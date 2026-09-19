@@ -1,13 +1,14 @@
-export type ProviderState = 'UNCONFIGURED'|'LOADING'|'LOGIN_REQUIRED'|'DISCOVERING'|'READY'|'RATE_LIMITED'|'BROKEN_MAPPING'|'REDISCOVERING';
-export type Route = 'home'|'browser'|'models'|'harness'|'sessions'|'detector'|'settings';
+export type ProviderState = 'UNCONFIGURED'|'LOADING'|'LOGIN_REQUIRED'|'DISCOVERING'|'READY'|'RATE_LIMITED'|'BROKEN_MAPPING'|'REDISCOVERING'|'BROWSING'|'CANDIDATE';
+export type Route = 'home'|'browser'|'models'|'harness'|'sessions'|'detector'|'settings'|'providers'|'tools';
 export type Mapping = 'prompt'|'send'|'response'|'stop'|'new_chat'|'model'|'reasoning'|'attachment';
 export interface Model {
-  id:string; display_name:string; confidence:'OBSERVED'|'USER_SUPPLIED';
+  id:string; display_name:string; enabled:boolean; available:boolean; confidence:'OBSERVED'|'USER_SUPPLIED';
   context:{nominal:number|null;effective:number|null;source:string};
   tokenizer:{mode:string;name:string|null}; tools:'emulated'; vision:boolean|null;
   reasoning:{supported:boolean|null;control_observed:boolean}|null;
 }
 export interface Provider {
+  detected:boolean;exposed:boolean;scan_enabled:boolean;dismissed:boolean;discovery_score:number;discovery_reason:string;current_model:string;reasoning_modes:Array<{value:string;label:string}>;
   id:number; label:string; origin:string; url:string; current_url:string; state:ProviderState;
   open_tab:boolean; pinned:boolean; active:boolean; browser_busy?:boolean; last_seen:number; mapping_version:number;
   last_error:string; models:Model[]; mappings:Record<Mapping,number>;
@@ -20,7 +21,7 @@ export interface Session {
   context:{estimated_used:number;source:string;nominal:number|null;reported_used:number|null};
 }
 export interface Preferences {
-  theme:'dark'|'light'|'system';compact:boolean;restore_tabs:boolean;auto_start:boolean;idle_minutes:number;
+  harness:'opencode'|'claude'|'chat'|'responses'|'messages';theme:'dark'|'light'|'system';compact:boolean;restore_tabs:boolean;auto_start:boolean;idle_minutes:number;
   logging:'ERROR'|'WARN'|'INFO'|'DEBUG'; fallback_enabled:boolean;fallback_model:string;default_model:string;
   raw_capture:false;developer_mode:boolean;
 }
@@ -30,7 +31,10 @@ export interface FileProbe {
   provider_id:number;model:string;path:string;scope:'one_synthetic_file_read_only';granted:boolean;
   read_count:number;denied_count:number;error:string;proof_verified:boolean;file_removed:boolean;writes:false;shell:false;remote_filesystem:false;
 }
+export interface McpServer {id:number;label:string;command:string;args:string[];state:'DISCONNECTED'|'CONNECTING'|'DISCOVERING'|'READY'|'CALLING'|'ERROR';error:string;protocol:string;tools:Array<{name:string;alias:string;description:string;enabled:boolean;schema:Record<string,unknown>}>}
+export interface McpRun {id:string;state:'IDLE'|'GENERATING'|'PERMISSION_REQUIRED'|'EXECUTING_TOOL'|'RESULT_READY'|'COMPLETED'|'FAILED'|'CANCELLED';provider_id:number;model:string;turns:number;calls:number;auto_continue:boolean;error:string;answer:string;call_id:string;tool:string;arguments:string;last_result:string}
 export interface Snapshot {
+  mcp_servers?:McpServer[];mcp_run?:McpRun;
   file_probe?:FileProbe;
   protocol:1;backend:'zag';version:string;
   api:{host:'127.0.0.1';port:number;running:boolean;desired_port:number;key_present:boolean};
@@ -47,6 +51,8 @@ export interface Control {
 export interface Evidence {type:'observation';origin:string;document_id:string;controls:Control[];password_fields_present:boolean}
 export const routes:Array<{id:Route;title:string;icon:string;description:string}> = [
   {id:'browser',title:'Browser',icon:'globe',description:'Your provider websites'},
+  {id:'providers',title:'Providers',icon:'globe',description:'Detected websites and exposed capabilities'},
+  {id:'tools',title:'Tools & MCP',icon:'terminal',description:'Permissioned tools inside your website conversations'},
   {id:'models',title:'Models',icon:'layers',description:'Discovered models and capabilities'},
   {id:'sessions',title:'Sessions',icon:'history',description:'Conversations and request continuity'},
   {id:'harness',title:'Connect a client',icon:'terminal',description:'Website access, local file permissions and client connections'},

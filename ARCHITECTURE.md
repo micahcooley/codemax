@@ -45,3 +45,11 @@ TNN prediction parsing and safety authority remain separate; the symbolic engine
 `backend/security/file_probe.zag` owns the synthetic-file test state machine and volatile one-read grant. `backend/app.zag` connects its private socketpair to the existing HTTP connection slots. UI operations stay in the main Tauri webview; Rust forwards them and does not implement filesystem business policy. The broker is not a public endpoint and does not give provider pages OS commands. A separate Python test-only reference client exercises real adversarial filesystem fixtures, clearly separated from native evidence.
 
 Tab status combines native page-load events, authoritative gateway activity, and sanitized semantic busy controls. Model discovery status is not automatically ongoing work. No network heartbeat or repeated UI polling is used to manufacture busy state.
+
+## Codemax discovery and MCP amendment
+
+Browser profiles and admitted providers are distinct. `Provider.detected` records positive evidence; `exposed`, `dismissed`, `scan_enabled`, model `enabled` and fresh `available` state govern publication. Svelte derives detected/exposed views rather than inventing model entries. Network metadata is explicit and model-scoped, with unknown and user override provenance preserved.
+
+`backend/mcp/hub.zag` owns stdio MCP negotiation/catalog/call state. `backend/mcp/runner.zag` owns a bounded permissioned website task and its volatile transcript/grants. It uses a private nonblocking socketpair client into the same Zag generation/session path as external model clients. It does not implement a separate model backend. `src-tauri/src/mcp_transport.rs` only starts user-confirmed programs and transports bounded stdio frames; it does not decide permissions or execute model-generated shell text.
+
+MCP tools/consent/continuation are available through the trusted main UI's private operations. Remote provider observation cannot invoke those operations. Tasks are bound to exact server epochs/catalogs/model/session and revalidated at approval. A lost conversation, disabled provider/model or changed catalog revokes the task. Detailed scope and intentionally unnegotiated capabilities are in `docs/MCP_CLIENT.md`.

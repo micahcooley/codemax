@@ -2,6 +2,7 @@
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 compile_error!("This application targets Linux x86_64 only. Other native backends are not qualified.");
 mod framing;
+mod mcp_transport;
 mod host;
 mod views;
 mod platform;
@@ -15,7 +16,7 @@ async fn bridge_request(webview: Webview, host: tauri::State<'_, Arc<Host>>, op:
     views::trusted_main(&webview)?;
     // Internal-only frames cannot be forged through the otherwise trusted UI
     // proxy. Domain authorization and validation still reside in Zag.
-    if matches!(op.as_str(), "observation" | "browser.failed" | "browser.location" | "shutdown") { return Err("INTERNAL_OPERATION".into()); }
+    if matches!(op.as_str(), "observation" | "browser.failed" | "browser.location" | "mcp.transport" | "shutdown") { return Err("INTERNAL_OPERATION".into()); }
     host.request(op, params).await
 }
 #[tauri::command]

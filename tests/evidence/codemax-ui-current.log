@@ -1,0 +1,80 @@
+PASS Only detected profiles appear as providers; technical controls collapsed
+PASS Per-model and per-provider exposure changes actual generated harness config
+PASS Pause, exclusion and resume controls send scoped policies without onboarding wizard
+PASS Provider-reported context separated from unknown limits and tokenizer execution
+PASS Harness choice persists; new registry events update config without reload
+PASS Normal address navigation creates ordinary tab, not an exposed provider
+PASS Import only command/argv; strips credential env and does not start process
+PASS Explicit local-process trust plus disabled-by-default per-tool exposure
+PASS Per-call approval binds run/call; optional manual result insertion continues same run
+PASS Deny submits no approval; broader per-task tool permission is explicit advanced opt-in
+PASS Untrusted model/tool text escaped and compact viewport has no document overflow
+PASS No JavaScript runtime errors in new discovery/MCP screens
+{
+  "scope": "Actual compiled Svelte UI with explicitly mocked Tauri backend and provider facts. No native MCP/file/provider execution.",
+  "passed": 12,
+  "failed": 0,
+  "tests": [
+    {
+      "name": "Only detected profiles appear as providers; technical controls collapsed",
+      "status": "PASS",
+      "seconds": 0.29
+    },
+    {
+      "name": "Per-model and per-provider exposure changes actual generated harness config",
+      "status": "PASS",
+      "seconds": 0.851
+    },
+    {
+      "name": "Pause, exclusion and resume controls send scoped policies without onboarding wizard",
+      "status": "PASS",
+      "seconds": 0.298
+    },
+    {
+      "name": "Provider-reported context separated from unknown limits and tokenizer execution",
+      "status": "PASS",
+      "seconds": 0.133
+    },
+    {
+      "name": "Harness choice persists; new registry events update config without reload",
+      "status": "PASS",
+      "seconds": 0.772
+    },
+    {
+      "name": "Normal address navigation creates ordinary tab, not an exposed provider",
+      "status": "PASS",
+      "seconds": 0.21
+    },
+    {
+      "name": "Import only command/argv; strips credential env and does not start process",
+      "status": "PASS",
+      "seconds": 0.308
+    },
+    {
+      "name": "Explicit local-process trust plus disabled-by-default per-tool exposure",
+      "status": "PASS",
+      "seconds": 0.203
+    },
+    {
+      "name": "Per-call approval binds run/call; optional manual result insertion continues same run",
+      "status": "PASS",
+      "seconds": 0.394
+    },
+    {
+      "name": "Deny submits no approval; broader per-task tool permission is explicit advanced opt-in",
+      "status": "PASS",
+      "seconds": 0.298
+    },
+    {
+      "name": "Untrusted model/tool text escaped and compact viewport has no document overflow",
+      "status": "PASS",
+      "seconds": 0.122
+    },
+    {
+      "name": "No JavaScript runtime errors in new discovery/MCP screens",
+      "status": "PASS",
+      "seconds": 0.0
+    }
+  ],
+  "runtime_errors": []
+}

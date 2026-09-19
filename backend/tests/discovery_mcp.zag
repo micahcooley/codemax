@@ -1,0 +1,63 @@
+// Native regression gate. Compile and execute with the pinned Zag toolchain.
+// No foreign implementation or simulated success substitutes for this binary.
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../core/json.zag") as json
+@import("../providers/registry.zag") as registry
+@import("../detector/symbolic.zag") as symbolic
+@import("../mcp/hub.zag") as mcp
+@import("../mcp/runner.zag") as runner
+fn check(value: bool, label: []u8) void { if (!value) { _zag_eprintln(label);_zag_exit(1); } }
+fn observe(p: *registry.Provider, raw: []u8) void { let d: json.Document=json.parse(raw);check(d.ok!=0,"fixture JSON");check(symbolic.observe(p,&d,0),"valid evidence accepted");json.free(&d); }
+fn provider_cases() void {
+ let r: registry.Registry=registry.make();let i: i32=registry.add(&r,"https://fixture.example","https://fixture.example/","Fixture");let p: *registry.Provider=&r.items[i];let out: buf.Buffer=buf.make(16384);
+ observe(p,"{\"origin\":\"https://fixture.example\",\"document_id\":\"discovery_doc\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"input\",\"label\":\"Search\",\"visible\":true,\"editable\":true},{\"id\":2,\"tag\":\"button\",\"label\":\"Search\",\"visible\":true},{\"id\":3,\"tag\":\"main\",\"label\":\"Results\",\"visible\":true},{\"id\":4,\"tag\":\"button\",\"label\":\"GLM-5.3-Flash\",\"visible\":true}]}");
+ check(!p.*.detected && !registry.publishable(p),"search and model mention do not admit a provider");
+ observe(p,"{\"origin\":\"https://fixture.example\",\"document_id\":\"discovery_doc\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"textarea\",\"label\":\"Message\",\"visible\":true,\"editable\":true},{\"id\":2,\"tag\":\"button\",\"label\":\"Send message\",\"visible\":true},{\"id\":3,\"tag\":\"select\",\"label\":\"Model\",\"visible\":true,\"options\":[{\"label\":\"Fixture 1\",\"value\":\"fixture-1\",\"selected\":true,\"disabled\":false}]},{\"id\":4,\"tag\":\"main\",\"label\":\"Page\",\"visible\":true}]}");
+ check(!p.*.detected && p.*.state==9,"generic main is not conversation evidence");
+ observe(p,"{\"origin\":\"https://fixture.example\",\"document_id\":\"discovery_doc\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"textarea\",\"label\":\"Message\",\"visible\":true,\"editable\":true},{\"id\":2,\"tag\":\"button\",\"label\":\"Send message\",\"visible\":true},{\"id\":3,\"tag\":\"select\",\"label\":\"Model\",\"visible\":true,\"options\":[{\"label\":\"Fixture 1\",\"value\":\"fixture-1\",\"selected\":true,\"disabled\":false}]},{\"id\":4,\"tag\":\"div\",\"label\":\"Assistant responses\",\"visible\":true,\"role\":\"log\",\"assistant\":true},{\"id\":5,\"tag\":\"select\",\"label\":\"Reasoning\",\"visible\":true,\"options\":[{\"label\":\"High\",\"value\":\"high\",\"disabled\":false}]}]}");
+ check(p.*.detected && registry.publishable(p),"independent chat model conversation evidence admits");
+ check(buf.eq(buf.view(&p.*.current_model),"fixture-1"),"selected model observed");
+ check(buf.find(buf.view(&p.*.reasoning_modes),"high",0)>=0,"reasoning options observed without invented levels");
+ check(p.*.models[0].context_tokens==0 && p.*.models[0].tokenizer.len==0,"no capability from model names");
+ registry.public_models(&r,&out);check(buf.find(buf.view(&out),"p1/fixture-1",0)>=0,"admitted model published");
+ p.*.models[0].enabled=false;registry.public_models(&r,&out);check(buf.eq(buf.view(&out),"{\"object\":\"list\",\"data\":[]}"),"disabled model hidden");p.*.models[0].enabled=true;
+ p.*.exposed=false;check(registry.find_model(&r,"p1/fixture-1")<0,"provider exposure gates routing");p.*.exposed=true;
+ let md: json.Document=json.parse("{\"origin\":\"https://fixture.example\",\"facts\":[{\"model\":\"unrelated\",\"context_tokens\":999999,\"source\":\"PROVIDER_METADATA\"},{\"model\":\"fixture-1\",\"context_tokens\":65536,\"tokenizer\":\"fixture-tok\",\"source\":\"PROVIDER_METADATA\"}]}");check(symbolic.capabilities(p,&md,0),"explicit metadata accepted");json.free(&md);
+ check(p.*.models[0].context_tokens==65536 && buf.eq(buf.view(&p.*.models[0].tokenizer),"fixture-tok"),"metadata model scoped");
+ observe(p,"{\"origin\":\"https://fixture.example\",\"document_id\":\"discovery_doc\",\"password_fields_present\":true,\"controls\":[{\"id\":1,\"tag\":\"textarea\",\"label\":\"Message\",\"visible\":true,\"editable\":true},{\"id\":2,\"tag\":\"button\",\"label\":\"Send message\",\"visible\":true},{\"id\":3,\"tag\":\"select\",\"label\":\"Model\",\"visible\":true,\"options\":[{\"label\":\"Fixture 1\",\"value\":\"fixture-1\",\"selected\":true,\"disabled\":false}]},{\"id\":4,\"tag\":\"div\",\"label\":\"Assistant responses\",\"visible\":true,\"role\":\"log\",\"assistant\":true},{\"id\":5,\"tag\":\"select\",\"label\":\"Reasoning\",\"visible\":true,\"options\":[{\"label\":\"High\",\"value\":\"high\",\"disabled\":false}]}]}");check(p.*.state==2 && !registry.publishable(p),"login screen not published");
+ p.*.dismissed=true;observe(p,"{\"origin\":\"https://fixture.example\",\"document_id\":\"discovery_doc\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"textarea\",\"label\":\"Message\",\"visible\":true,\"editable\":true},{\"id\":2,\"tag\":\"button\",\"label\":\"Send message\",\"visible\":true},{\"id\":3,\"tag\":\"select\",\"label\":\"Model\",\"visible\":true,\"options\":[{\"label\":\"Fixture 1\",\"value\":\"fixture-1\",\"selected\":true,\"disabled\":false}]},{\"id\":4,\"tag\":\"div\",\"label\":\"Assistant responses\",\"visible\":true,\"role\":\"log\",\"assistant\":true},{\"id\":5,\"tag\":\"select\",\"label\":\"Reasoning\",\"visible\":true,\"options\":[{\"label\":\"High\",\"value\":\"high\",\"disabled\":false}]}]}");check(p.*.state==8 && !registry.publishable(p),"user dismissal wins over evidence");
+ buf.free(&out);registry.free(&r);
+}
+fn mcp_cases() void {
+ let h: mcp.Hub=mcp.make();let out: buf.Buffer=buf.make(131072);
+ let d: json.Document=json.parse("{\"label\":\"Fixture MCP\",\"command\":\"node\",\"args\":[\"fixture.mjs\"]}");
+ check(mcp.add(&h,&d,0)==1,"stdio config accepted without starting");json.free(&d);let s: *mcp.Server=&h.servers[0];
+ check(s.*.state==0 && out.len==0,"config cannot execute");
+ check(!mcp.connect(s,false,&out) && out.len==0,"process consent mandatory");
+ check(mcp.connect(s,true,&out),"explicit consent emits bounded process start");
+ check(buf.find(buf.view(&out),"start",0)>=0,"process start frame");
+ // Inject protocol frames directly; no child process is spawned in a unit test.
+ mcp.rpc(s,"initialize","{}",1,&out);
+ mcp.incoming(s,"{\"jsonrpc\":\"2.0\",\"id\":99999,\"result\":{}}",&out);
+ check(s.*.pending_id==1 && s.*.operation==1,"wrong response id ignored");
+ mcp.incoming(s,"{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32601,\"message\":\"Method not found\"}}",&out);
+ check(buf.eq(buf.view(&s.*.version),"2026-07-28") && s.*.pending_id==2,"negative method error triggers explicit modern discovery");
+ mcp.incoming(s,"{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"resultType\":\"complete\",\"supportedVersions\":[\"2026-07-28\"],\"capabilities\":{\"tools\":{}}}}",&out);
+ check(s.*.state==2 && s.*.pending_id==3,"negotiated modern catalog requested");
+ mcp.incoming(s,"{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{\"resultType\":\"complete\",\"tools\":[{\"name\":\"read_note\",\"inputSchema\":{\"type\":\"object\"}}]}}",&out);
+ check(s.*.state==3 && s.*.count==1 && !s.*.tools[0].enabled,"catalog tools default disabled");
+ check(!mcp.call(&h,0,"{}",&out),"disabled tools cannot execute");s.*.tools[0].enabled=true;
+ let run: runner.Run=runner.make();check(runner.begin(&run,&h,1,"p1/fixture-1","Read a fixture note",true),"trusted task establishes binding");
+ check(!runner.approve(&run,&h,buf.view(&run.id),"not-requested",false,&out),"no tool executes without pending request");
+ check(!mcp.call(&h,0,"[]",&out),"tool arguments must be object");
+ let binding: buf.Buffer=buf.make(65536);mcp.binding(&h,&binding);check(runner.valid_catalog(&run,&h),"task catalog stable");
+ check(mcp.call(&h,0,"{}",&out),"enabled tool emits request");check(runner.valid_catalog(&run,&h),"in-flight call does not revoke own catalog");
+ mcp.incoming(s,"{\"jsonrpc\":\"2.0\",\"id\":4,\"result\":{\"resultType\":\"complete\",\"content\":[{\"type\":\"text\",\"text\":\"fixture data\"}]}}",&out);
+ check(s.*.result_ready && s.*.state==3,"complete result becomes untrusted data");
+ mcp.incoming(s,"{\"jsonrpc\":\"2.0\",\"method\":\"notifications/tools/list_changed\"}",&out);
+ check(!runner.valid_catalog(&run,&h) && s.*.count==0,"catalog change invalidates grants");
+ runner.terminal(&run,7,"USER_CANCELLED");check(run.grants.len==0 && !runner.active(&run),"cancel erases volatile grants");
+ runner.free(&run);buf.free(&binding);mcp.stop(s,&out);check(s.*.epoch.len==0,"stop invalidates process epoch");mcp.free(&h);buf.free(&out);
+}
+fn main() i32 { provider_cases();mcp_cases();_zag_println("native discovery and MCP unit assertions passed");return 0; }

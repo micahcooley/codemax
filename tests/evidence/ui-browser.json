@@ -13,67 +13,67 @@
     {
       "name": "browser-first layout with separately positioned provider surface",
       "status": "PASS",
-      "seconds": 0.421
+      "seconds": 0.377
     },
     {
       "name": "Ctrl-L address focus and keyboard command palette with provider hiding",
       "status": "PASS",
-      "seconds": 0.153
+      "seconds": 0.13
     },
     {
       "name": "endpoint/key controls and all five client configuration formats",
       "status": "PASS",
-      "seconds": 0.501
+      "seconds": 0.464
     },
     {
       "name": "website-first client setup, explicit one-file consent, deny/revoke and state rendering",
       "status": "PASS",
-      "seconds": 0.857
+      "seconds": 0.922
     },
     {
       "name": "real CSS spinner, manual generation, idle ring, limit state and reduced motion",
       "status": "PASS",
-      "seconds": 2.455
+      "seconds": 2.444
     },
     {
       "name": "model filtering, exact identifier copy and backend-driven default selection",
       "status": "PASS",
-      "seconds": 0.316
+      "seconds": 0.283
     },
     {
       "name": "theme, density, API port, listener control and developer setting round trips",
       "status": "PASS",
-      "seconds": 0.627
+      "seconds": 0.609
     },
     {
       "name": "session rename, retained title, search and context provenance",
       "status": "PASS",
-      "seconds": 0.242
+      "seconds": 0.231
     },
     {
       "name": "evidence inspection, connector import/export and page-picker action wiring",
       "status": "PASS",
-      "seconds": 0.318
+      "seconds": 0.334
     },
     {
       "name": "keyboard-resizable panes and collapse/restore bounds",
       "status": "PASS",
-      "seconds": 0.436
+      "seconds": 0.455
     },
     {
       "name": "new website workflow, tab creation and close operation",
       "status": "PASS",
-      "seconds": 0.381
+      "seconds": 0.382
     },
     {
       "name": "profile context menu and destructive-action confirmation with surface hiding",
       "status": "PASS",
-      "seconds": 0.41
+      "seconds": 0.374
     },
     {
       "name": "reduced motion and compact-window overflow checks",
       "status": "PASS",
-      "seconds": 0.212
+      "seconds": 0.207
     },
     {
       "name": "no browser JavaScript runtime errors",
@@ -84,12 +84,15 @@
   "runtime_errors": [],
   "screenshots": [
     "06-tool-in-progress.png",
-    "04-settings.png",
+    "10-harness-setup.png",
     "07-active-idle-tabs.png",
     "01-browser-workspace.png",
-    "05-file-permission.png",
     "03-client-setup.png",
-    "02-model-registry.png"
+    "04-settings.png",
+    "02-model-registry.png",
+    "05-file-permission.png",
+    "09-provider-settings.png",
+    "11-mcp-permission.png"
   ],
   "fixture_code_shipped_in_production_dist": false
 }

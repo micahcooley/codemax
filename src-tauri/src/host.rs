@@ -16,11 +16,12 @@ pub struct Host {
     pending: Mutex<HashMap<u64, oneshot::Sender<Result<Value, String>>>>,
     next_id: AtomicU64,
     pub status: Mutex<Value>,
+    pub mcp: Mutex<HashMap<u32, crate::mcp_transport::ProcessHandle>>,
 }
 impl Host {
     pub fn new(root: PathBuf, dev_fixture: bool) -> (Arc<Self>, mpsc::Receiver<Vec<u8>>) {
         let (sender, receiver) = mpsc::channel(128);
-        (Arc::new(Self { root, dev_fixture, views: Mutex::new(HashMap::new()), ready: AtomicBool::new(false), closing: AtomicBool::new(false), restart: Notify::new(), sender,
+        (Arc::new(Self { mcp: Mutex::new(HashMap::new()), root, dev_fixture, views: Mutex::new(HashMap::new()), ready: AtomicBool::new(false), closing: AtomicBool::new(false), restart: Notify::new(), sender,
             pending: Mutex::new(HashMap::new()), next_id: AtomicU64::new(1), status: Mutex::new(json!({"state":"STARTING","code":null})) }), receiver)
     }
     pub fn set_status(&self, app: &AppHandle, state: &str, code: Option<&str>) {
@@ -89,6 +90,11 @@ async fn handle_frame(app: &AppHandle, host: &Arc<Host>, bytes: &[u8], hello: &m
                 let id = value["provider_id"].as_u64().unwrap_or(0);
                 let _ = host.notify("browser.failed", json!({"provider_id":id}));
                 let _ = app.emit_to(tauri::EventTarget::Webview { label: "main".into() }, "bridge:browser-error", json!({"provider_id":id,"code":error}));
+            }
+        }
+        "mcp" => {
+            if crate::mcp_transport::handle(host, &value).is_err() {
+                let _ = host.notify("mcp.transport", json!({"server_id":value["server_id"],"epoch":value["epoch"],"event":"error"}));
             }
         }
         "action" => {
@@ -160,7 +166,7 @@ pub async fn supervise(app: AppHandle, host: Arc<Host>, mut outgoing: mpsc::Rece
                 }
             }
         }
-        host.ready.store(false, Ordering::Release); host.fail_pending();
+        crate::mcp_transport::stop_all(&host); host.ready.store(false, Ordering::Release); host.fail_pending();
         // Closing stdin is Zag's graceful-stop signal. A stuck child is killed
         // and reaped after a finite grace period, independently of pipe writes.
         let _ = stdin.shutdown().await; drop(stdin);
@@ -174,5 +180,5 @@ pub async fn supervise(app: AppHandle, host: Arc<Host>, mut outgoing: mpsc::Rece
             else { tokio::time::sleep(Duration::from_millis(250 * crashes.len() as u64)).await; }
         }
     }
-    host.ready.store(false, Ordering::Release); host.fail_pending(); host.set_status(&app, "STOPPED", None);
+    crate::mcp_transport::stop_all(&host); host.ready.store(false, Ordering::Release); host.fail_pending(); host.set_status(&app, "STOPPED", None);
 }

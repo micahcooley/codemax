@@ -29,6 +29,29 @@
         known_fields: Object.keys(value).filter(k => allowed.has(k)).slice(0, 16)};
     } catch { return {kind: 'opaque'}; }
   }
+
+  // Explicit capability fields only. No message content, arbitrary payload keys,
+  // request headers, storage, cookies, hidden inputs, or credentials are emitted.
+  function metadata(value, source = 'OBSERVED_REQUEST') {
+    if (typeof value === 'string') { if (value.length > 32768) return []; try { value = JSON.parse(value); } catch { return []; } }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+    const safe = x => typeof x === 'string' && x.length > 0 && x.length <= 180 && !sensitive.test(x) && redact(x) === x;
+    const entries = Array.isArray(value.models) ? value.models : Array.isArray(value.data) ? value.data : [value];
+    const result = [];
+    for (const item of entries.slice(0, 32)) {
+      if (!item || typeof item !== 'object') continue;
+      const model = typeof item.model === 'string' ? item.model : item.id;
+      if (!safe(model)) continue;
+      const n = item.context_window ?? item.context_length ?? item.max_context_tokens;
+      const context_tokens = Number.isSafeInteger(n) && n >= 128 && n <= 10000000 ? n : null;
+      const tokenizer = safe(item.tokenizer) ? item.tokenizer : null;
+      const reasoning = safe(item.reasoning_effort) ? item.reasoning_effort : null;
+      const selected = source === 'OBSERVED_REQUEST' && Array.isArray(item.messages);
+      if (context_tokens || tokenizer || reasoning || selected) result.push({model, context_tokens, tokenizer, reasoning, selected, source});
+    }
+    return result;
+  }
+
   function splitText(text, limit = 3072) {
     if (!Number.isInteger(limit) || limit < 4) throw new Error('Invalid chunk limit');
     const result = []; let chunk = ''; let size = 0;
@@ -45,7 +68,7 @@
     return next.slice(previous.length);
   }
   if (config.testOnly) {
-    Object.defineProperty(globalThis, '__BRIDGE_TEST_API__', {value: Object.freeze({safeURL, shape, splitText, redact, appendDelta})});
+    Object.defineProperty(globalThis, '__BRIDGE_TEST_API__', {value: Object.freeze({safeURL, shape, splitText, redact, appendDelta, metadata})});
     return;
   }
   if (!config.origin || location.origin !== config.origin || window.top !== window) return;
@@ -55,7 +78,7 @@
     Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
   const ids = new WeakMap(); const nodes = new Map(); let nextId = 1;
   let generation = null; let preparingRequest = null; let observationTimer = 0; let responseTimer = 0;
-  let picker = null;
+  let picker = null; let lastMenuTrigger = null; let lastMenuAt = 0; let discoveryEnabled = true;
   let lastSnapshot = ''; let stopped = false; let sending = false;
   const queue = []; const MAX_QUEUE = 128;
   const transport = event => {
@@ -110,6 +133,20 @@
     const form = node.closest('form');
     return !!(form && form.querySelector('input[type="password"],input[autocomplete^="cc-"],input[autocomplete="one-time-code"]'));
   }
+
+  function menuOwner(node) {
+    const menu = node.closest('[role="listbox"],[role="menu"]');
+    if (!menu) return 0;
+    for (const labelId of (menu.getAttribute('aria-labelledby') || '').split(/\s+/)) {
+      const owner = document.getElementById(labelId); if (owner && visible(owner) && !forbidden(owner)) return id(owner);
+    }
+    if (menu.id) for (const button of document.querySelectorAll('[aria-controls]')) {
+      if ((button.getAttribute('aria-controls') || '').split(/\s+/).includes(menu.id) && visible(button) && !forbidden(button)) return id(button);
+    }
+    const openMenus = Array.from(document.querySelectorAll('[role="listbox"],[role="menu"]')).filter(visible);
+    return openMenus.length === 1 && lastMenuTrigger?.isConnected && visible(lastMenuTrigger) && Date.now() - lastMenuAt < 10000 ? id(lastMenuTrigger) : 0;
+  }
+
   function summary(node) {
     const isVisible = visible(node);
     const fileInput = node instanceof HTMLInputElement && node.type === 'file';
@@ -120,14 +157,16 @@
     return {id: id(node), tag: node.tagName.toLowerCase(), role: node.getAttribute('role') || '', label: label(node),
       visible: isVisible, editable: editable(node), disabled: !!node.disabled || node.getAttribute('aria-disabled') === 'true',
       live: node.getAttribute('aria-live') || '', busy: node.getAttribute('aria-busy') === 'true',
-      value: ['option','menuitemradio'].includes(node.getAttribute('role')) ? redact(node.getAttribute('data-value') || label(node)).slice(0,180) : '',
+      current_value: node instanceof HTMLSelectElement ? redact(node.selectedOptions[0]?.value || '') : '',
+      selected: node.matches('[aria-checked="true"],[aria-selected="true"],[aria-pressed="true"]'), menu_owner: menuOwner(node),
+      value: ['option','menuitemradio','menuitem'].includes(node.getAttribute('role')) ? redact(node.getAttribute('data-value') || label(node)).slice(0,180) : '',
       popup: node.getAttribute('aria-haspopup') || '', file_input: fileInput,
       assistant: node.matches('[data-message-author-role="assistant"],[data-role="assistant"],[data-bridge-assistant]'), options};
   }
   function snapshot() {
-    if (stopped || location.origin !== config.origin) return;
+    if (stopped || !discoveryEnabled || location.origin !== config.origin) return;
     // Bound traversal work even on very large pages. Skip page text and input values.
-    const candidates = document.querySelectorAll('textarea,input,[contenteditable]:not([contenteditable="false"]),button,select,[role="button"],[role="combobox"],[role="option"],[role="menuitemradio"],[role="switch"],main,[role="main"],[role="log"],[aria-live],[data-message-author-role="assistant"],[data-role="assistant"],[data-bridge-assistant]');
+    const candidates = document.querySelectorAll('textarea,input,[contenteditable]:not([contenteditable="false"]),button,select,[role="button"],[role="combobox"],[role="option"],[role="menuitemradio"],[role="menuitem"],[role="switch"],main,[role="main"],[role="log"],[aria-live],[data-message-author-role="assistant"],[data-role="assistant"],[data-bridge-assistant]');
     const controls = []; let examined = 0;
     for (const node of candidates) {
       if (++examined > 512 || controls.length >= 128) break;
@@ -335,6 +374,7 @@
   }
   async function execute(action) {
     if (!action || typeof action !== 'object' || action.document_id !== documentId || location.origin !== config.origin) throw new Error('STALE_DOCUMENT');
+    if (action.type === 'discovery_policy') { discoveryEnabled = action.enabled === true; if (discoveryEnabled) {lastSnapshot='';snapshot();} return; }
     if (action.type === 'scan') { lastSnapshot = ''; snapshot(); return; }
     if (action.type === 'stop') {
       if (preparingRequest?.request === action.request_id) preparingRequest.cancelled = true;
@@ -355,6 +395,9 @@
     if (generation || preparingRequest) throw new Error('PROVIDER_BUSY');
     if (typeof action.prompt !== 'string' || encoder.encode(action.prompt).length > 131072) throw new Error('PROMPT_LIMIT');
     if (typeof action.request_id !== 'string' || !/^[A-Za-z0-9._-]{1,96}$/.test(action.request_id)) throw new Error('INVALID_REQUEST');
+    const originalInput = resolve(action,'prompt',action.prompt_node);
+    const draft = el => el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? el.value : el.textContent || '';
+    if (draft(originalInput).trim()) throw new Error('UNSENT_DRAFT');
     const preparing = {request:action.request_id,cancelled:false}; preparingRequest = preparing;
     const checkPreparing = () => {if (preparing.cancelled) throw new Error('CANCELLED');};
     try {
@@ -368,6 +411,7 @@
     } finally { if (preparingRequest === preparing) preparingRequest = null; }
     const input = resolve(action,'prompt',action.prompt_node); resolve(action,'send',action.send_node,{allowDisabled:true});
     if (!editable(input)) throw new Error('PROMPT_MAPPING_INVALID');
+    if (draft(input).trim()) throw new Error('UNSENT_DRAFT');
     const region = resolve(action,'response',action.response_node,{allowDisabled:true});
     const baseline = assistantNode(region);
     generation = {request: action.request_id, response: id(region), stop: action.stop_node, action,
@@ -388,6 +432,7 @@
         if (!send.disabled && send.getAttribute('aria-disabled') !== 'true') break;
         await pause(100);
       }
+      if (draft(input) !== action.prompt) throw new Error('COMPOSER_CHANGED');
       generation.submitted = true;
       resolve(action,'send',action.send_node).click();
       emit({type: 'action_result', request_id: action.request_id, status: 'submitted'});
@@ -401,8 +446,26 @@
     if (location.origin !== config.origin) return;
     stopped = false; queue.length = 0; lastSnapshot = ''; snapshot();
   }});
+
+  function capabilities(data, source) { if (!discoveryEnabled) return; const facts=metadata(data,source); if(facts.length)emit({type:'capabilities',origin:location.origin,facts}); }
+  function metadataEndpoint(raw) { try { const u=new URL(raw,location.href); return u.origin===location.origin && /\/(models|capabilities|config)(\/|$)/.test(u.pathname); } catch {return false;} }
+  async function metadataRead(reader) {
+    let timer;
+    try { return await Promise.race([reader.read(), new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('METADATA_TIMEOUT')), 2000);
+    })]); } finally { clearTimeout(timer); }
+  }
+  async function responseMetadata(response, rawURL) {
+    const length=Number(response.headers.get('content-length'));
+    if (!discoveryEnabled || !metadataEndpoint(rawURL) || !Number.isSafeInteger(length) || length<=0 || length>32768 || !response.headers.get('content-type')?.includes('application/json'))return;
+    try { const reader=response.clone().body?.getReader(); if(!reader)return; let bytes=0,text='';const decoder=new TextDecoder();
+      try {for(let i=0;i<128;i++){const next=await metadataRead(reader);if(next.done){capabilities(text+decoder.decode(),'PROVIDER_METADATA');return;}bytes+=next.value.length;if(bytes>32768)return;text+=decoder.decode(next.value,{stream:true});}}
+      finally{await reader.cancel().catch(()=>{});}
+    }catch{/* Metadata failure never changes a website response. */}
+  }
+
   function network(event) {
-    emit({type: 'network', ...event});
+    if (discoveryEnabled) emit({type: 'network', ...event});
     if (event.status === 429 && generation && event.request_id === generation.request) { emit({type: 'quota', state: 'RATE_LIMITED'}); stopGeneration('PROVIDER_RATE_LIMITED'); }
     if (event.status === 401 && generation && event.request_id === generation.request) { emit({type: 'login_required'}); stopGeneration('AUTH_REQUIRED'); }
   }
@@ -410,13 +473,16 @@
     const original = window.fetch;
     window.fetch = async function(input, init) {
       const url = safeURL(input instanceof Request ? input.url : String(input), location.href);
+      const rawURL = input instanceof Request ? input.url : String(input);
+      if (metadataEndpoint(rawURL) || (typeof init?.body === 'string' && shape(init.body).known_fields?.includes('messages'))) capabilities(init?.body,'OBSERVED_REQUEST');
       const start = performance.now(); const request_id = generation?.submitted ? generation.request : null;
       try {
         const response = await Reflect.apply(original, this, [input, init]);
         network({transport: 'fetch', request_id, method: String(init?.method || (input instanceof Request ? input.method : 'GET')).slice(0, 12),
           url_pattern: url, status: response.status, content_type: String(response.headers.get('Content-Type') || '').split(';')[0].slice(0, 80),
           duration_ms: Math.round(performance.now() - start), request_shape: shape(init?.body)});
-        return response; // Never clone/read response bodies or headers containing credentials.
+        void responseMetadata(response,rawURL);
+        return response; // No arbitrary response capture; only bounded capability endpoints above.
       } catch (error) { network({transport: 'fetch', url_pattern: url, failed: true}); throw error; }
     };
     const open = XMLHttpRequest.prototype.open; const send = XMLHttpRequest.prototype.send; const requests = new WeakMap();
@@ -427,13 +493,14 @@
     XMLHttpRequest.prototype.send = function(...args) {
       const meta = requests.get(this);
       const request_id = generation?.submitted ? generation.request : null;
-      if (meta) this.addEventListener('loadend', () => network({...meta, request_id, status: this.status}), {once: true});
+      if (meta) { capabilities(args[0],'OBSERVED_REQUEST'); this.addEventListener('loadend', () => network({...meta, request_id, status: this.status}), {once: true}); }
       return Reflect.apply(send, this, args);
     };
     if (window.WebSocket) {
       const Original = window.WebSocket;
       window.WebSocket = class extends Original {
         constructor(...args) { super(...args); const url = safeURL(args[0], location.href);
+          this.addEventListener('message', e => {if(typeof e.data==='string' && e.data.length<=32768)capabilities(e.data,'PROVIDER_METADATA');});
           this.addEventListener('open', () => network({transport: 'websocket', phase: 'open', url_pattern: url}));
           this.addEventListener('close', e => network({transport: 'websocket', phase: 'close', url_pattern: url, code: e.code}));
         }
@@ -449,9 +516,12 @@
       };
     }
   } catch { emit({type: 'instrumentation_warning', code: 'NETWORK_HOOK_PARTIAL'}); }
+  document.addEventListener('pointerdown', event => {const node=event.target instanceof Element?event.target.closest('[aria-haspopup],[role="combobox"]'):null;if(node&&visible(node)&&!forbidden(node)){lastMenuTrigger=node;lastMenuAt=Date.now();}},true);
+  document.addEventListener('change', scheduleSnapshot,true);
   document.addEventListener('click', event => {
     const node = event.target instanceof Element ? event.target.closest('button,select,[role="button"],[role="option"],textarea,[contenteditable="true"]') : null;
     if (!picker && node && visible(node) && !forbidden(node)) emit({type: 'interaction', node: id(node), role: node.getAttribute('role') || node.tagName.toLowerCase(), label: label(node)});
+    scheduleSnapshot();
   }, true);
   for (const method of ['pushState', 'replaceState']) {
     const original = history[method];
@@ -466,7 +536,7 @@
   const observer = new MutationObserver(scheduleSnapshot);
   function start() {
     observer.observe(document.documentElement, {subtree: true, childList: true, characterData: true,
-      attributes: true, attributeFilter: ['aria-busy', 'aria-disabled', 'aria-hidden', 'hidden', 'disabled', 'aria-label', 'role']});
+      attributes: true, attributeFilter: ['aria-busy', 'aria-disabled', 'aria-hidden', 'hidden', 'disabled', 'aria-label', 'role','aria-checked','aria-selected','aria-pressed','aria-expanded','aria-controls','data-value','data-state']});
     snapshot();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, {once: true}); else start();

@@ -12,18 +12,19 @@ var root_4 = $.from_html(`<button> </button>`);
 var root_5 = $.from_html(`<p class="field-hint" style="margin-top:12px">Save in your project. Set <code>BRIDGE_API_KEY</code> in the terminal before launching OpenCode, or connect provider <code>bridge</code> through its credential manager. Model limits are omitted when unknown.</p>`);
 var root_7 = $.from_html(`<p class="field-hint" style="margin-top:12px">This sets the Messages gateway for this terminal only. Real Claude Code compatibility still depends on the selected website model and the client’s protocol requirements; it is not a vendor-supported non-Claude integration.</p>`);
 var root_8 = $.from_html(`<p class="field-hint" style="margin-top:12px">Reuse the session header for continuation. Chat and Messages clients resend the ordered conversation; Responses clients can send <code>previous_response_id</code>. Never share the local key.</p>`);
-var root = $.from_html(`<div class="split"><div><section class="section"><div class="section-title"><h2>Connection details</h2><span><span></span> </span></div><label class="field"><span>OpenAI-compatible base URL</span><div class="readout"><!><code> </code><button class="icon-button" aria-label="Copy API endpoint"><!></button></div></label><div class="field"><span>Local API key <span class="faint">Not a provider credential</span></span><div class="readout"><!><code> </code><button class="icon-button"><!></button><button class="icon-button" aria-label="Copy API key"><!></button></div><span class="field-hint">Revealed keys disappear after 30 seconds. Copying is an explicit action.</span></div><label class="field" style="margin-bottom:0"><span>Model</span><select aria-label="Client model"><option> </option><!></select></label><!></section> <section class="section" style="border:0"><div class="section-title"><h2>Client configuration</h2><!></div><div class="segmented" aria-label="Client format"></div><div class="code-panel"><div class="code-heading"><!><span> </span><button class="text-button"><!>Copy</button></div><pre> </pre></div><!></section></div><aside><section class="section"><span class="label">Three steps, no new account</span><div class="step"><span class="step-num">1</span><div><strong>Open your AI website</strong><p>Sign in and select the model on its own page. Open its model menu to help discovery.</p></div></div><div class="step"><span class="step-num">2</span><div><strong>Pair your external coding tool</strong><p>These details connect the tool to this desktop app. They do not connect to a paid provider API.</p></div></div><div class="step"><span class="step-num">3</span><div><strong>Start a conversation</strong><p>Keep Bridge running. Requests stream through the corresponding website tab.</p></div></div></section><section class="section"><h3 style="margin-bottom:12px">What crosses the bridge</h3><p>Messages, model selections, framed tool calls, and cancellation. Website login credentials stay in the webview.</p><p style="margin-top:12px">The coding client executes tools. Bridge never executes a model’s shell command itself.</p></section><section class="section"><div class="note" style="padding:0"><!><span>Website limits and access rules still apply. Fallback is disabled unless you explicitly configure it.</span></div></section><button class="text-button" style="margin-top:15px">Watch session activity<!></button></aside></div>`);
+var root = $.from_html(`<div class="split"><div><section class="section"><div class="section-title"><h2>Connection details</h2><span><span></span> </span></div><label class="field"><span>Local model gateway</span><div class="readout"><!><code> </code><button class="icon-button" aria-label="Copy API endpoint"><!></button></div></label><div class="field"><span>Local access token <span class="faint">Not a provider credential</span></span><div class="readout"><!><code> </code><button class="icon-button"><!></button><button class="icon-button" aria-label="Copy API key"><!></button></div><span class="field-hint">Revealed keys disappear after 30 seconds. Copying is an explicit action.</span></div><label class="field" style="margin-bottom:0"><span>Model</span><select aria-label="Client model"><option> </option><!></select></label><!></section> <section class="section" style="border:0"><div class="section-title"><h2>Client configuration</h2><!></div><div class="segmented" aria-label="Client format"></div><div class="code-panel"><div class="code-heading"><!><span> </span><button class="text-button"><!>Copy</button></div><pre> </pre></div><!></section></div><aside><section class="section"><span class="label">Three steps, no new account</span><div class="step"><span class="step-num">1</span><div><strong>Open your AI website</strong><p>Sign in normally. Discovery watches the page, selections, and safe capability metadata without sending test prompts.</p></div></div><div class="step"><span class="step-num">2</span><div><strong>Pair your external coding tool</strong><p>These details connect the tool to this desktop app. They do not connect to a paid provider API.</p></div></div><div class="step"><span class="step-num">3</span><div><strong>Start a conversation</strong><p>Keep Codemax running. Requests stream through the corresponding website tab.</p></div></div></section><section class="section"><h3 style="margin-bottom:12px">What crosses the bridge</h3><p>Messages, model selections, framed tool calls, and cancellation. Website login credentials stay in the webview.</p><p style="margin-top:12px">In harness mode, your harness executes tools under its own permissions. Website tool sessions use the separately approved MCP connections in Tools & MCP.</p></section><section class="section"><div class="note" style="padding:0"><!><span>Website limits and access rules still apply. Fallback is disabled unless you explicitly configure it.</span></div></section><button class="text-button" style="margin-top:15px">Watch session activity<!></button></aside></div>`);
 
 export default function ExternalClients($$anchor, $$props) {
 	$.push($$props, true);
 
-	let client = $.state('opencode');
 	let selected = $.state('');
 	let probing = $.state(false);
 	let probeMessage = $.state('');
 	let timer;
+	const client = $.derived(() => app.preferences.harness || 'opencode');
+	const sh = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
 	const endpoint = $.derived(() => `http://127.0.0.1:${app.snapshot?.api.port ?? 7331}`);
-	const model = $.derived(() => $.get(selected) || app.preferences.default_model || app.models[0]?.id || 'bridge/default');
+	const model = $.derived(() => app.exposedModels.find((m) => m.id === $.get(selected))?.id || app.exposedModels.find((m) => m.id === app.preferences.default_model)?.id || app.exposedModels[0]?.id || '');
 
 	const clients = [
 		{ id: 'opencode', name: 'OpenCode' },
@@ -39,12 +40,12 @@ export default function ExternalClients($$anchor, $$props) {
 		provider: {
 			bridge: {
 				npm: '@ai-sdk/openai-compatible',
-				name: 'Desktop AI Bridge',
+				name: 'Codemax websites',
 				options: {
 					baseURL: `${$.get(endpoint)}/v1`,
 					apiKey: '{env:BRIDGE_API_KEY}'
 				},
-				models: Object.fromEntries(app.models.map((m) => [m.id, { name: `${m.provider.label} / ${m.display_name}` }]))
+				models: Object.fromEntries(app.exposedModels.map((m) => [m.id, { name: `${m.provider.label} / ${m.display_name}` }]))
 			}
 		}
 	}));
@@ -56,8 +57,9 @@ export default function ExternalClients($$anchor, $$props) {
 			: 'Terminal · streaming request');
 
 	const snippet = $.derived(() => {
+		if (!$.get(model)) return 'Open an AI website and sign in. Connection details populate after positive model detection.';
 		if ($.get(client) === 'opencode') return JSON.stringify($.get(config), null, 2);
-		if ($.get(client) === 'claude') return `read -rsp 'Local Bridge key: ' ANTHROPIC_AUTH_TOKEN; echo\nexport ANTHROPIC_AUTH_TOKEN\nexport ANTHROPIC_BASE_URL='${$.get(endpoint)}'\nexport ANTHROPIC_MODEL='${$.get(model)}'\nexport ANTHROPIC_DEFAULT_HAIKU_MODEL='${$.get(model)}'\nexport ANTHROPIC_DEFAULT_SONNET_MODEL='${$.get(model)}'\nexport ANTHROPIC_DEFAULT_OPUS_MODEL='${$.get(model)}'\nclaude`;
+		if ($.get(client) === 'claude') return `read -rsp 'Local Bridge key: ' ANTHROPIC_AUTH_TOKEN; echo\nexport ANTHROPIC_AUTH_TOKEN\nexport ANTHROPIC_BASE_URL='${$.get(endpoint)}'\nexport ANTHROPIC_MODEL=${sh($.get(model))}\nexport ANTHROPIC_DEFAULT_HAIKU_MODEL=${sh($.get(model))}\nexport ANTHROPIC_DEFAULT_SONNET_MODEL=${sh($.get(model))}\nexport ANTHROPIC_DEFAULT_OPUS_MODEL=${sh($.get(model))}\nclaude`;
 
 		const path = $.get(client) === 'chat'
 			? '/v1/chat/completions'
@@ -92,7 +94,7 @@ export default function ExternalClients($$anchor, $$props) {
 					]
 				};
 
-		return `read -rsp 'Local Bridge key: ' BRIDGE_API_KEY; echo\nexport BRIDGE_API_KEY\ncurl --no-buffer '${$.get(endpoint)}${path}' \\\n  -H "Authorization: Bearer $BRIDGE_API_KEY" \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-Bridge-Session: terminal-review' \\\n${$.get(client) === 'messages' ? "  -H 'anthropic-version: 2023-06-01' \\\n" : ''}  --data '${JSON.stringify(payload)}'`;
+		return `read -rsp 'Local Bridge key: ' BRIDGE_API_KEY; echo\nexport BRIDGE_API_KEY\ncurl --no-buffer '${$.get(endpoint)}${path}' \\\n  -H "Authorization: Bearer $BRIDGE_API_KEY" \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-Bridge-Session: terminal-review' \\\n${$.get(client) === 'messages' ? "  -H 'anthropic-version: 2023-06-01' \\\n" : ''}  --data ${sh(JSON.stringify(payload))}`;
 	});
 
 	async function reveal() {
@@ -158,13 +160,13 @@ export default function ExternalClients($$anchor, $$props) {
 	Icon(node, { name: 'globe', size: 15 });
 
 	var code = $.sibling(node);
-	var text_1 = $.child(code);
+	var text_1 = $.child(code, true);
 
 	$.reset(code);
 
 	var button = $.sibling(code);
 
-	button.__click = () => app.clipboard(`${$.get(endpoint)}/v1`);
+	button.__click = () => app.clipboard($.get(client) === 'claude' || $.get(client) === 'messages' ? $.get(endpoint) : `${$.get(endpoint)}/v1`);
 
 	var node_1 = $.child(button);
 
@@ -225,7 +227,7 @@ export default function ExternalClients($$anchor, $$props) {
 
 	var node_5 = $.sibling(option);
 
-	$.each(node_5, 17, () => app.models, (m) => m.id, ($$anchor, m) => {
+	$.each(node_5, 17, () => app.exposedModels, (m) => m.id, ($$anchor, m) => {
 		var option_1 = root_1();
 		var text_4 = $.child(option_1);
 
@@ -287,7 +289,7 @@ export default function ExternalClients($$anchor, $$props) {
 			Icon(node_9, { name: 'download', size: 14 });
 			$.next();
 			$.reset(button_3);
-			$.template_effect(() => button_3.disabled = !app.models.length);
+			$.template_effect(() => button_3.disabled = !app.exposedModels.length);
 			$.append($$anchor, button_3);
 		};
 
@@ -303,7 +305,7 @@ export default function ExternalClients($$anchor, $$props) {
 	$.each(div_8, 21, () => clients, $.index, ($$anchor, c) => {
 		var button_4 = root_4();
 
-		button_4.__click = () => $.set(client, $.get(c).id, true);
+		button_4.__click = () => app.settings({ harness: $.get(c).id });
 
 		let classes_2;
 		var text_6 = $.child(button_4, true);
@@ -428,15 +430,15 @@ export default function ExternalClients($$anchor, $$props) {
 		classes = $.set_class(span, 1, 'tag', null, classes, { ready: app.snapshot?.api.running });
 		classes_1 = $.set_class(span_1, 1, 'dot', null, classes_1, { online: app.snapshot?.api.running });
 		$.set_text(text, app.snapshot?.api.running ? 'Listening on loopback' : 'Stopped');
-		$.set_text(text_1, `${$.get(endpoint) ?? ''}/v1`);
+		$.set_text(text_1, $.get(client) === 'claude' || $.get(client) === 'messages' ? $.get(endpoint) : `${$.get(endpoint)}/v1`);
 		$.set_text(text_2, app.secret || 'sk-local-••••••••••••••••••••••••••••');
 		$.set_attribute(button_1, 'aria-label', app.secret ? 'Hide API key' : 'Reveal API key');
 		button_1.disabled = !app.ready;
 		button_2.disabled = !app.ready;
-		select.disabled = !app.models.length;
+		select.disabled = !app.exposedModels.length;
 		$.set_text(text_3, app.preferences.default_model ? 'Workspace default' : 'First discovered model');
 		$.set_text(text_7, $.get(filename));
-		button_5.disabled = !app.models.length;
+		button_5.disabled = !app.exposedModels.length;
 		$.set_text(text_8, $.get(snippet));
 	});
 

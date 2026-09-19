@@ -78,15 +78,20 @@ class FixtureHost:
                     with self.lock:q=self.pending.get(msg['id'])
                     if q is not None:q.put(msg)
                 elif msg.get('type')=='event' and msg.get('name')=='snapshot':self.snapshot=msg['data']
-                elif msg.get('type')=='host':
+                elif msg.get('type')=='mcp':self.mcp_frame(msg)
+                elif msg.get('type')=='host' and 'provider_id' in msg:
                     self.provider=msg['provider_id']
                     if msg['name'] in ('browser.open','browser.scan'):self.observe(observation())
                 elif msg.get('type')=='action':
                     action=msg['action'];self.actions.append(action)
                     if action['type']=='generate':self.emit_generation(action)
                     elif action['type']=='stop':self.stopped.set()
+                    elif action['type']=='new_chat':
+                        self.observe({'v':1,'type':'action_result','origin':ORIGIN,'document_id':'fixture_document_1','request_id':action['request_id'],'status':'new_chat_opened'})
         except Exception as exc:
             if not self.stopping:self.reader_error=f'{type(exc).__name__}: {exc}'
+    def mcp_frame(self,frame):
+        raise AssertionError("MCP frame not expected in gateway-only suite")
     def http(self,path,body=None,headers=None,auth=True,method=None):
         connection=http.client.HTTPConnection('127.0.0.1',self.port,timeout=10)
         h={'Authorization':f'Bearer {self.key}'} if auth else {}

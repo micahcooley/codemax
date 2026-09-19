@@ -1,52 +1,58 @@
-# Website clients, file permissions and tab activity — 0.1.0-dev.3
+# Codemax browse-to-discover + MCP implementation
 
-## Delivered changes
+## Delivery status
 
-The primary **Connect a client** screen now starts with the signed-in website and its observed model. It does not ask for a provider API key or a provider API base URL. An **Open Z.ai** action opens `https://chat.z.ai/`. Exact GLM-5.3-Flash selection is preferred only when it appears in the observed registry; no model or availability is invented. External coding-harness loopback configuration remains in an optional advanced disclosure. Its local token is still required for security and is not a provider credential.
+Application implementation revision, with compiled Svelte frontend. Not a compiled native installer, a live interoperability certification, or a claim that the complete masterplan is release-qualified.
 
-The built-in file test has a complete Zag implementation: prepare a private synthetic file, request explicit consent, send an ordinary model request through the existing gateway/session/tool path over a private socketpair, validate and execute one exact file read, return the tool result in the same conversation, compare the final response with the random value, revoke and clean up. UI, private IPC, broker, session cleanup and build-time native test source are wired. No production Python or JavaScript filesystem backend is introduced.
+User requirement: ordinary browsing/sign-in should passively discover genuine AI providers; expose selected models to the chosen harness; provide clean provider settings and advanced controls; insert instructions and send results for permissioned MCP tools. The original MASTERPLAN.md is preserved. The revised product workflow is in docs/CODEMAX_WORKFLOW.md.
 
-Provider pages still receive only `provider_observe`. All custom Tauri commands are now listed in the build-time `AppManifest` so capability permissions also cover commands added in the preceding delivery. The trusted main webview is checked again inside each command. No new remote filesystem or shell permissions were granted.
+## Completed source changes
 
-## Permission policy
+- Browser profiles are distinct from admitted model providers. New addresses are ordinary browsing until Zag has independent composer/send, model and conversation evidence. A search box, main region, login form or model mention is insufficient.
+- Continuous event-driven discovery observes native and correlated custom model/reasoning controls, current selection and explicit per-model context/tokenizer metadata. It does not send test prompts, open menus autonomously, read credentials, or invent hidden capabilities.
+- Provider settings control site/model exposure, scan pause, dismissal/resume, context/reasoning overrides, mappings and lifecycle. Advanced controls stay collapsed. Unknown/website-reported/user-supplied facts remain distinguishable.
+- Harness selection persists. Generated OpenCode/Claude Code/Chat/Responses/Messages configurations use the live exposed registry. Connection details are primary, not hidden behind a mandatory file test. Static client catalogs may require refresh/export; client model-provider APIs and MCP are separate paths.
+- Zag MCP client: user-confirmed stdio configuration, legacy negotiation and bounded 2026 discovery, catalog/pagination, per-tool enabling, call correlation, pending approval, once/per-task grants, result handling and same-session continuation. Rust only transports process bytes and manages lifecycle.
+- Built-in tasks automatically insert tool instructions and optionally auto-send results. A user must start a task. Ordinary webpage text never authorizes local tools.
+- Pending approval is revalidated at the execution boundary. Catalog/epoch changes, lost conversations, disabled exposure, cancellation and expiry revoke grants. No grants survive restart.
+- Browser automation now refuses to overwrite an unsent draft or submit a composer changed by the user before sending. Passive scan pause/resume is exercised in Chromium.
+- Native regression source covers admission/exposure and MCP negotiation/permission rules. A native integration driver with an independent stdio/file fixture is included; it does not replace the production backend with Python.
 
-Only the app-created `bridge-probe.txt` is eligible. Consent is volatile, bound to a random test ID plus the exact provider and model, single-read, and expires after five minutes. The prompt does not initially contain the random value. `openat` resolves only the exact filename relative to a retained directory descriptor, with no-follow, close-on-exec and nonblocking flags; `fstat` verifies regular-file type, owner, restrictive mode, link count and size before a bounded read. Wrong identities, arbitrary paths, symlinks, hardlinks, special files, repeated reads and expired/revoked grants fail closed. The read must match the original synthetic content. Failure to remove the synthetic file is reported, not silently described as success.
-
-The app creates and deletes its own test artifact. Model-requested writes, deletion, shell commands and general project/home-directory access are not granted. External coding tools remain responsible for their own workspace and command permissions; Bridge cannot claim to enforce another program's filesystem policy.
-
-## Activity indicators
-
-Every website tab and sidebar row has an accessible ring. Actual page-load events, bridge generation, visible enabled stop controls, and assistant `aria-busy` observations drive the busy state. Manual website typing is covered; unrelated background network traffic does not count. A stalled/incomplete mapping is stationary with a **Needs control mapping** label rather than an endless busy animation. Idle/sleeping states use stationary rings. Login, quota and mapping errors show a stationary attention state. Reduced-motion preferences disable rotation without removing the state label. Native completion clears stale busy state before a following tool-result turn is admitted.
-
-## Executed evidence
+## Verified in this execution environment
 
 | Check | Result | Scope |
-|---|---|---|
-| Svelte compilation | 24 modules, zero warnings | Actual local Svelte 5.48.0 compiler; compiled assets included |
-| UI interactions | 15 passed | Actual compiled UI in Chromium; explicit Tauri/provider test doubles |
-| Browser agent | 23 passed | Actual `browser/agent.js`, in-memory DOM/transport fixtures, including manual busy/idle and 22-turn continuity |
-| Node suite | 20 passed | Six helper tests, three real local HTTP fixture tests, eleven static source/capability checks |
-| File-permission cases | 26 passed | Real OS file operations on synthetic temp fixtures using an independent **test-only Python client**, not native Zag |
-| Zag static audit | 32 modules; 3,300 qualified calls; no mismatches | Import/export/argument-count checks only, not compilation |
-| Native Zag build | Blocked, exit 77 | Compiler absent; native file-probe unit source included in real build script |
-| Rust/Tauri native build | Not executed | Cargo/rustc absent |
+|---|---:|---|
+| Svelte compilation | 27 application modules, zero component warnings | Actual Svelte 5.48.0 compiler and bundled runtime; offline build |
+| Existing compiled-UI suite | 15 passed | Actual compiled Svelte, explicit Tauri/native-state test double |
+| New Codemax UI suite | 12 passed | Admission presentation, exposure/config updates, consent controls, escaping, responsive layout |
+| Browser-agent suite | 26 passed | Actual agent in Chromium with in-memory website/network fixtures; includes 22-turn sequence |
+| Node suite | 25 passed | 11 pure helper cases, 3 real local HTTP fixture cases, 11 static boundary cases |
+| Zag source contract audit | 4,255 calls across 35 modules; no mismatches | Imports, symbols and qualified-call arity only; not compilation |
+| New native harness scripts | Python syntax checked | Not execution of the native integration |
+| MCP fixture script | Node syntax checked | Independent test-server source, not production-client execution |
 
-Detailed evidence is under `tests/evidence/`. The regular build script invokes both native Zag suites before packaging. Full TypeScript typechecking, Vite dependency installation, Zag types/ownership/code generation, native IPC enforcement, WebKitGTK behavior and installation remain unverified in this environment. Static checks do not establish those properties.
+Evidence is in tests/evidence/frontend-build.json, ui-browser.json, codemax-ui.json, browser-dom-tests.json, node-current.log, and zag-static-contracts.json. Screenshots are actual compiled UI captures with labelled test provider/native-host doubles, not generated concept images and not native Tauri screenshots.
 
-## Z.ai / GLM-5.3-Flash live test
+## Failed attempts and unverified boundaries
 
-In browser automation run `d37e7b98-5d12-4bd7-bcbc-3d96e49d377b`, the normal Z.ai chat website exposed and selected **GLM-5.3-Flash** without requiring login or CAPTCHA in that session. No provider API key was used. It returned this exact requested tool-shaped output:
+The native build was attempted and exited **77** because the Zag compiler is absent. `tests/evidence/native-build-current.log` records the failure. Rust/Cargo are also absent. Native source was reviewed but not compiled, linked or executed. Static import/arity checks do not prove type, ownership, ABI, effect, syscall or runtime correctness.
 
-```json
-{"id":"bridge-read-probe","name":"read_file","arguments":{"path":"bridge-probe.txt"}}
-```
+Consequently native MCP protocol/stdio execution, real website-to-MCP-to-local-file continuation, Tauri/WebKitGTK login isolation, live provider detection accuracy, real coding harness interoperability, process containment, crash stress and native Linux packaging remain unverified. Ordinary fixture success is not a substitute for these gates. No live Z.ai or other model request was made during this revision.
 
-That output was manually relayed to the local reference test client. Without consent it was denied. After an explicit synthetic-file grant, an actual local read succeeded; replay and malicious scope variations were refused. No personal/project file was inspected.
+The built-in MCP client presently supports local stdio, not direct remote HTTP/SSE/OAuth. It is not a sandbox for trusted server executables. Tool arguments are structurally bounded; full schema validation belongs to the server. 2026 change subscriptions and asynchronous/multi-round-trip capabilities are not negotiated. No training/TNN production admission occurred. No universal website/harness compatibility or measured superiority to MCP SuperAssistant is claimed.
 
-**The follow-up did not pass.** Run `550b9678-9249-4e62-a1c7-bac12b80968f` was a new website session. GLM declined the manually relayed result because it had no previous tool call in that conversation. There was no verified final echo. The first probe used bare JSON, not the production nonce-framed parser. These two live runs plus the local fixture test do **not** establish native app/harness end-to-end interoperability. The production test is authored to retain its actual conversation; that route needs a native run.
+## Bugs found and repaired during this round
 
-`tests/evidence/zai-live.json` preserves the observed results, including the failure. The automation tool reported screenshots within its runs but returned no reusable image. Packaged screenshots and the GIF are actual captures of the compiled Svelte UI with an explicitly labelled local test provider; they are not screenshots of Z.ai or a native Tauri executable.
+- Every opened address previously looked like a provider; registration and admission are now separate.
+- Generic page regions and unrelated menus could contribute misleading detector evidence; they are not sufficient for admission and menu ownership is correlated.
+- Routine harness connection details were buried behind the diagnostic workflow; setup and diagnostics are now separate.
+- A nested diagnostic scroll container interfered with UI interaction; fixed and regression suite passed.
+- MCP fallback initially used an unsigned-only JSON numeric helper for -32601; it now checks the exact numeric error spelling, with native regression source.
+- Pending approvals initially relied on a later tick to notice changed exposure/session; exact-boundary revalidation added.
+- Composer insertion could replace unsent work; preservation and pre-send equality checks added and browser-tested.
 
-## Delivery
+## Sources and recovery
 
-The ZIP includes the entire revised source, built UI, tests, reports, screenshots/GIF and updated local Git recovery bundle. No native installer or remote GitHub commit is claimed. GitHub was used to inspect Zag filesystem primitives and the Tauri page-load API. The original masterplan is preserved. Previous reports are historical under `docs/history/`.
+MCP SuperAssistant's README/official quick start, official MCP legacy lifecycle and 2026 architecture, and OpenCode provider documentation were inspected. References and limitations are in docs/SOURCES.md. The original masterplan is the product basis; external documentation informed protocol/UI changes, not proof of the application's runtime.
+
+A local commit and full Git recovery bundle accompany this revision. No remote GitHub commit, CI run, Drive upload or native installer is claimed for this round. ZIP/checksum verification is recorded in PACKAGE_METADATA.json and the external delivery receipt.

@@ -4,67 +4,67 @@
     {
       "name": "login_form_sensitive_fields_excluded",
       "status": "PASS",
-      "seconds": 0.032
+      "seconds": 0.022
     },
     {
       "name": "generic_controls_observed",
       "status": "PASS",
-      "seconds": 0.008
+      "seconds": 0.007
     },
     {
       "name": "manual_website_generation_emits_busy_then_idle_observations",
       "status": "PASS",
-      "seconds": 0.495
+      "seconds": 0.479
     },
     {
       "name": "real_dom_incremental_unicode_stream",
       "status": "PASS",
-      "seconds": 0.265
+      "seconds": 0.246
     },
     {
       "name": "model_selection_precedes_submission",
       "status": "PASS",
-      "seconds": 0.262
+      "seconds": 0.265
     },
     {
       "name": "22_turn_browser_conversation_continuity",
       "status": "PASS",
-      "seconds": 5.901
+      "seconds": 5.899
     },
     {
       "name": "cancellation_stops_provider_generation",
       "status": "PASS",
-      "seconds": 0.22
+      "seconds": 0.221
     },
     {
       "name": "provider_quota_stops_without_retry",
       "status": "PASS",
-      "seconds": 0.094
+      "seconds": 0.095
     },
     {
       "name": "login_expiration_surfaces_auth_error",
       "status": "PASS",
-      "seconds": 0.099
+      "seconds": 0.1
     },
     {
       "name": "broken_stream_never_reports_success",
       "status": "PASS",
-      "seconds": 0.158
+      "seconds": 0.15
     },
     {
       "name": "response_rewrite_never_duplicates_text",
       "status": "PASS",
-      "seconds": 0.276
+      "seconds": 0.285
     },
     {
       "name": "websocket_metadata_and_dom_stream",
       "status": "PASS",
-      "seconds": 0.316
+      "seconds": 0.264
     },
     {
       "name": "eventsource_metadata_and_dom_stream",
       "status": "PASS",
-      "seconds": 0.268
+      "seconds": 0.284
     },
     {
       "name": "all_observations_remain_bounded_and_redacted",
@@ -74,27 +74,27 @@
     {
       "name": "fixture_state_rehydration_rejects_stale_document_actions",
       "status": "PASS",
-      "seconds": 0.337
+      "seconds": 0.34
     },
     {
       "name": "sensitive_target_rechecked_at_execution",
       "status": "PASS",
-      "seconds": 0.045
+      "seconds": 0.033
     },
     {
       "name": "semantic_mapping_survives_fixture_redesign",
       "status": "PASS",
-      "seconds": 0.576
+      "seconds": 0.552
     },
     {
       "name": "fixture_state_containers_are_independent",
       "status": "PASS",
-      "seconds": 0.123
+      "seconds": 0.097
     },
     {
       "name": "client_attachment_upload_preserves_existing_files_and_refuses_malformed_base64",
       "status": "PASS",
-      "seconds": 0.411
+      "seconds": 0.405
     },
     {
       "name": "exact_reasoning_switch_precedes_submission",
@@ -109,14 +109,29 @@
     {
       "name": "connector_picker_selects_control_without_editing_or_submitting",
       "status": "PASS",
-      "seconds": 0.113
+      "seconds": 0.119
     },
     {
       "name": "custom_model_popover_selects_exact_observed_option",
       "status": "PASS",
-      "seconds": 0.34
+      "seconds": 0.35
+    },
+    {
+      "name": "automation_preserves_unsent_user_draft_without_submission",
+      "status": "PASS",
+      "seconds": 0.043
+    },
+    {
+      "name": "changed_composer_is_not_auto_submitted",
+      "status": "PASS",
+      "seconds": 0.05
+    },
+    {
+      "name": "discovery_pause_stops_observation_and_explicit_resume_restarts",
+      "status": "PASS",
+      "seconds": 0.735
     }
   ],
-  "passed": 23,
+  "passed": 26,
   "failed": 0
 }

@@ -7,7 +7,7 @@ catch {
     return url;
 } }
 export const initials = (label) => label.split(/[ ._-]+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
-const stateNames = { READY: 'Ready', ACTIVE: 'Generating', IDLE: 'Idle', EXPIRED: 'Ended', RESTORING: 'Restoring', PROVIDER_LOST: 'Reconnect', RATE_LIMITED: 'Rate limited', BROKEN_MAPPING: 'Needs repair', UNCONFIGURED: 'Closed', LOADING: 'Opening', LOGIN_REQUIRED: 'Sign in', DISCOVERING: 'Discovering', REDISCOVERING: 'Rescanning' };
+const stateNames = { BROWSING: 'Browsing', CANDIDATE: 'Inspecting chat controls', READY: 'Ready', ACTIVE: 'Generating', IDLE: 'Idle', EXPIRED: 'Ended', RESTORING: 'Restoring', PROVIDER_LOST: 'Reconnect', RATE_LIMITED: 'Rate limited', BROKEN_MAPPING: 'Needs repair', UNCONFIGURED: 'Closed', LOADING: 'Opening', LOGIN_REQUIRED: 'Sign in', DISCOVERING: 'Discovering', REDISCOVERING: 'Rescanning' };
 export const stateText = (state) => stateNames[state] ?? state.replaceAll('_', ' ').toLowerCase();
 export const providerText = (p) => p.state === 'UNCONFIGURED' && p.open_tab ? 'Sleeping' : stateText(p.state);
 export function dateTime(epoch) { return epoch ? new Date(epoch * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not recorded'; }

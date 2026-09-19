@@ -4,7 +4,7 @@
 @import("../core/json.zag") as json
 // This validator is on the authoritative side of the IPC trust boundary.
 fn allowed(p: *registry.Provider) bool {
-    return p.*.state == 4 && p.*.quota == 0 && p.*.prompt > 0 && p.*.send > 0 && p.*.response > 0 && p.*.document.len > 0;
+    return registry.publishable(p) && p.*.quota == 0 && p.*.prompt > 0 && p.*.send > 0 && p.*.response > 0 && p.*.document.len > 0;
 }
 fn generate(p: *registry.Provider, model_index: i32, request_id: []u8, prompt: []u8, reasoning: []u8, files: []u8, new_chat: bool, out: *buf.Buffer) bool {
     if (!allowed(p) || model_index < 0 || model_index >= p.*.model_count || _zag_strlen(prompt) > 131072) { return false; }

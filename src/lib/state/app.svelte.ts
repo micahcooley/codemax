@@ -1,7 +1,7 @@
 import type {Route,Snapshot,HostStatus,Provider,Mapping,Preferences} from '../types/bridge';
 import * as bridge from '../api/bridge';
 export type Popup='add'|'commands'|'rotate-key'|'clear-profile'|'remove-provider'|'close-provider'|'shortcuts'|null;
-const initial:Preferences={theme:'dark',compact:false,restore_tabs:true,auto_start:false,idle_minutes:30,logging:'INFO',fallback_enabled:false,fallback_model:'',default_model:'',raw_capture:false,developer_mode:false};
+const initial:Preferences={harness:'opencode',theme:'dark',compact:false,restore_tabs:true,auto_start:false,idle_minutes:30,logging:'INFO',fallback_enabled:false,fallback_model:'',default_model:'',raw_capture:false,developer_mode:false};
 class Application {
   route=$state<Route>('browser');snapshot=$state<Snapshot|null>(null);host=$state<HostStatus>({state:'STARTING',code:null});
   selectedProvider=$state<number|null>(null);popup=$state<Popup>(null);popupProvider=$state<number|null>(null);
@@ -16,7 +16,9 @@ class Application {
     const ai=this.tabOrder.indexOf(a.id),bi=this.tabOrder.indexOf(b.id);
     return (ai<0?1000+a.id:ai)-(bi<0?1000+b.id:bi);
   }));
-  models=$derived(this.providers.flatMap(provider=>provider.models.map(model=>({...model,provider}))));
+  detectedProviders=$derived(this.providers.filter(p=>p.detected&&!p.dismissed));
+  models=$derived(this.detectedProviders.flatMap(provider=>provider.models.map(model=>({...model,provider}))));
+  exposedModels=$derived(this.models.filter(m=>m.enabled&&m.available&&m.provider.exposed&&m.provider.state==='READY'));
   provider=$derived<Provider|undefined>(this.providers.find(p=>p.id===this.selectedProvider));
   ready=$derived(this.host.state==='READY'&&!!this.snapshot);
   sessions=$derived(this.snapshot?.sessions??[]);
@@ -44,15 +46,20 @@ class Application {
     }
   }
   newTab():void{this.selectedProvider=null;this.route='browser';this.findVisible=false;this.focusAddress++;void this.perform('workspace.focus',{provider_id:0});}
+  address(input:string):URL{const text=input.trim();if(!text)throw Error('EMPTY_ADDRESS');
+    if(text.includes('://')){const url=new URL(text);if(!['https:','http:'].includes(url.protocol))throw Error('UNSAFE_ADDRESS');return url;}
+    if(!/\s/.test(text)&&(/^[\w.-]+\.[a-z]{2,}(?::\d+)?(?:[/?#]|$)/i.test(text)||/^localhost(?::\d+)?(?:[/?#]|$)/.test(text)||/^127\.0\.0\.1/.test(text)))return new URL(`https://${text}`);
+    return new URL(`https://www.google.com/search?q=${encodeURIComponent(text)}`);
+  }
   async addWebsite(url:string,label=''):Promise<boolean>{
-    let parsed:URL;try{parsed=new URL(url.includes('://')?url:`https://${url}`);}catch{this.error='INVALID_PROVIDER_URL';return false;}
+    let parsed:URL;try{parsed=this.address(url);}catch{this.error='INVALID_PROVIDER_URL';return false;}
     const existing=this.providers.find(p=>p.origin===parsed.origin);
     if(existing){this.popup=null;await this.openProvider(existing.id);return true;}
     const result=await this.perform<{provider_id:number}>('provider.add',{url:parsed.href,label:label.trim()||parsed.hostname.replace(/^chat\./,'')});
     if(!result)return false;this.popup=null;await this.openProvider(result.provider_id);return true;
   }
   async go(url:string):Promise<void>{
-    let parsed:URL;try{parsed=new URL(url.includes('://')?url:`https://${url}`);}catch{this.error='INVALID_PROVIDER_URL';return;}
+    let parsed:URL;try{parsed=this.address(url);}catch{this.error='INVALID_PROVIDER_URL';return;}
     if(this.provider&&parsed.origin===this.provider.origin){await this.perform('provider.navigate',{provider_id:this.provider.id,url:parsed.href});}
     else await this.addWebsite(parsed.href);
   }

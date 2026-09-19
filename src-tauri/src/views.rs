@@ -143,7 +143,7 @@ pub async fn host_action(app: &AppHandle, host: &Arc<Host>, value: &Value) -> Re
 }
 pub fn execute(app: &AppHandle, host: &Arc<Host>, frame: &Value) -> Result<(), String> {
     let id = provider_id(frame)?; let action = frame.get("action").ok_or("ACTION_REQUIRED")?;
-    if !matches!(action["type"].as_str(), Some("generate" | "stop" | "scan" | "pick" | "new_chat")) { return Err("ACTION_DENIED".into()); }
+    if !matches!(action["type"].as_str(), Some("discovery_policy" | "generate" | "stop" | "scan" | "pick" | "new_chat")) { return Err("ACTION_DENIED".into()); }
     let view = app.get_webview(&format!("provider-{id}")).ok_or("PROVIDER_VIEW_CLOSED")?;
     let actual = view.url().map_err(|_| "VIEW_URL_UNAVAILABLE")?;
     let origin = host.views.lock().map_err(|_| "HOST_LOCK_FAILED")?.get(&id).ok_or("UNKNOWN_VIEW")?.origin.clone();
@@ -180,7 +180,7 @@ pub async fn provider_observe(webview: Webview, host: tauri::State<'_, Arc<Host>
     if !host.ready.load(Ordering::Acquire) { return Err("BACKEND_UNAVAILABLE".into()); }
     let size = serde_json::to_vec(&event).map_err(|_| "INVALID_OBSERVATION")?.len();
     if size > 32768 || event["v"] != 1 || !event.is_object() { return Err("OBSERVATION_LIMIT".into()); }
-    if !matches!(event["type"].as_str(), Some("picked" | "shortcut" | "observation" | "network" | "generation_delta" | "generation_done" | "generation_error" | "action_result" | "quota" | "login_required" | "interaction" | "instrumentation_warning")) { return Err("OBSERVATION_TYPE_DENIED".into()); }
+    if !matches!(event["type"].as_str(), Some("capabilities" | "picked" | "shortcut" | "observation" | "network" | "generation_delta" | "generation_done" | "generation_error" | "action_result" | "quota" | "login_required" | "interaction" | "instrumentation_warning")) { return Err("OBSERVATION_TYPE_DENIED".into()); }
     let url = webview.url().map_err(|_| "VIEW_URL_UNAVAILABLE")?;
     {
         let mut views = host.views.lock().map_err(|_| "HOST_LOCK_FAILED")?;

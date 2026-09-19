@@ -5,8 +5,8 @@
   function context(event:MouseEvent,id:number){event.preventDefault();app.contextMenu={id,y:Math.max(92,Math.min(event.clientY,window.innerHeight-265))};}
 </script>
 <aside class="workspace-sidebar" class:collapsed={!app.sidebarVisible} aria-label="Workspace sidebar">
-  <div class="workspace-title"><span class="workspace-logo"><Icon name="folder" size={15}/></span><span><strong>Personal workspace</strong><small>Websites, connected locally</small></span></div>
-  <div class="sidebar-section"><span class="label">Your websites</span><span class="spacer"></span><span class="count">{app.providers.length}</span></div>
+  <div class="workspace-title"><span class="workspace-logo"><Icon name="folder" size={15}/></span><span><strong>Codemax</strong><small>Browse. Discover. Connect.</small></span></div>
+  <div class="sidebar-section"><span class="label">Browser tabs</span><span class="spacer"></span><span class="count">{app.providers.length}</span></div>
   <div class="site-list">
     {#each [...app.providers].sort((a,b)=>Number(b.pinned)-Number(a.pinned)||a.id-b.id) as provider(provider.id)}
       <button class="site-row" class:selected={app.selectedProvider===provider.id&&app.route==='browser'} title={`${provider.label} · ${providerText(provider)}`} onclick={()=>app.openProvider(provider.id)} oncontextmenu={event=>context(event,provider.id)}>

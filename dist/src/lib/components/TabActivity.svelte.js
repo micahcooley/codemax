@@ -27,9 +27,9 @@ export default function TabActivity($$anchor, $$props) {
 					? 'Loading'
 					: $.get(working)
 						? 'Discovering controls'
-						: $$props.provider.state === 'DISCOVERING'
-							? 'Needs control mapping'
-							: $$props.provider.open_tab && $$props.provider.state === 'READY' ? 'Idle' : 'Sleeping');
+						: ['DISCOVERING', 'CANDIDATE'].includes($$props.provider.state)
+							? 'Observing controls'
+							: $$props.provider.open_tab ? 'Idle' : 'Sleeping');
 
 	var span = root();
 	let classes;

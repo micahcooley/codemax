@@ -4,20 +4,21 @@
 @import("files.zag") as files
 // UI preferences and routing policy are persisted by Zag, never by browser pages.
 struct Settings {
-    theme: i32, compact: bool, restore_tabs: bool, auto_start: bool,
+    harness: i32, theme: i32, compact: bool, restore_tabs: bool, auto_start: bool,
     idle_minutes: i32, log_level: i32, fallback_enabled: bool, developer_mode: bool,
     fallback_model: buf.Buffer, default_model: buf.Buffer,
 }
 fn make() Settings {
-    return Settings{.theme = 0, .compact = false, .restore_tabs = true, .auto_start = false,
+    return Settings{.harness = 0, .theme = 0, .compact = false, .restore_tabs = true, .auto_start = false,
         .idle_minutes = 30, .log_level = 2, .fallback_enabled = false, .developer_mode = false,
         .fallback_model = buf.make(256), .default_model = buf.make(256)};
 }
 fn boolean(out: *buf.Buffer, value: bool) void { if (value) { buf.add(out, "true"); } else { buf.add(out, "false"); } }
 fn theme_name(n: i32) []u8 { if (n == 1) { return "light"; } if (n == 2) { return "system"; } return "dark"; }
 fn log_name(n: i32) []u8 { if (n == 0) { return "ERROR"; } if (n == 1) { return "WARN"; } if (n == 3) { return "DEBUG"; } return "INFO"; }
+fn harness_name(n: i32) []u8 { if (n == 1) { return "claude"; } if (n == 2) { return "chat"; } if (n == 3) { return "responses"; } if (n == 4) { return "messages"; } return "opencode"; }
 fn render(s: *Settings, out: *buf.Buffer) void {
-    buf.add(out, "{\"theme\":"); buf.json(out, theme_name(s.*.theme));
+    buf.add(out, "{\"harness\":"); buf.json(out, harness_name(s.*.harness)); buf.add(out, ",\"theme\":"); buf.json(out, theme_name(s.*.theme));
     buf.add(out, ",\"compact\":"); boolean(out, s.*.compact);
     buf.add(out, ",\"restore_tabs\":"); boolean(out, s.*.restore_tabs);
     buf.add(out, ",\"auto_start\":"); boolean(out, s.*.auto_start);
@@ -38,6 +39,8 @@ fn valid_bool(d: *json.Document, object: i32, key: []u8) bool {
 fn update(s: *Settings, d: *json.Document, object: i32) bool {
     if (json.kind(d, object) != 1 || !valid_bool(d, object, "compact") || !valid_bool(d, object, "restore_tabs") ||
         !valid_bool(d, object, "auto_start") || !valid_bool(d, object, "fallback_enabled") || !valid_bool(d, object, "developer_mode")) { return false; }
+    let harness: i32 = s.*.harness; let harness_at: i32 = json.get(d, object, "harness");
+    if (harness_at >= 0) { harness = 0 - 1; let n: i32 = 0; while (n < 5) { if (json.is_text(d, harness_at, harness_name(n))) { harness = n; } n = n + 1; } if (harness < 0) { return false; } }
     let theme: i32 = s.*.theme; let level: i32 = s.*.log_level;
     let at: i32 = json.get(d, object, "theme");
     if (at >= 0) {
@@ -64,7 +67,7 @@ fn update(s: *Settings, d: *json.Document, object: i32) bool {
     let enabled: bool = bool_field(d, object, "fallback_enabled", s.*.fallback_enabled);
     let ok: bool = fallback.ok != 0 && model.ok != 0 && (!enabled || fallback.len > 0);
     if (ok) {
-        s.*.theme = theme; s.*.log_level = level; s.*.idle_minutes = idle as i32;
+        s.*.harness = harness; s.*.theme = theme; s.*.log_level = level; s.*.idle_minutes = idle as i32;
         s.*.compact = bool_field(d, object, "compact", s.*.compact);
         s.*.restore_tabs = bool_field(d, object, "restore_tabs", s.*.restore_tabs);
         s.*.auto_start = bool_field(d, object, "auto_start", s.*.auto_start);
@@ -74,7 +77,7 @@ fn update(s: *Settings, d: *json.Document, object: i32) bool {
     buf.free(&fallback); buf.free(&model); return ok;
 }
 fn copy(source: *Settings, target: *Settings) void {
-    target.*.theme = source.*.theme; target.*.compact = source.*.compact; target.*.restore_tabs = source.*.restore_tabs;
+    target.*.harness = source.*.harness; target.*.theme = source.*.theme; target.*.compact = source.*.compact; target.*.restore_tabs = source.*.restore_tabs;
     target.*.auto_start = source.*.auto_start; target.*.idle_minutes = source.*.idle_minutes;
     target.*.developer_mode = source.*.developer_mode; target.*.log_level = source.*.log_level; target.*.fallback_enabled = source.*.fallback_enabled;
     buf.copy(&target.*.fallback_model, buf.view(&source.*.fallback_model)); buf.copy(&target.*.default_model, buf.view(&source.*.default_model));

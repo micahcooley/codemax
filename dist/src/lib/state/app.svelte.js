@@ -3,6 +3,7 @@ import * as $ from '../../../runtime/svelte_internal_client.js';
 import * as bridge from '../api/bridge.js';
 
 const initial = {
+	harness: 'opencode',
 	theme: 'dark',
 	compact: false,
 	restore_tabs: true,
@@ -272,7 +273,17 @@ class Application {
 		$.set(this.#tabs, value);
 	}
 
-	#models = $.derived(() => this.providers.flatMap((provider) => provider.models.map((model) => ({ ...model, provider }))));
+	#detectedProviders = $.derived(() => this.providers.filter((p) => p.detected && !p.dismissed));
+
+	get detectedProviders() {
+		return $.get(this.#detectedProviders);
+	}
+
+	set detectedProviders(value) {
+		$.set(this.#detectedProviders, value);
+	}
+
+	#models = $.derived(() => this.detectedProviders.flatMap((provider) => provider.models.map((model) => ({ ...model, provider }))));
 
 	get models() {
 		return $.get(this.#models);
@@ -280,6 +291,16 @@ class Application {
 
 	set models(value) {
 		$.set(this.#models, value);
+	}
+
+	#exposedModels = $.derived(() => this.models.filter((m) => m.enabled && m.available && m.provider.exposed && m.provider.state === 'READY'));
+
+	get exposedModels() {
+		return $.get(this.#exposedModels);
+	}
+
+	set exposedModels(value) {
+		$.set(this.#exposedModels, value);
 	}
 
 	#provider = $.derived(() => this.providers.find((p) => p.id === this.selectedProvider));
@@ -403,11 +424,29 @@ class Application {
 		void this.perform('workspace.focus', { provider_id: 0 });
 	}
 
+	address(input) {
+		const text = input.trim();
+
+		if (!text) throw Error('EMPTY_ADDRESS');
+
+		if (text.includes('://')) {
+			const url = new URL(text);
+
+			if (!['https:', 'http:'].includes(url.protocol)) throw Error('UNSAFE_ADDRESS');
+
+			return url;
+		}
+
+		if (!(/\s/).test(text) && ((/^[\w.-]+\.[a-z]{2,}(?::\d+)?(?:[/?#]|$)/i).test(text) || (/^localhost(?::\d+)?(?:[/?#]|$)/).test(text) || (/^127\.0\.0\.1/).test(text))) return new URL(`https://${text}`);
+
+		return new URL(`https://www.google.com/search?q=${encodeURIComponent(text)}`);
+	}
+
 	async addWebsite(url, label = '') {
 		let parsed;
 
 		try {
-			parsed = new URL(url.includes('://') ? url : `https://${url}`);
+			parsed = this.address(url);
 		} catch {
 			this.error = 'INVALID_PROVIDER_URL';
 
@@ -440,7 +479,7 @@ class Application {
 		let parsed;
 
 		try {
-			parsed = new URL(url.includes('://') ? url : `https://${url}`);
+			parsed = this.address(url);
 		} catch {
 			this.error = 'INVALID_PROVIDER_URL';
 

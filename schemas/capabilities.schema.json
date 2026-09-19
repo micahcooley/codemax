@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Origin-scoped whitelisted website capability facts",
+  "type": "object",
+  "required": [
+    "type",
+    "origin",
+    "document_id",
+    "facts"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "type": {
+      "const": "capabilities"
+    },
+    "origin": {
+      "type": "string",
+      "maxLength": 512
+    },
+    "document_id": {
+      "type": "string",
+      "maxLength": 96
+    },
+    "facts": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "required": [
+          "model",
+          "source"
+        ],
+        "properties": {
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 180
+          },
+          "context_tokens": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 128,
+            "maximum": 10000000
+          },
+          "tokenizer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 180
+          },
+          "reasoning": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 180
+          },
+          "selected": {
+            "type": "boolean"
+          },
+          "source": {
+            "enum": [
+              "OBSERVED_REQUEST",
+              "PROVIDER_METADATA"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$comment": "The host validates origin and document. Backend independently validates fields; schema is documentation, not an authorization grant."
+}

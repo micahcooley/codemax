@@ -17,7 +17,12 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
     if (changed && p.*.active_request >= 0 && !p.*.preparing) { p.*.state = 6; buf.copy(&p.*.last_error, "SITE_CHANGED"); buf.free(&document); return false; }
     buf.copy(&p.*.document, buf.view(&document)); buf.free(&document);
     p.*.browser_busy = false;
-    if (json.kind(d, json.get(d, event, "password_fields_present")) == 5) { p.*.state = 2; return true; }
+    if (!p.*.scan_enabled || p.*.dismissed) { p.*.state = 8; buf.copy(&p.*.discovery_reason, "Discovery paused by user"); return true; }
+    let strong_response: bool = false;
+    let changed_catalog: bool = changed && p.*.active_request < 0;
+    if (changed_catalog) { let m: i32 = 0; while (m < p.*.model_count) { p.*.models[m].available = false; m = m + 1; } buf.clear(&p.*.current_model); buf.copy(&p.*.reasoning_modes,"[]"); }
+
+    if (json.kind(d, json.get(d, event, "password_fields_present")) == 5) { p.*.state = 2; buf.copy(&p.*.discovery_reason, "Sign in normally; credentials are never inspected"); return true; }
     p.*.prompt = 0; p.*.send = 0; p.*.response = 0; p.*.stop = 0; p.*.new_chat = 0; p.*.model_control = 0; p.*.reasoning_control = 0; p.*.attachment = 0;
     // During generation, a disappearing model menu must not rewrite the model
     // selected by an in-flight request. Registry indices remain stable.
@@ -54,34 +59,52 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
             if (is_visible && (json.is_text(d, json.get(d, i, "role"), "log") || json.kind(d, json.get(d, i, "assistant")) == 5)) {
                 if (json.kind(d, json.get(d, i, "busy")) == 5) { p.*.browser_busy = true; }
                 let score: i32 = 1; if (json.is_text(d, json.get(d, i, "role"), "log")) { score = 3; }
-                if (score > response_score) { response_score = score; p.*.response = node; }
+                if (score > response_score) { response_score = score; p.*.response = node; } strong_response = true;
             }
             if (json.kind(d, json.get(d, i, "file_input")) == 5) { p.*.attachment = node; }
             if (is_visible && (json.is_text(d, json.get(d, i, "tag"), "main") || json.is_text(d, json.get(d, i, "role"), "main")) && response_score == 0) { p.*.response = node; }
-            if (is_visible && (json.is_text(d, json.get(d, i, "role"), "combobox") || json.is_text(d, json.get(d, i, "tag"), "button"))) {
-                if (validation.contains(s, "model")) { p.*.model_control = node; }
+            if (is_visible && (json.is_text(d, json.get(d, i, "role"), "combobox") || json.is_text(d, json.get(d, i, "tag"), "button") || json.is_text(d, json.get(d, i, "role"), "switch"))) {
+                if (validation.contains(s, "model") || (model_label(s) && !buf.eq(s, "step 1") && !buf.eq(s, "step 2"))) { p.*.model_control = node; }
                 if (validation.contains(s, "reasoning") || validation.contains(s, "thinking")) { p.*.reasoning_control = node; }
             }
-            if (is_visible && p.*.model_control > 0 && p.*.active_request < 0 &&
-                (json.is_text(d, json.get(d, i, "role"), "option") || json.is_text(d, json.get(d, i, "role"), "menuitemradio"))) {
-                json.field_text(d, i, "value", &value); json.field_text(d, i, "label", &label);
-                if (value.len == 0) { buf.copy(&value, buf.view(&label)); }
-                if (value.ok != 0 && label.ok != 0) { registry.model(p, buf.view(&value), buf.view(&label), node); }
-            }
             if (is_visible && json.is_text(d, json.get(d, i, "tag"), "select")) {
-                if (validation.contains(s, "reason") || validation.contains(s, "thinking")) { p.*.reasoning_control = node; }
+                if (validation.contains(s, "reason") || validation.contains(s, "thinking")) { p.*.reasoning_control = node; copy_modes(p, d, i); }
                 else if (validation.contains(s, "model")) {
                     p.*.model_control = node; let options: i32 = json.get(d, i, "options");
                     if (json.kind(d, options) == 2 && d.*.tokens[options].size <= 32 && p.*.active_request < 0) {
-                        p.*.model_count = 0; let opt: i32 = options + 1;
+                        let old: i32 = 0; while (old < p.*.model_count) { p.*.models[old].available = false; old = old + 1; } let opt: i32 = options + 1;
                         while (opt < d.*.tokens[options].next) {
                             if (json.kind(d, json.get(d, opt, "disabled")) != 5) {
                                 json.field_text(d, opt, "value", &value); json.field_text(d, opt, "label", &label);
-                                if (value.ok != 0 && label.ok != 0) { registry.model(p, buf.view(&value), buf.view(&label), 0); }
+                                if (value.ok != 0 && label.ok != 0) { registry.model(p, buf.view(&value), buf.view(&label), 0); if (json.kind(d, json.get(d, opt, "selected")) == 5) { buf.copy(&p.*.current_model, buf.view(&value)); } }
                             }
                             opt = d.*.tokens[opt].next;
                         }
                     }
+                }
+            }
+        }
+        i = d.*.tokens[i].next;
+    }
+    // Second pass: options must belong to the exact model/reasoning control.
+    // Traversal order and a random open settings menu are not evidence of a model.
+    i = controls + 1;
+    while (i < d.*.tokens[controls].next) {
+        let node: i32 = json.number(d, json.get(d, i, "id"), 0) as i32;
+        let owner: i32 = json.number(d, json.get(d, i, "menu_owner"), 0) as i32;
+        if (json.kind(d, json.get(d, i, "visible")) == 5 && json.kind(d, json.get(d, i, "disabled")) != 5) {
+            if (node == p.*.model_control && !json.is_text(d, json.get(d, i, "tag"), "select")) {
+                json.field_text(d, i, "label", &label); validation.ascii_lower(buf.view(&label), &lower);
+                if (model_label(buf.view(&lower)) && !validation.contains(buf.view(&lower), "model")) {
+                    registry.model(p, buf.view(&label), buf.view(&label), 0); buf.copy(&p.*.current_model, buf.view(&label));
+                }
+            }
+            if (owner > 0 && (json.is_text(d, json.get(d, i, "role"), "option") || json.is_text(d, json.get(d, i, "role"), "menuitemradio") || json.is_text(d, json.get(d, i, "role"), "menuitem"))) {
+                json.field_text(d, i, "value", &value); json.field_text(d, i, "label", &label);
+                if (value.len == 0) { buf.copy(&value, buf.view(&label)); }
+                if (value.ok != 0 && label.ok != 0 && !validation.sensitive_label(buf.view(&label))) {
+                    if (owner == p.*.model_control && p.*.active_request < 0) { registry.model(p, buf.view(&value), buf.view(&label), node); }
+                    if (owner == p.*.reasoning_control) { append_mode(p, buf.view(&value), buf.view(&label)); }
                 }
             }
         }
@@ -93,11 +116,88 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
     if (p.*.model_count == 0 && p.*.manual_model.len > 0) {
         registry.model(p, "manual", buf.view(&p.*.manual_model), 0); p.*.models[0].supplied = true;
     }
+    let chat_input: bool = prompt_score >= 3 && p.*.prompt > 0 && p.*.send > 0;
+    let model_evidence: bool = p.*.model_count > 0 && (p.*.model_control > 0 || p.*.current_model.len > 0 || p.*.manual_model.len > 0);
+    let conversation: bool = strong_response || (p.*.new_chat > 0 && p.*.reasoning_control > 0 && p.*.model_control > 0);
+    // Recorder-assisted admission still requires explicit response mapping plus
+    // model identity; manually naming an arbitrary website is insufficient.
+    if (p.*.recipes.len > 2 && recipes_ok && p.*.response > 0 && p.*.prompt > 0 && p.*.send > 0) {
+        let rd: json.Document=json.parse(buf.view(&p.*.recipes));let response_recorded: bool=false;
+        if (rd.ok!=0) { let ri: i32=1;while (ri<rd.count) { if (json.is_text(&rd,json.get(&rd,ri,"mapping"),"response")) { response_recorded=true; }ri=rd.tokens[ri].next; } }
+        json.free(&rd);if (response_recorded) { chat_input=true;conversation=true; }
+    }
+    p.*.discovery_score = 0;
+    if (chat_input) { p.*.discovery_score = p.*.discovery_score + 3; }
+    if (model_evidence) { p.*.discovery_score = p.*.discovery_score + 3; }
+    if (conversation) { p.*.discovery_score = p.*.discovery_score + 3; }
     if (!recipes_ok) { p.*.state = 6; buf.copy(&p.*.last_error, "RECORDED_MAPPING_CHANGED"); }
-    else if (p.*.prompt > 0 && p.*.send > 0 && p.*.response > 0 && p.*.model_count > 0 && p.*.quota == 0) {
-        p.*.state = 4; buf.clear(&p.*.last_error);
-    } else if (p.*.quota != 0) { p.*.state = 5; }
-    else { p.*.state = 3; }
+    else if (chat_input && model_evidence && conversation && p.*.response > 0) {
+        p.*.detected = true;
+        buf.copy(&p.*.discovery_reason, "Chat composer + send action + model identity + conversation evidence");
+        if (p.*.quota != 0) { p.*.state = 5; } else { p.*.state = 4; buf.clear(&p.*.last_error); }
+    } else {
+        p.*.state = 8;
+        if (chat_input || model_evidence) { p.*.state = 9; }
+        if (!chat_input) { buf.copy(&p.*.discovery_reason, "Browsing normally; no unambiguous chat composer and send action"); }
+        else if (!model_evidence) { buf.copy(&p.*.discovery_reason, "Chat candidate; no model identity exposed yet"); }
+        else { buf.copy(&p.*.discovery_reason, "Model label alone is insufficient; conversation evidence needed"); }
+    }
     p.*.version = p.*.version + 1; p.*.last_seen = _zag_clock_monotonic_ms();
     buf.copy(&p.*.evidence, json.raw(d, event)); return true;
+}
+
+// A model-shaped control label is only a candidate, never sole admission.
+fn model_label(text: []u8) bool {
+    if (text.len < 3 || text.len > 96) { return false; }
+    let letter: bool = false; let digit: bool = false; let separator: bool = false; let i: i32 = 0;
+    while (i < text.len) { let c: u8 = text[i]; if (c >= 97 && c <= 122) { letter = true; } if (c >= 48 && c <= 57) { digit = true; } if (c == 45 || c == 46) { separator = true; } i = i + 1; }
+    return letter && digit && separator;
+}
+fn append_mode(p: *registry.Provider, value: []u8, label: []u8) void {
+    if (value.len < 1 || value.len > 180 || label.len > 240 || p.*.reasoning_modes.len > 3500) { return; }
+    let d: json.Document = json.parse(buf.view(&p.*.reasoning_modes)); let found: bool = false;
+    if (d.ok != 0) { let i: i32 = 1; while (i < d.count) { if (json.is_text(&d, json.get(&d, i, "value"), value)) { found = true; } i = d.tokens[i].next; } }
+    json.free(&d); if (found) { return; }
+    let out: buf.Buffer = buf.make(4096); buf.add(&out, p.*.reasoning_modes.data[0..p.*.reasoning_modes.len - 1]);
+    if (out.len > 1) { buf.byte(&out, 44); } buf.add(&out, "{\"value\":"); buf.json(&out, value); buf.add(&out, ",\"label\":"); buf.json(&out, label); buf.add(&out, "}]");
+    if (out.ok != 0) { buf.copy(&p.*.reasoning_modes, buf.view(&out)); } buf.free(&out);
+}
+fn copy_modes(p: *registry.Provider, d: *json.Document, control: i32) void {
+    let options: i32 = json.get(d, control, "options");
+    if (json.kind(d, options) != 2 || d.*.tokens[options].size == 0) { return; }
+    buf.copy(&p.*.reasoning_modes, "[]"); let value: buf.Buffer = buf.make(192); let label: buf.Buffer = buf.make(256); let i: i32 = options + 1;
+    while (i < d.*.tokens[options].next) {
+        json.field_text(d, i, "value", &value); json.field_text(d, i, "label", &label);
+        if (value.ok != 0 && label.ok != 0 && json.kind(d, json.get(d, i, "disabled")) != 5) { append_mode(p, buf.view(&value), buf.view(&label)); }
+        i = d.*.tokens[i].next;
+    }
+    buf.free(&value); buf.free(&label);
+}
+// Facts remain website-reported, scoped to an explicit model, never a guessed
+// tokenizer or an advertised limit silently applied to all models.
+fn capabilities(p: *registry.Provider, d: *json.Document, event: i32) bool {
+    if (!p.*.scan_enabled || p.*.dismissed || !json.is_text(d, json.get(d, event, "origin"), buf.view(&p.*.origin))) { return false; }
+    let facts: i32 = json.get(d, event, "facts"); if (json.kind(d, facts) != 2 || d.*.tokens[facts].size > 32) { return false; }
+    let value: buf.Buffer = buf.make(192); let text: buf.Buffer = buf.make(192); let changed: bool = false; let i: i32 = facts + 1;
+    while (i < d.*.tokens[facts].next) {
+        json.field_text(d, i, "model", &value);
+        let source: i32 = json.get(d, i, "source"); let allowed: bool = json.is_text(d, source, "OBSERVED_REQUEST") || json.is_text(d, source, "PROVIDER_METADATA");
+        if (value.ok != 0 && value.len > 0 && !validation.sensitive_label(buf.view(&value)) && allowed) {
+            if (json.is_text(d, source, "OBSERVED_REQUEST") && json.kind(d, json.get(d, i, "selected")) == 5 && p.*.prompt > 0 && p.*.send > 0) {
+                buf.copy(&p.*.current_model, buf.view(&value));
+                if (p.*.model_control == 0) { registry.model(p, buf.view(&value), buf.view(&value), 0); changed = true; }
+            }
+            let m: i32 = 0;
+            while (m < p.*.model_count) {
+                if (buf.eq(buf.view(&p.*.models[m].value), buf.view(&value)) || buf.eq(buf.view(&p.*.models[m].label), buf.view(&value))) {
+                    let n: i64 = json.number(d, json.get(d, i, "context_tokens"), 0);
+                    if (n >= 128 && n <= 10000000) { p.*.models[m].context_tokens = n; buf.copy(&p.*.models[m].context_source, "WEBSITE_REPORTED"); changed = true; }
+                    if (json.kind(d, json.get(d, i, "tokenizer")) == 3) { json.field_text(d, i, "tokenizer", &text); if (text.ok != 0 && text.len < 128 && !validation.sensitive_label(buf.view(&text))) { buf.copy(&p.*.models[m].tokenizer, buf.view(&text)); changed = true; } }
+                }
+                m = m + 1;
+            }
+        }
+        i = d.*.tokens[i].next;
+    }
+    buf.free(&value); buf.free(&text); return changed;
 }

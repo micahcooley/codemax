@@ -36,3 +36,24 @@ test('oversized and non-JSON network bodies remain opaque', () => {
   assert.equal(api.shape('x'.repeat(20000)).kind, 'string');
   assert.equal(api.shape('not json').kind, 'opaque');
 });
+
+test('capability extraction copies only explicit per-model facts, never messages or auth', () => {
+ const data=api.metadata(JSON.stringify({model:'glm-5.3-flash',messages:[{content:'PRIVATE_PROJECT_TEXT'}],password:'DO_NOT_EXPORT',context_window:131072,tokenizer:'example-tokenizer',reasoning_effort:'high',api_key:'secret'}));
+ assert.equal(data.length,1);assert.equal(data[0].model,'glm-5.3-flash');assert.equal(data[0].context_tokens,131072);assert.equal(data[0].selected,true);
+ assert.equal(JSON.stringify(data).includes('PRIVATE_PROJECT'),false);assert.equal(JSON.stringify(data).includes('DO_NOT_EXPORT'),false);assert.equal(JSON.stringify(data).includes('api_key'),false);
+});
+test('model names alone do not invent context, tokenizer or selection',()=>{
+ assert.equal(api.metadata({model:'glm-5.3-128k'}).length,0);
+ const d=api.metadata({model:'glm-5.3',messages:[],context_window:'128K'});assert.equal(d[0].context_tokens,null);assert.equal(d[0].tokenizer,null);
+});
+test('metadata values and sample counts are bounded',()=>{
+ assert.equal(api.metadata('a'.repeat(32769)).length,0);assert.equal(api.metadata({data:Array.from({length:50},(_,i)=>({id:'model-'+i,context_length:2048}))},'PROVIDER_METADATA').length,32);
+ for(const x of [-1,0,127,10000001,1.5,Infinity,NaN])assert.equal(api.metadata({model:'m-1',messages:[],context_window:x})[0].context_tokens,null);
+});
+test('credential-shaped model or tokenizer identities are not exported',()=>{
+ assert.equal(api.metadata({model:'sk-secret_123456789',messages:[]}).length,0);
+ assert.equal(api.metadata({model:'m-1',messages:[],tokenizer:'Bearer secret-token'})[0].tokenizer,null);
+});
+test('model catalog metadata is not falsely marked as the current selection',()=>{
+ const d=api.metadata({models:[{id:'m-1',context_window:2048,messages:['private']},{id:'m-2',context_length:4096}]},'PROVIDER_METADATA');assert.equal(d[0].selected,false);assert.equal(d[1].selected,false);
+});

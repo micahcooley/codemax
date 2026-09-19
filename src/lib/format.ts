@@ -3,7 +3,7 @@ export const number=(n:number|undefined):string=>(n??0).toLocaleString('en-US');
 export const short=(n:number):string=>n>=1000000?`${(n/1000000).toFixed(1)}m`:n>=1000?`${(n/1000).toFixed(1)}k`:`${n}`;
 export function hostname(url:string):string{try{return new URL(url).hostname;}catch{return url;}}
 export const initials=(label:string):string=>label.split(/[ ._-]+/).slice(0,2).map(s=>s[0]).join('').toUpperCase();
-const stateNames:Record<string,string>={READY:'Ready',ACTIVE:'Generating',IDLE:'Idle',EXPIRED:'Ended',RESTORING:'Restoring',PROVIDER_LOST:'Reconnect',RATE_LIMITED:'Rate limited',BROKEN_MAPPING:'Needs repair',UNCONFIGURED:'Closed',LOADING:'Opening',LOGIN_REQUIRED:'Sign in',DISCOVERING:'Discovering',REDISCOVERING:'Rescanning'};
+const stateNames:Record<string,string>={BROWSING:'Browsing',CANDIDATE:'Inspecting chat controls',READY:'Ready',ACTIVE:'Generating',IDLE:'Idle',EXPIRED:'Ended',RESTORING:'Restoring',PROVIDER_LOST:'Reconnect',RATE_LIMITED:'Rate limited',BROKEN_MAPPING:'Needs repair',UNCONFIGURED:'Closed',LOADING:'Opening',LOGIN_REQUIRED:'Sign in',DISCOVERING:'Discovering',REDISCOVERING:'Rescanning'};
 export const stateText=(state:string):string=>stateNames[state]??state.replaceAll('_',' ').toLowerCase();
 export const providerText=(p:Provider):string=>p.state==='UNCONFIGURED'&&p.open_tab?'Sleeping':stateText(p.state);
 export function dateTime(epoch:number):string{return epoch?new Date(epoch*1000).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'Not recorded';}

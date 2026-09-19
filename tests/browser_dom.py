@@ -181,6 +181,27 @@ try:
             a['model_control']=next(n['id'] for n in snap['controls'] if n['label']=='Model selector')
             execute(a);finish('custom-menu');assert page.input_value('#model')=='mock-reasoner'
         record('custom_model_popover_selects_exact_observed_option',custom_model_menu)
+        def preserve_draft():
+            before=page.locator('[data-bridge-assistant]').count();page.fill('#prompt','Unsent user draft: never replace me')
+            a=action('unsent-draft');a['model_control']=0;execute(a);events=finish('unsent-draft','generation_error')
+            assert events[-1]['code']=='UNSENT_DRAFT';assert page.input_value('#prompt')=='Unsent user draft: never replace me'
+            assert page.locator('[data-bridge-assistant]').count()==before;page.fill('#prompt','')
+        record('automation_preserves_unsent_user_draft_without_submission',preserve_draft)
+        def changed_composer():
+            before=page.locator('[data-bridge-assistant]').count()
+            page.evaluate("document.getElementById('prompt').addEventListener('input',e=>{e.target.value='User edit during automation'},{once:true})")
+            a=action('changed-composer');a['model_control']=0;execute(a);events=finish('changed-composer','generation_error')
+            assert events[-1]['code']=='COMPOSER_CHANGED';assert page.locator('[data-bridge-assistant]').count()==before
+            assert page.input_value('#prompt')=='User edit during automation';page.fill('#prompt','')
+        record('changed_composer_is_not_auto_submitted',changed_composer)
+        def paused_observer():
+            a=action('pause-policy');execute({'type':'discovery_policy','document_id':a['document_id'],'enabled':False});page.wait_for_timeout(300)
+            n=page.evaluate("__events.filter(e=>e.type==='observation').length")
+            page.evaluate("document.getElementById('chat').setAttribute('aria-label','ordinary page');__BRIDGE_RESCAN__()")
+            page.wait_for_timeout(400);assert page.evaluate("__events.filter(e=>e.type==='observation').length")==n
+            execute({'type':'discovery_policy','document_id':a['document_id'],'enabled':True})
+            page.wait_for_function("n=>__events.filter(e=>e.type==='observation').length>n",arg=n)
+        record('discovery_pause_stops_observation_and_explicit_resume_restarts',paused_observer)
         page.screenshot(path=str(OUT/'mock-provider-browser.png'),full_page=True)
         context.close();browser.close()
 except Exception:

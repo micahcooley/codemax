@@ -85,6 +85,30 @@
       "description": "Actual built-in Zag client + exact live model + two turns + one permitted read + final proof + cleanup",
       "status": "NOT_VERIFIED",
       "evidence": "tests/evidence/zai-live.json"
+    },
+    {
+      "id": "codemax_ui",
+      "description": "Compiled discovery, exposure and MCP consent presentation with explicit host double",
+      "status": "VERIFIED",
+      "evidence": "tests/evidence/codemax-ui.json"
+    },
+    {
+      "id": "native_discovery_mcp",
+      "description": "Compile/run native discovery and MCP unit program",
+      "status": "NOT_VERIFIED",
+      "evidence": null
+    },
+    {
+      "id": "native_mcp_stdio_roundtrip",
+      "description": "Actual Zag MCP runner with real stdio fixture process and synthetic file, test browser/transport",
+      "status": "NOT_VERIFIED",
+      "evidence": null
+    },
+    {
+      "id": "live_mcp_webview",
+      "description": "Actual Rust stdio transport, Zag runner and authenticated website model repeated tools",
+      "status": "NOT_VERIFIED",
+      "evidence": null
     }
   ]
 }

@@ -107,3 +107,13 @@ There is no admitted provider tokenizer. OpenAI-style usage may be null; Anthrop
 Error codes include AUTH_REQUIRED, PROVIDER_RATE_LIMITED, MODEL_UNAVAILABLE, MAPPING_BROKEN, CONTEXT_LIMIT, SITE_CHANGED, PROVIDER_CONVERSATION_LOST, SESSION_HISTORY_CONFLICT, BROWSER_ERROR, TIMEOUT and CANCELLED. Post-header stream failures emit an error event and close without a success terminal. A disconnected client triggers a stop action; actual website stop behavior requires live qualification.
 
 If a client imposes stricter native formats or sends unsupported mandatory options, it is incompatible until an explicit adapter is implemented and tested. SDK examples in the UI are templates, not evidence that any named coding harness passed.
+
+## Codemax private MCP / discovery operations
+
+`provider.update` adds optional booleans `exposed`, `scan_enabled`, `dismissed`. `model.update` takes `provider_id`, exact registry `model`, and `enabled`. Browser `capabilities` observations are document/origin bound and whitelisted; see `schemas/capabilities.schema.json`.
+
+Trusted UI-only operations: `mcp.server.add` (label, command, JSON string-array args), `.connect` (server_id, confirmed), `.disconnect`, `.remove` (confirmed), `mcp.tool.update` (alias in `tool`, enabled), `mcp.run.start` (provider_id, model, task, auto_continue), `.approve` (run_id, call_id, confirmed, allow_run), `.cancel` (run_id), `.continue` (run_id). Snapshot fields `mcp_servers` and `mcp_run` provide bounded state. These are **not public model HTTP endpoints** and do not turn Codemax into a remotely exposed MCP server.
+
+`mcp.transport` accepts only id-zero internal host notifications bound to server ID and connection epoch. Zag emits `type:mcp` frames with start/write/stop transport actions. The Rust transport supplies connected/line/closed/error events. No provider page or main-UI proxy can supply arbitrary process output.
+
+MCP task states: IDLE, GENERATING, PERMISSION_REQUIRED, EXECUTING_TOOL, RESULT_READY, COMPLETED, FAILED, CANCELLED. One-time approval is consumed on dispatch; auto_continue controls result submission, not tool permissions. Refer to `docs/MCP_CLIENT.md` for version, transport and byte/count limits.

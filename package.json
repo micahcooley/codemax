@@ -1,6 +1,6 @@
 {
-  "name": "desktop-ai-bridge",
-  "version": "0.1.0-dev.3",
+  "name": "codemax",
+  "version": "0.1.0-dev.4",
   "private": true,
   "type": "module",
   "scripts": {
@@ -19,7 +19,8 @@
     "build:backend": "bash scripts/build-backend.sh",
     "release:gate": "python3 scripts/release-gate.py",
     "test:ui": "python3 tests/ui_browser.py",
-    "check:zag-contracts": "python3 scripts/check-zag-contracts.py"
+    "check:zag-contracts": "python3 scripts/check-zag-contracts.py",
+    "test:codemax": "python3 tests/codemax_ui.py"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

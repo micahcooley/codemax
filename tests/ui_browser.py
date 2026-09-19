@@ -44,7 +44,6 @@ with sync_playwright() as pw:
   record('Ctrl-L address focus and keyboard command palette with provider hiding',keyboard)
   page.screenshot(animations='disabled',path=str(SHOTS/'03-client-setup.png'))
   def client_controls():
-   page.locator('.advanced-client summary').click()
    page.get_by_role('button',name='Copy API endpoint').click();page.wait_for_function("window.__clipboard==='http://127.0.0.1:7331/v1'")
    page.get_by_role('button',name='Reveal API key').click();page.get_by_text('sk-local-ui-fixture-not-a-real-key',exact=True).wait_for()
    page.get_by_role('button',name='Hide API key').click();assert not page.get_by_text('sk-local-ui-fixture-not-a-real-key',exact=True).count()
@@ -54,8 +53,8 @@ with sync_playwright() as pw:
    for label in ['Claude Code','Chat API','Responses API','Messages API','OpenCode']:page.locator('.segmented button').filter(has_text=label).click()
   record('endpoint/key controls and all five client configuration formats',client_controls)
   def file_permissions():
-   page.locator('.advanced-client summary').click()
-   assert not page.get_by_role('button',name='Copy API endpoint').is_visible()
+   route('Tools & MCP');page.get_by_text('Advanced · synthetic file permission diagnostic',exact=True).click()
+   assert not page.get_by_role('button',name='Copy API endpoint').count()
    page.get_by_role('button',name='Prepare file test',exact=True).click()
    page.get_by_text('Allow this exact read?',exact=True).wait_for()
    assert not page.evaluate('window.__uiFixture.snapshot.file_probe.granted')
@@ -117,7 +116,7 @@ with sync_playwright() as pw:
    page.emulate_media(reduced_motion='no-preference')
    page.evaluate("window.__uiFixture.snapshot.providers[0].browser_busy=false;window.__uiFixture.snapshot.providers[0].state='DISCOVERING';window.__uiFixture.push()")
    page.wait_for_function("document.querySelector('.browser-tab .tab-activity').dataset.state==='idle'")
-   assert ring.get_attribute('aria-label').endswith(': Needs control mapping')
+   assert ring.get_attribute('aria-label').endswith(': Observing controls')
    page.evaluate("window.__uiFixture.snapshot.providers[0].state='RATE_LIMITED';window.__uiFixture.push()")
    page.wait_for_function("document.querySelector('.browser-tab .tab-activity').dataset.state==='attention'")
    assert arc.evaluate('(e)=>getComputedStyle(e).animationName')=='none'

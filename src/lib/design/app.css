@@ -22,3 +22,17 @@ dialog{width:min(520px,calc(100vw - 48px));border:1px solid var(--line);border-r
 .permission-table{width:100%;border-collapse:collapse;font-size:12px}.permission-table td{padding:9px 0;height:auto}.permission-table td:last-child{text-align:right;font-family:var(--mono);color:var(--muted)}
 .probe-path{display:block;word-break:break-all;color:var(--text);font-family:var(--mono);font-size:11px;padding:10px 0}.proof-step{display:flex;align-items:center;gap:9px;padding:8px 0;color:var(--muted);font-size:12px}.proof-step.done{color:var(--text)}
 .advanced-client{border-top:1px solid var(--line);margin-top:26px;padding-top:16px}.advanced-client>summary{cursor:pointer;font-size:12px;color:var(--muted);padding:4px 0 18px}.advanced-client[open]>summary{color:var(--text)}
+
+/* Codemax discovery/settings: compact browser-native surfaces. */
+.setup-strip{display:flex;align-items:center;gap:20px;padding:16px 0 28px;flex-wrap:wrap;color:var(--muted)}
+.setup-step{display:flex;gap:9px;align-items:center;font-size:12px}.setup-step strong{font-size:11px;opacity:.65}
+.provider-settings{display:grid;grid-template-columns:230px 1fr;gap:32px}.provider-selector{display:flex;flex-direction:column;gap:5px}
+.provider-choice{display:flex;align-items:center;gap:11px;text-align:left;padding:13px 11px;border-radius:6px;border:1px solid transparent}
+.provider-choice.active{background:var(--panel);border-color:var(--line)}.provider-choice .site-details{min-width:0;flex:1}
+.setting-line{display:flex;align-items:center;gap:16px;padding:16px 0;border-bottom:1px solid var(--line)}.setting-line>div:first-child{flex:1;min-width:0}
+.setting-line strong{font-size:13px;font-weight:550}.setting-line p{font-size:12px;margin-top:4px;line-height:1.6}.setting-line input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);flex:none}
+.discovery-note{margin-top:18px;padding:13px 0;font-size:12px;line-height:1.7;color:var(--muted)}
+.tool-server{padding:16px 0;border-bottom:1px solid var(--line)}.tool-call{margin:14px 0;padding:16px;border:1px solid var(--line);border-radius:6px}.tool-call pre{max-height:200px;overflow:auto;font-size:12px;white-space:pre-wrap}
+@media(max-width:1100px){.provider-settings{grid-template-columns:180px 1fr;gap:20px}.setup-strip{gap:12px}}
+
+.tool-answer{white-space:pre-wrap;overflow-wrap:anywhere;font-family:inherit;line-height:1.65;font-size:13px;margin:18px 0}.permission-box{border-color:var(--accent);background:var(--panel)}.screen-inner textarea{resize:vertical;min-height:68px}.code{white-space:pre-wrap;overflow-wrap:anywhere;max-height:340px;overflow:auto}.tool-server+.tool-server{margin-top:20px}.provider-choice .site-details{text-align:left}

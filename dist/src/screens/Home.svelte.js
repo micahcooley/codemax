@@ -7,7 +7,7 @@ import Icon from '../lib/components/Icon.svelte.js';
 
 var root_1 = $.from_html(`<div class="log-row"><span class="faint"> </span><span> </span><code> </code><span class="log-detail"> </span></div>`);
 var root_2 = $.from_html(`<div class="empty-state"><!><h2>No retained events</h2><p>Gateway and connector events will appear here. Debug-level browser metadata requires an explicit logging setting.</p><button class="text-button">Logging settings<!></button></div>`);
-var root = $.from_html(`<section class="screen"><div class="screen-inner"><header class="screen-head"><div><div class="breadcrumb">Workspace / Diagnostics</div><h1>Activity</h1><p>A bounded, redacted view of what the local gateway is doing.</p></div><div class="button-group"><button class="secondary"><!>Export diagnostics</button></div></header> <div class="metric-strip"><div><span class="label">Ready websites</span><strong> <span class="muted" style="font-size:16px;letter-spacing:0"> </span></strong><small>Independent browser profiles</small></div><div><span class="label">Available models</span><strong> </strong><small>Observed or user supplied</small></div><div><span class="label">Completed requests</span><strong> </strong><small>During this backend process</small></div><div><span class="label">Failed requests</span><strong> </strong><small>No silent automatic retries</small></div></div> <div class="section-title"><h2>Gateway events</h2><span class="tag"><span></span>Push updates</span></div><div class="filterbar"><span class="muted" style="font-size:11px"> </span><span class="spacer"></span><select aria-label="Event severity"><option>All levels</option><option>Errors</option><option>Warnings</option><option>Information</option><option>Debug</option></select><button class="text-button"><!>Clear</button></div> <!> <!> <div class="note"><!><span>No prompts, response bodies, authentication headers, or cookies are written to the diagnostic event ring. Export only diagnostics you intend to share.</span></div></div></section>`);
+var root = $.from_html(`<section class="screen"><div class="screen-inner"><header class="screen-head"><div><div class="breadcrumb">Workspace / Diagnostics</div><h1>Activity</h1><p>A bounded, redacted view of what the local gateway is doing.</p></div><div class="button-group"><button class="secondary"><!>Export diagnostics</button></div></header> <div class="metric-strip"><div><span class="label">Ready providers</span><strong> <span class="muted" style="font-size:16px;letter-spacing:0"> </span></strong><small>Independent browser profiles</small></div><div><span class="label">Available models</span><strong> </strong><small>Observed or user supplied</small></div><div><span class="label">Completed requests</span><strong> </strong><small>During this backend process</small></div><div><span class="label">Failed requests</span><strong> </strong><small>No silent automatic retries</small></div></div> <div class="section-title"><h2>Gateway events</h2><span class="tag"><span></span>Push updates</span></div><div class="filterbar"><span class="muted" style="font-size:11px"> </span><span class="spacer"></span><select aria-label="Event severity"><option>All levels</option><option>Errors</option><option>Warnings</option><option>Information</option><option>Debug</option></select><button class="text-button"><!>Clear</button></div> <!> <!> <div class="note"><!><span>No prompts, response bodies, authentication headers, or cookies are written to the diagnostic event ring. Export only diagnostics you intend to share.</span></div></div></section>`);
 
 export default function Home($$anchor, $$props) {
 	$.push($$props, true);
@@ -206,8 +206,8 @@ export default function Home($$anchor, $$props) {
 		($0, $1, $2) => {
 			button.disabled = !app.ready;
 			$.set_text(text, $0);
-			$.set_text(text_1, `/ ${app.providers.length ?? ''}`);
-			$.set_text(text_2, app.models.length);
+			$.set_text(text_1, `/ ${app.detectedProviders.length ?? ''}`);
+			$.set_text(text_2, app.exposedModels.length);
 			$.set_text(text_3, $1);
 			$.set_text(text_4, $2);
 			classes = $.set_class(span_2, 1, 'dot', null, classes, { online: app.ready });
@@ -215,7 +215,7 @@ export default function Home($$anchor, $$props) {
 			button_1.disabled = !app.events.length;
 		},
 		[
-			() => app.providers.filter((p) => p.state === 'READY').length,
+			() => app.detectedProviders.filter((p) => p.state === 'READY' && p.exposed).length,
 			() => number(app.snapshot?.metrics.completed_requests),
 			() => number(app.snapshot?.metrics.failed_requests)
 		]
