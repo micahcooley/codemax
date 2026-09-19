@@ -54,7 +54,8 @@
   const documentId = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() :
     Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
   const ids = new WeakMap(); const nodes = new Map(); let nextId = 1;
-  let generation = null; let observationTimer = 0; let responseTimer = 0;
+  let generation = null; let preparingRequest = null; let observationTimer = 0; let responseTimer = 0;
+  let picker = null;
   let lastSnapshot = ''; let stopped = false; let sending = false;
   const queue = []; const MAX_QUEUE = 128;
   const transport = event => {
@@ -90,14 +91,14 @@
     if (!ids.has(node)) ids.set(node, nextId++);
     const value = ids.get(node); nodes.set(value, node); return value;
   }
-  function editable(node) { return node instanceof HTMLTextAreaElement || node instanceof HTMLInputElement || node.isContentEditable; }
+  function editable(node) { return node instanceof HTMLTextAreaElement || (node instanceof HTMLInputElement && ['text','search',''].includes(node.getAttribute('type') || '')) || node.isContentEditable; }
   function label(node) {
     const by = node.getAttribute('aria-labelledby');
     const related = by ? by.split(/\s+/).slice(0, 3).map(k => document.getElementById(k)?.textContent || '').join(' ') : '';
     const formLabel = node.labels ? Array.from(node.labels).slice(0, 2).map(x => x.textContent).join(' ') : '';
     // Never read .value or editor text for evidence.
     return redact(node.getAttribute('aria-label') || related || formLabel || node.getAttribute('placeholder') ||
-      node.getAttribute('title') || (!editable(node) && ['BUTTON', 'OPTION'].includes(node.tagName) ? node.textContent : '') || '');
+      node.getAttribute('title') || (!editable(node) && (['BUTTON', 'OPTION'].includes(node.tagName) || ['option','menuitemradio','menuitem'].includes(node.getAttribute('role'))) ? node.textContent : '') || '');
   }
   function forbidden(node) {
     if (!(node instanceof Element)) return true;
@@ -111,19 +112,22 @@
   }
   function summary(node) {
     const isVisible = visible(node);
-    if (forbidden(node) || (!isVisible && !(node instanceof HTMLButtonElement && node.hasAttribute('aria-label')))) return null;
+    const fileInput = node instanceof HTMLInputElement && node.type === 'file';
+    if ((!fileInput && forbidden(node)) || (!isVisible && !fileInput && !(node instanceof HTMLButtonElement && node.hasAttribute('aria-label')))) return null;
     const options = node instanceof HTMLSelectElement ? Array.from(node.options).slice(0, 32).map(option => ({
       value: redact(option.value).slice(0, 180), label: redact(option.textContent), disabled: option.disabled, selected: option.selected
     })) : [];
     return {id: id(node), tag: node.tagName.toLowerCase(), role: node.getAttribute('role') || '', label: label(node),
       visible: isVisible, editable: editable(node), disabled: !!node.disabled || node.getAttribute('aria-disabled') === 'true',
       live: node.getAttribute('aria-live') || '', busy: node.getAttribute('aria-busy') === 'true',
+      value: ['option','menuitemradio'].includes(node.getAttribute('role')) ? redact(node.getAttribute('data-value') || label(node)).slice(0,180) : '',
+      popup: node.getAttribute('aria-haspopup') || '', file_input: fileInput,
       assistant: node.matches('[data-message-author-role="assistant"],[data-role="assistant"],[data-bridge-assistant]'), options};
   }
   function snapshot() {
     if (stopped || location.origin !== config.origin) return;
     // Bound traversal work even on very large pages. Skip page text and input values.
-    const candidates = document.querySelectorAll('textarea,input,[contenteditable="true"],button,select,[role="button"],[role="combobox"],[role="option"],[role="log"],[aria-live],[data-message-author-role="assistant"],[data-role="assistant"],[data-bridge-assistant]');
+    const candidates = document.querySelectorAll('textarea,input,[contenteditable]:not([contenteditable="false"]),button,select,[role="button"],[role="combobox"],[role="option"],[role="menuitemradio"],[role="switch"],main,[role="main"],[role="log"],[aria-live],[data-message-author-role="assistant"],[data-role="assistant"],[data-bridge-assistant]');
     const controls = []; let examined = 0;
     for (const node of candidates) {
       if (++examined > 512 || controls.length >= 128) break;
@@ -156,15 +160,116 @@
     if (!allowDisabled && (node.disabled || node.getAttribute('aria-disabled') === 'true')) throw new Error('CONTROL_DISABLED');
     return node;
   }
+  const assistantSelector = '[data-message-author-role="assistant"],[data-role="assistant"],[data-bridge-assistant],.assistant-message,[data-testid="assistant-message"]';
   function assistantNode(region) {
-    if (region.matches('[data-message-author-role="assistant"],[data-role="assistant"],[data-bridge-assistant]')) return region;
-    const matches = region.querySelectorAll('[data-message-author-role="assistant"],[data-role="assistant"],[data-bridge-assistant]');
+    if (region.matches(assistantSelector)) return region;
+    const matches = region.querySelectorAll(assistantSelector);
     return matches[matches.length - 1] || null;
+  }
+  function responseText(node) {
+    // innerText preserves rendered code-block line breaks. Never flatten code
+    // to textContent merely to make a stream appear append-only.
+    return node instanceof HTMLElement ? node.innerText : (node.textContent || '');
+  }
+  function resolve(action, key, nodeId, options = {}) {
+    try { return target(nodeId, options); }
+    catch (error) {
+      if (error.message !== 'MAPPING_BROKEN') throw error;
+      const binding = action.bindings?.[key];
+      if (!binding || typeof binding.label !== 'string') throw error;
+      const matches = [];
+      for (const node of Array.from(document.querySelectorAll('textarea,input,button,select,[contenteditable],main,[role],[aria-live]')).slice(0,512)) {
+        if (visible(node) && !forbidden(node) && node.tagName.toLowerCase() === binding.tag &&
+            (node.getAttribute('role') || '') === binding.role && label(node) === binding.label) matches.push(node);
+      }
+      if (matches.length !== 1) throw new Error('MAPPING_BROKEN');
+      id(matches[0]); return matches[0];
+    }
+  }
+  function findStop(nodeId) {
+    const mapped = nodes.get(nodeId);
+    if (mapped && visible(mapped) && !forbidden(mapped) && !mapped.disabled) return mapped;
+    const matches = Array.from(document.querySelectorAll('button,[role="button"]')).slice(0,256)
+      .filter(node => visible(node) && !forbidden(node) && !node.disabled && /^(stop|stop generating|stop response|cancel generation)$/i.test(label(node).trim()));
+    return matches.length === 1 ? matches[0] : null;
+  }
+  const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+  async function choose(action, key, nodeId, value, displayName = value) {
+    const selector = resolve(action, key, nodeId);
+    if (selector instanceof HTMLSelectElement) {
+      const choices = Array.from(selector.options).filter(o => !o.disabled && (o.value === value || o.textContent?.trim() === displayName));
+      if (choices.length !== 1) throw new Error(key === 'model' ? 'MODEL_UNAVAILABLE' : 'REASONING_UNAVAILABLE');
+      selector.value = choices[0].value;
+      selector.dispatchEvent(new Event('input', {bubbles:true})); selector.dispatchEvent(new Event('change', {bubbles:true}));
+      await settle();
+      if (selector.value !== choices[0].value) throw new Error('SELECTION_FAILED');
+      return;
+    }
+    if (key === 'reasoning' && ['switch','checkbox'].includes(selector.getAttribute('role'))) {
+      if (!['on','off','enabled','disabled','true','false','thinking','normal'].includes(value)) throw new Error('REASONING_UNAVAILABLE');
+      const wanted = ['on','enabled','true','thinking'].includes(value);
+      if ((selector.getAttribute('aria-checked') === 'true') !== wanted) selector.click();
+      await settle(); if ((selector.getAttribute('aria-checked') === 'true') !== wanted) throw new Error('SELECTION_FAILED'); return;
+    }
+    if (!(selector instanceof HTMLButtonElement) && !['button','combobox'].includes(selector.getAttribute('role'))) throw new Error('CONTROL_TYPE_UNSUPPORTED');
+    // The current value can be its button's label. No model-name heuristics.
+    if (label(selector).trim() === displayName.trim()) return;
+    selector.click();
+    for (let attempt=0; attempt<30; attempt++) {
+      await pause(50);
+      const candidates = Array.from(document.querySelectorAll('[role="option"],[role="menuitemradio"],[role="menuitem"],button[data-value]')).slice(0,256)
+        .filter(node => visible(node) && !forbidden(node) && !node.disabled && node.getAttribute('aria-disabled') !== 'true')
+        .filter(node => (node.getAttribute('data-value') || '') === value || label(node).trim() === displayName.trim() || label(node).trim() === value.trim());
+      if (candidates.length > 1) throw new Error('AMBIGUOUS_SELECTION');
+      if (candidates.length === 1) { candidates[0].click(); await settle(); return; }
+    }
+    throw new Error(key === 'model' ? 'MODEL_UNAVAILABLE' : 'REASONING_UNAVAILABLE');
+  }
+  function endPicker() {
+    if (!picker) return;
+    document.removeEventListener('pointermove', picker.move, true);
+    document.removeEventListener('click', picker.click, true);
+    document.removeEventListener('keydown', picker.key, true);
+    picker.host.remove(); picker = null;
+  }
+  function beginPicker(mapping) {
+    if (!['prompt','send','response','stop','new_chat','model','reasoning','attachment'].includes(mapping) || generation) throw new Error('PICKER_DENIED');
+    endPicker(); const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483647';
+    const shadow = host.attachShadow({mode:'closed'});
+    shadow.innerHTML = '<style>:host{all:initial} .hint{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#20241f;color:#eef0eb;border:1px solid #697568;border-radius:8px;padding:12px 18px;font:13px system-ui;box-shadow:0 6px 28px #0005} .outline{position:fixed;border:2px solid #7db58b;background:#7db58b19;border-radius:4px;box-sizing:border-box}</style><div class="outline"></div><div class="hint"></div>';
+    shadow.querySelector('.hint').textContent = 'Select the '+mapping.replaceAll('_',' ')+' control · Esc to cancel';
+    const outline = shadow.querySelector('.outline'); let selected = null;
+    const allowed = node => {
+      if (!(node instanceof Element) || !visible(node)) return false;
+      if (mapping === 'attachment') return node instanceof HTMLInputElement && node.type === 'file' && !sensitive.test(label(node));
+      if (forbidden(node)) return false;
+      if (mapping === 'prompt') return editable(node);
+      if (mapping === 'response') return node.matches('main,[role="main"],[role="log"],'+assistantSelector);
+      if (mapping === 'model' || mapping === 'reasoning') return node.matches('select,button,[role="button"],[role="combobox"],[role="switch"]');
+      return node.matches('button,[role="button"]');
+    };
+    const move = event => {
+      let node = event.target instanceof Element ? event.target : null;
+      selected = null;
+      for (let depth=0; node && depth<8; depth++,node=node.parentElement) { if (allowed(node)) {selected=node;break;} }
+      if (!selected) {outline.style.display='none';return;}
+      const rect=selected.getBoundingClientRect(); outline.style.cssText=`display:block;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px`;
+    };
+    const click = event => {
+      if (!selected) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      const node = selected; endPicker(); lastSnapshot=''; snapshot();
+      emit({type:'picked',mapping,node:id(node)});
+    };
+    const key = event => { if(event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();endPicker();} };
+    picker={host,move,click,key}; document.documentElement.append(host);
+    document.addEventListener('pointermove',move,true);document.addEventListener('click',click,true);document.addEventListener('keydown',key,true);
   }
   function stopGeneration(reason = 'CANCELLED', notify = true) {
     const g = generation; if (!g) return;
     generation = null; clearTimeout(g.timeout);
-    try { const stop = nodes.get(g.stop); if (stop && visible(stop) && !forbidden(stop) && !stop.disabled) stop.click(); } catch { /* Boundary never escalates to keyboard or shell. */ }
+    try { const stop = findStop(g.stop); if (stop) stop.click(); } catch { /* Boundary never escalates to keyboard or shell. */ }
     if (notify) emit({type: 'generation_error', request_id: g.request, code: reason});
   }
   function visibleFailure() {
@@ -183,16 +288,16 @@
     const g = generation; if (!g || !g.submitted) return;
     try {
       const failure = visibleFailure(); if (failure) throw new Error(failure);
-      const region = target(g.response, {allowDisabled: true});
+      const region = resolve(g.action, 'response', g.response, {allowDisabled:true}); g.response = id(region);
       const assistant = assistantNode(region);
-      if (assistant && (assistant !== g.baselineNode || (assistant.textContent || '') !== g.baselineText)) {
-        const next = assistant.textContent || '';
+      if (assistant && (assistant !== g.baselineNode || responseText(assistant) !== g.baselineText)) {
+        const next = responseText(assistant);
         if (encoder.encode(next).length > 262144) throw new Error('OUTPUT_LIMIT');
         const delta = appendDelta(g.text, next);
         for (const text of splitText(delta)) emit({type: 'generation_delta', request_id: g.request, text});
         g.text = next;
       }
-      const stop = nodes.get(g.stop);
+      const stop = findStop(g.stop);
       const busy = region.getAttribute('aria-busy') === 'true' || !!(stop && visible(stop) && !stop.disabled && stop.getAttribute('aria-disabled') !== 'true');
       if (busy) g.sawBusy = true;
       if (g.sawBusy && !busy && g.text.length) {
@@ -202,34 +307,71 @@
     } catch (error) { stopGeneration(error.message || 'BROWSER_ERROR'); }
   }
   const settle = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  async function attach(action) {
+    const files = action.attachments || [];
+    if (!Array.isArray(files) || files.length > 4) throw new Error('ATTACHMENT_LIMIT');
+    if (!files.length) return;
+    const input = nodes.get(action.attachment_node);
+    if (!(input instanceof HTMLInputElement) || input.type !== 'file' || !input.isConnected || input.disabled ||
+        input.closest('form')?.querySelector('input[type="password"],input[autocomplete^="cc-"]') ||
+        sensitive.test([label(input),input.name,input.id].join(' '))) throw new Error('ATTACHMENT_CONTROL_REQUIRED');
+    if (input.files?.length) throw new Error('EXISTING_ATTACHMENTS_REQUIRE_USER_ACTION');
+    if (!input.multiple && files.length > 1) throw new Error('ATTACHMENT_COUNT_UNSUPPORTED');
+    const transfer = new DataTransfer(); let total = 0;
+    for (const item of files) {
+      if (!item || !['image/png','image/jpeg','image/webp','image/gif','application/pdf','text/plain'].includes(item.mime) ||
+          typeof item.name !== 'string' || !/^[a-zA-Z0-9_.-]{1,96}$/.test(item.name) ||
+          typeof item.data !== 'string' || item.data.length < 4 || item.data.length > 131072 || item.data.length % 4 ||
+          !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(item.data)) throw new Error('INVALID_ATTACHMENT');
+      total += item.data.length; if (total > 190000) throw new Error('ATTACHMENT_LIMIT');
+      const accept = input.accept.toLowerCase().split(',').map(s=>s.trim()).filter(Boolean);
+      if (accept.length && !accept.some(value=>value === item.mime || (value.endsWith('/*') && item.mime.startsWith(value.slice(0,-1))) || (value.startsWith('.') && item.name.endsWith(value)))) throw new Error('ATTACHMENT_TYPE_UNSUPPORTED');
+      const binary = atob(item.data); if (btoa(binary) !== item.data) throw new Error('INVALID_ATTACHMENT'); const data = Uint8Array.from(binary,c=>c.charCodeAt(0));
+      transfer.items.add(new File([data],item.name,{type:item.mime}));
+    }
+    input.files = transfer.files;
+    if (input.files.length !== files.length) throw new Error('ATTACHMENT_REJECTED');
+    input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+  }
   async function execute(action) {
     if (!action || typeof action !== 'object' || action.document_id !== documentId || location.origin !== config.origin) throw new Error('STALE_DOCUMENT');
     if (action.type === 'scan') { lastSnapshot = ''; snapshot(); return; }
     if (action.type === 'stop') {
+      if (preparingRequest?.request === action.request_id) preparingRequest.cancelled = true;
       if (generation?.request === action.request_id) {
         if (Number.isSafeInteger(action.stop_node) && action.stop_node > 0) generation.stop = action.stop_node;
         stopGeneration();
       } return;
     }
+    if (action.type === 'pick') { beginPicker(action.mapping); return; }
+    if (action.type === 'new_chat') {
+      if (generation || preparingRequest) throw new Error('PROVIDER_BUSY');
+      target(action.node).click(); await settle(); await pause(200);
+      emit({type:'action_result',request_id:action.request_id,status:'new_chat_opened'});
+      lastSnapshot=''; snapshot(); return;
+    }
     if (action.type !== 'generate') throw new Error('ACTION_DENIED');
-    if (generation) throw new Error('PROVIDER_BUSY');
+    endPicker();
+    if (generation || preparingRequest) throw new Error('PROVIDER_BUSY');
     if (typeof action.prompt !== 'string' || encoder.encode(action.prompt).length > 131072) throw new Error('PROMPT_LIMIT');
     if (typeof action.request_id !== 'string' || !/^[A-Za-z0-9._-]{1,96}$/.test(action.request_id)) throw new Error('INVALID_REQUEST');
-    if (action.new_chat) { target(action.new_chat).click(); await settle(); }
-    if (action.model_control) {
-      const selector = target(action.model_control);
-      if (!(selector instanceof HTMLSelectElement)) throw new Error('MODEL_CONTROL_NEEDS_RECORDER');
-      if (!Array.from(selector.options).some(o => o.value === action.model_value && !o.disabled)) throw new Error('MODEL_UNAVAILABLE');
-      selector.value = action.model_value;
-      selector.dispatchEvent(new Event('change', {bubbles: true})); await settle();
-      if (selector.value !== action.model_value) throw new Error('MODEL_SELECTION_FAILED');
-    }
-    const input = target(action.prompt_node); target(action.send_node, {allowDisabled: true});
+    const preparing = {request:action.request_id,cancelled:false}; preparingRequest = preparing;
+    const checkPreparing = () => {if (preparing.cancelled) throw new Error('CANCELLED');};
+    try {
+      if (action.new_chat) { target(action.new_chat).click(); await settle(); checkPreparing(); }
+      if (action.model_control) { await choose(action, 'model', action.model_control, action.model_value, action.model_label || action.model_value); checkPreparing(); }
+      if (action.reasoning_value) {
+        if (!action.reasoning_control) throw new Error('REASONING_UNAVAILABLE');
+        await choose(action,'reasoning',action.reasoning_control,action.reasoning_value); checkPreparing();
+      }
+      await attach(action); checkPreparing();
+    } finally { if (preparingRequest === preparing) preparingRequest = null; }
+    const input = resolve(action,'prompt',action.prompt_node); resolve(action,'send',action.send_node,{allowDisabled:true});
     if (!editable(input)) throw new Error('PROMPT_MAPPING_INVALID');
-    const region = target(action.response_node, {allowDisabled: true});
+    const region = resolve(action,'response',action.response_node,{allowDisabled:true});
     const baseline = assistantNode(region);
-    generation = {request: action.request_id, response: action.response_node, stop: action.stop_node,
-      baselineNode: baseline, baselineText: baseline?.textContent || '', text: '', sawBusy: false, submitted: false,
+    generation = {request: action.request_id, response: id(region), stop: action.stop_node, action,
+      baselineNode: baseline, baselineText: baseline ? responseText(baseline) : '', text: '', sawBusy: false, submitted: false,
       timeout: setTimeout(() => stopGeneration('TIMEOUT'), 120000)};
     try {
       if (input instanceof HTMLTextAreaElement || input instanceof HTMLInputElement) {
@@ -239,8 +381,15 @@
       input.dispatchEvent(new InputEvent('input', {bubbles: true, inputType: 'insertText', data: action.prompt}));
       await settle();
       if (!generation || generation.request !== action.request_id) throw new Error('CANCELLED');
+      const deadline = performance.now() + 15000; let send;
+      while (performance.now() < deadline) {
+        if (!generation || generation.request !== action.request_id) throw new Error('CANCELLED');
+        send = resolve(action,'send',action.send_node,{allowDisabled:true});
+        if (!send.disabled && send.getAttribute('aria-disabled') !== 'true') break;
+        await pause(100);
+      }
       generation.submitted = true;
-      target(action.send_node).click();
+      resolve(action,'send',action.send_node).click();
       emit({type: 'action_result', request_id: action.request_id, status: 'submitted'});
       readGeneration();
     } catch (error) { stopGeneration(error.message || 'BROWSER_ERROR'); }
@@ -302,14 +451,18 @@
   } catch { emit({type: 'instrumentation_warning', code: 'NETWORK_HOOK_PARTIAL'}); }
   document.addEventListener('click', event => {
     const node = event.target instanceof Element ? event.target.closest('button,select,[role="button"],[role="option"],textarea,[contenteditable="true"]') : null;
-    if (node && visible(node) && !forbidden(node)) emit({type: 'interaction', node: id(node), role: node.getAttribute('role') || node.tagName.toLowerCase(), label: label(node)});
+    if (!picker && node && visible(node) && !forbidden(node)) emit({type: 'interaction', node: id(node), role: node.getAttribute('role') || node.tagName.toLowerCase(), label: label(node)});
   }, true);
   for (const method of ['pushState', 'replaceState']) {
     const original = history[method];
     history[method] = function(...args) { const result = Reflect.apply(original, this, args); scheduleSnapshot(); return result; };
   }
+  document.addEventListener('keydown', event => {
+    if (!event.isTrusted || !(event.metaKey || event.ctrlKey) || !['l','k'].includes(event.key.toLowerCase())) return;
+    event.preventDefault(); emit({type:'shortcut',key:event.key.toLowerCase()==='l'?'address':'commands'});
+  }, true);
   window.addEventListener('popstate', scheduleSnapshot);
-  window.addEventListener('pagehide', () => stopGeneration('NAVIGATED'));
+  window.addEventListener('pagehide', () => {endPicker();stopGeneration('NAVIGATED');});
   const observer = new MutationObserver(scheduleSnapshot);
   function start() {
     observer.observe(document.documentElement, {subtree: true, childList: true, characterData: true,

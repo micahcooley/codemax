@@ -1,9 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
-compile_error!("This source alpha targets Linux x86_64 only. Other native backends are not qualified.");
+compile_error!("This application targets Linux x86_64 only. Other native backends are not qualified.");
 mod framing;
 mod host;
 mod views;
+mod platform;
 use std::sync::{Arc, atomic::Ordering};
 use serde_json::{json, Value};
 use tauri::{Manager, Webview, WebviewUrl};
@@ -14,7 +15,7 @@ async fn bridge_request(webview: Webview, host: tauri::State<'_, Arc<Host>>, op:
     views::trusted_main(&webview)?;
     // Internal-only frames cannot be forged through the otherwise trusted UI
     // proxy. Domain authorization and validation still reside in Zag.
-    if matches!(op.as_str(), "observation" | "browser.failed" | "shutdown") { return Err("INTERNAL_OPERATION".into()); }
+    if matches!(op.as_str(), "observation" | "browser.failed" | "browser.location" | "shutdown") { return Err("INTERNAL_OPERATION".into()); }
     host.request(op, params).await
 }
 #[tauri::command]
@@ -27,7 +28,29 @@ async fn browser_control(webview: Webview, host: tauri::State<'_, Arc<Host>>, pr
     if !host.views.lock().map_err(|_| "HOST_LOCK_FAILED")?.contains_key(&provider_id) { return Err("UNKNOWN_VIEW".into()); }
     let view = webview.app_handle().get_webview(&format!("provider-{provider_id}")).ok_or("PROVIDER_VIEW_CLOSED")?;
     match action.as_str() {
-        "back" => view.eval("history.back()"), "forward" => view.eval("history.forward()"), "reload" => view.eval("location.reload()"),
+        "back" => view.eval("history.back()"), "forward" => view.eval("history.forward()"), "reload" => view.reload(),
+        "zoom_in" | "zoom_out" | "zoom_reset" => {
+            let zoom={let mut all=host.views.lock().map_err(|_|"HOST_LOCK_FAILED")?;let item=all.get_mut(&provider_id).ok_or("UNKNOWN_VIEW")?;
+                item.zoom=if action=="zoom_reset"{1.0}else{(item.zoom+if action=="zoom_in"{0.1}else{-0.1}).clamp(0.5,2.0)};item.zoom};
+            view.set_zoom(zoom)
+        }
+        "popup_once" | "download_once" => {
+            let mut all=host.views.lock().map_err(|_|"HOST_LOCK_FAILED")?;let item=all.get_mut(&provider_id).ok_or("UNKNOWN_VIEW")?;
+            let until=Some(std::time::Instant::now()+std::time::Duration::from_secs(60));
+            if action=="popup_once"{item.popup_until=until;}else{item.download_until=until;} return Ok(());
+        }
+        "inspect" => {
+            let snapshot=host.request("state.get".into(),serde_json::json!({})).await?;
+            if snapshot["developer_mode"]!=true{return Err("DEVELOPER_MODE_REQUIRED".into());}
+            if view.is_devtools_open(){view.close_devtools();}else{view.open_devtools();} return Ok(());
+        }
+        "external" => {
+            let mut url=view.url().map_err(|_|"VIEW_URL_UNAVAILABLE")?;url.set_query(None);url.set_fragment(None);
+            if !views::safe_provider_url(&url,host.dev_fixture) || ["oauth","callback","authorize","token"].iter().any(|part|url.path().to_ascii_lowercase().contains(part)){return Err("EXTERNAL_URL_DENIED".into());}
+            let mut child = std::process::Command::new("/usr/bin/xdg-open").arg(url.as_str()).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().map_err(|_|"EXTERNAL_BROWSER_FAILED")?;
+            std::thread::spawn(move || { let _ = child.wait(); });
+            return Ok(());
+        }
         _ => return Err("BROWSER_ACTION_DENIED".into()),
     }.map_err(|_| "BROWSER_ACTION_FAILED".into())
 }
@@ -42,14 +65,14 @@ async fn host_status(webview: Webview, host: tauri::State<'_, Arc<Host>>) -> Res
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![bridge_request, views::provider_observe, browser_bounds, browser_control, backend_restart, host_status])
+        .invoke_handler(tauri::generate_handler![bridge_request, views::provider_observe, browser_bounds, browser_control, backend_restart, host_status, views::browser_find, platform::window_control, platform::document_export, platform::document_import, platform::gateway_probe])
         .setup(|app| {
             let root = app.path().app_local_data_dir()?.join("state");
             views::private_directory(&root).map_err(std::io::Error::other)?;
             let dev_fixture = cfg!(debug_assertions) && std::env::var("BRIDGE_DEV_FIXTURE").as_deref() == Ok("1");
             let (host, receiver) = Host::new(root, dev_fixture); app.manage(host.clone());
             tauri::WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                .enable_clipboard_access().title("Desktop AI Bridge").inner_size(1440.0, 920.0).min_inner_size(980.0, 680.0)
+                .enable_clipboard_access().title("Desktop AI Bridge").decorations(false).inner_size(1500.0, 940.0).min_inner_size(1000.0, 680.0)
                 .on_navigation(|url| (url.scheme() == "tauri" && url.host_str() == Some("localhost")) || (cfg!(debug_assertions) && url.scheme() == "http" && url.host_str() == Some("127.0.0.1") && url.port() == Some(1420)))
                 .build()?;
             tauri::async_runtime::spawn(host::supervise(app.handle().clone(), host, receiver));

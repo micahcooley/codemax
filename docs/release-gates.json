@@ -15,10 +15,22 @@
       "evidence": null
     },
     {
-      "id": "svelte_build",
-      "description": "Svelte check and build",
+      "id": "svelte_compile",
+      "description": "Actual Svelte component/rune compilation",
+      "status": "VERIFIED",
+      "evidence": "tests/evidence/frontend-build.json"
+    },
+    {
+      "id": "svelte_typecheck_vite",
+      "description": "Full svelte-check and normal Vite dependency build",
       "status": "NOT_VERIFIED",
       "evidence": null
+    },
+    {
+      "id": "compiled_ui_chromium",
+      "description": "Compiled Svelte UI interaction cases with native host double",
+      "status": "VERIFIED",
+      "evidence": "tests/evidence/ui-browser.json"
     },
     {
       "id": "rust_host",

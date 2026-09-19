@@ -1,0 +1,93 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../core/json.zag") as json
+@import("files.zag") as files
+// UI preferences and routing policy are persisted by Zag, never by browser pages.
+struct Settings {
+    theme: i32, compact: bool, restore_tabs: bool, auto_start: bool,
+    idle_minutes: i32, log_level: i32, fallback_enabled: bool, developer_mode: bool,
+    fallback_model: buf.Buffer, default_model: buf.Buffer,
+}
+fn make() Settings {
+    return Settings{.theme = 0, .compact = false, .restore_tabs = true, .auto_start = false,
+        .idle_minutes = 30, .log_level = 2, .fallback_enabled = false, .developer_mode = false,
+        .fallback_model = buf.make(256), .default_model = buf.make(256)};
+}
+fn boolean(out: *buf.Buffer, value: bool) void { if (value) { buf.add(out, "true"); } else { buf.add(out, "false"); } }
+fn theme_name(n: i32) []u8 { if (n == 1) { return "light"; } if (n == 2) { return "system"; } return "dark"; }
+fn log_name(n: i32) []u8 { if (n == 0) { return "ERROR"; } if (n == 1) { return "WARN"; } if (n == 3) { return "DEBUG"; } return "INFO"; }
+fn render(s: *Settings, out: *buf.Buffer) void {
+    buf.add(out, "{\"theme\":"); buf.json(out, theme_name(s.*.theme));
+    buf.add(out, ",\"compact\":"); boolean(out, s.*.compact);
+    buf.add(out, ",\"restore_tabs\":"); boolean(out, s.*.restore_tabs);
+    buf.add(out, ",\"auto_start\":"); boolean(out, s.*.auto_start);
+    buf.add(out, ",\"idle_minutes\":"); buf.integer(out, s.*.idle_minutes as i64);
+    buf.add(out, ",\"logging\":"); buf.json(out, log_name(s.*.log_level));
+    buf.add(out, ",\"fallback_enabled\":"); boolean(out, s.*.fallback_enabled);
+    buf.add(out, ",\"fallback_model\":"); buf.json(out, buf.view(&s.*.fallback_model));
+    buf.add(out, ",\"default_model\":"); buf.json(out, buf.view(&s.*.default_model));
+    buf.add(out, ",\"developer_mode\":"); boolean(out, s.*.developer_mode);
+    buf.add(out, ",\"raw_capture\":false}");
+}
+fn bool_field(d: *json.Document, object: i32, key: []u8, old: bool) bool {
+    let at: i32 = json.get(d, object, key); if (at < 0) { return old; } return json.kind(d, at) == 5;
+}
+fn valid_bool(d: *json.Document, object: i32, key: []u8) bool {
+    let at: i32 = json.get(d, object, key); return at < 0 || json.kind(d, at) == 5 || json.kind(d, at) == 6;
+}
+fn update(s: *Settings, d: *json.Document, object: i32) bool {
+    if (json.kind(d, object) != 1 || !valid_bool(d, object, "compact") || !valid_bool(d, object, "restore_tabs") ||
+        !valid_bool(d, object, "auto_start") || !valid_bool(d, object, "fallback_enabled") || !valid_bool(d, object, "developer_mode")) { return false; }
+    let theme: i32 = s.*.theme; let level: i32 = s.*.log_level;
+    let at: i32 = json.get(d, object, "theme");
+    if (at >= 0) {
+        if (json.is_text(d, at, "dark")) { theme = 0; }
+        else if (json.is_text(d, at, "light")) { theme = 1; }
+        else if (json.is_text(d, at, "system")) { theme = 2; }
+        else { return false; }
+    }
+    at = json.get(d, object, "logging");
+    if (at >= 0) {
+        if (json.is_text(d, at, "ERROR")) { level = 0; }
+        else if (json.is_text(d, at, "WARN")) { level = 1; }
+        else if (json.is_text(d, at, "INFO")) { level = 2; }
+        else if (json.is_text(d, at, "DEBUG")) { level = 3; }
+        else { return false; }
+    }
+    let idle: i64 = s.*.idle_minutes as i64; at = json.get(d, object, "idle_minutes");
+    if (at >= 0) { idle = json.number(d, at, 0 - 1); }
+    if (idle < 0 || idle > 240 || (idle > 0 && idle < 5)) { return false; }
+    let fallback: buf.Buffer = buf.make(256); let model: buf.Buffer = buf.make(256);
+    buf.copy(&fallback, buf.view(&s.*.fallback_model)); buf.copy(&model, buf.view(&s.*.default_model));
+    at = json.get(d, object, "fallback_model"); if (at >= 0) { json.text(d, at, &fallback); }
+    at = json.get(d, object, "default_model"); if (at >= 0) { json.text(d, at, &model); }
+    let enabled: bool = bool_field(d, object, "fallback_enabled", s.*.fallback_enabled);
+    let ok: bool = fallback.ok != 0 && model.ok != 0 && (!enabled || fallback.len > 0);
+    if (ok) {
+        s.*.theme = theme; s.*.log_level = level; s.*.idle_minutes = idle as i32;
+        s.*.compact = bool_field(d, object, "compact", s.*.compact);
+        s.*.restore_tabs = bool_field(d, object, "restore_tabs", s.*.restore_tabs);
+        s.*.auto_start = bool_field(d, object, "auto_start", s.*.auto_start);
+        s.*.developer_mode = bool_field(d, object, "developer_mode", s.*.developer_mode);
+        s.*.fallback_enabled = enabled; buf.copy(&s.*.fallback_model, buf.view(&fallback)); buf.copy(&s.*.default_model, buf.view(&model));
+    }
+    buf.free(&fallback); buf.free(&model); return ok;
+}
+fn copy(source: *Settings, target: *Settings) void {
+    target.*.theme = source.*.theme; target.*.compact = source.*.compact; target.*.restore_tabs = source.*.restore_tabs;
+    target.*.auto_start = source.*.auto_start; target.*.idle_minutes = source.*.idle_minutes;
+    target.*.developer_mode = source.*.developer_mode; target.*.log_level = source.*.log_level; target.*.fallback_enabled = source.*.fallback_enabled;
+    buf.copy(&target.*.fallback_model, buf.view(&source.*.fallback_model)); buf.copy(&target.*.default_model, buf.view(&source.*.default_model));
+}
+fn save(root: []u8, s: *Settings) bool {
+    let out: buf.Buffer = buf.make(2048); render(s, &out);
+    let ok: bool = out.ok != 0 && files.save(root, "settings.json", buf.view(&out)); buf.free(&out); return ok;
+}
+fn load(root: []u8, s: *Settings) bool {
+    let out: buf.Buffer = buf.make(2048); let code: i32 = files.load(root, "settings.json", &out);
+    if (code == 0) { buf.free(&out); return true; }
+    if (code < 0) { buf.free(&out); return false; }
+    let d: json.Document = json.parse(buf.view(&out)); let ok: bool = d.ok != 0 && update(s, &d, 0);
+    json.free(&d); buf.free(&out); return ok;
+}
+fn free(s: *Settings) void { buf.free(&s.*.fallback_model); buf.free(&s.*.default_model); }

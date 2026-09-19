@@ -21,3 +21,13 @@ Retrieved during the execution ending September 19, 2026. URLs are development r
 The protocol implementation intentionally covers only the subset listed in PROTOCOL.md. No model identity/context size/provider capability has been taken from an illustrative masterplan example and passed off as discovered data. No actual provider login, model call, quota test or current provider terms review took place in this environment.
 
 GitHub read access succeeded. The attempted Actions job rerun returned HTTP 403, “Resource not accessible by integration.” Earlier write/branch attempts were also reported unavailable; no repository change, branch or workflow run is claimed in this delivery.
+
+
+## Completion-round source checks
+
+- Exact Svelte runtime license: https://github.com/sveltejs/svelte/blob/svelte@5.48.0/LICENSE.md
+- Tauri event target and callback teardown contract: https://github.com/tauri-apps/tauri/blob/tauri-v2.11.5/packages/api/src/event.ts
+- Native shell Command-to-std::process::Command conversion: https://github.com/tauri-apps/plugins-workspace/blob/v2/plugins/shell/src/process/mod.rs
+- Client configuration contracts consulted: https://opencode.ai/docs/providers/ and https://code.claude.com/docs/en/llm-gateway
+
+These external references informed implementation; the attached user masterplan defines product requirements. Current connector discovery provided GitHub/Drive reads but no create/upload/share actions. Only local commits and direct attachment are claimed for the revised delivery.

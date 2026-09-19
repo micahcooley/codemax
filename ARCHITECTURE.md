@@ -1,64 +1,40 @@
-# Architecture and source ownership
+# Application architecture
 
-Status: source implementation, not native/runtime qualification. The uploaded MASTERPLAN is the requirement; deviations below are explicit.
+```
+Trusted Svelte UI ── scoped commands/events ── Thin Tauri host
+                                                │
+                     attached provider webviews │ private stdio
+                     (untrusted origins)        ▼
+                                              Zag
+                                   detector / profiles / settings
+                                   HTTP / protocols / tools
+                                   registry / sessions / receipts
+                                                │
+                                        127.0.0.1 API
+```
 
-## Presentation
+## Responsibilities
 
-`src/App.svelte` owns navigation/dialog presentation. `lib/state/app.svelte.ts` uses Svelte runes for ephemeral route/pane/UI state and a received backend snapshot. Provider/model/session data comes from Zag push snapshots; the frontend does not own a substitute authoritative registry. `lib/api/bridge.ts` uses scoped Tauri invoke/events. Opening Vite in a normal browser displays a native-host-required state, not fabricated providers or inference responses.
+`src/` contains presentation and ephemeral tab/layout state only. No frontend production HTTP server or fake backend exists. `src/lib/api/native.ts` implements the small Tauri IPC/event boundary; `bridge.ts` subscribes to targeted snapshots and browser/host events.
 
-Seven screens are authored: Overview, Provider Browser, Models, Harness Setup, Sessions, Detector Lab and Settings. Native child views are hidden before modal dialogs, on route changes and during host failures. A ResizeObserver and animation-frame coalescing transmit bounded logical view coordinates. There is no 500 ms frontend polling loop.
+`src-tauri/` owns native webviews, individual storage directories, view rectangles, window/file APIs, popup/download permissions, and the Zag child process. Its bounded stdio protocol has a startup version handshake, request IDs, reply timeouts, bounded queues and restart supervision. Pending client work is failed rather than replayed after a crash. Provider pages receive only the observation command, never general app/shell/filesystem access.
 
-## Desktop orchestration
+`backend/` is edition-2027 Zag. It owns private-state locking/atomic file replacement, token generation, loopback admission, HTTP parsing, routing, protocol normalization, SSE, tool parsing, canonical session receipts, settings and provider state. The external interface uses a token distinct from provider authentication. Diagnostics require authenticated clients plus developer mode.
 
-`src-tauri/src/host.rs` resolves the external sidecar with Tauri's shell plugin, converts the resolved command to Tokio process plumbing, clears inherited environment variables, and exposes only state-directory/development-fixture settings. It owns stdio framing, bounded queues, a versioned handshake, crash backoff and pending-request rejection. It does not parse/translate provider API requests.
+`browser/agent.js` performs origin/document-scoped observation and validated DOM execution. It does not read cookies or authorization headers. Semantic controls and user-confirmed recipes rebind after navigation/redesign. Exact model/reasoning selection, prompt/send, response boundaries, stop and client-supplied attachments are performed inside the provider page, without transferring its credentials.
 
-`views.rs` constructs data-directory-separated provider webviews, scopes their initialization scripts to configured origins, blocks automatic downloads and new windows, validates the calling webview for observations, and forwards typed data. Tauri events are addressed to `EventTarget::Webview { label: "main" }`, not an ambiguous parent window label. Capabilities apply to `webviews`, not all child views of a permitted `window`.
+## State and continuity
 
-This source uses Tauri's **unstable** multi-webview API. Its actual behavior, WebKitGTK profile isolation and render/resize geometry need native qualification. Browser-based tests of Chromium cannot establish those claims. OAuth flows that require popups may fail under the current intentionally strict new-window policy.
+Provider storage is retained by its native webview profile. Zag persists metadata, settings, connector recipes, conversation URLs and per-message SHA-256 receipt sequences—not prompts/tool-result transcripts. Receipts verify the client-supplied canonical prefix; only new messages are submitted. On restart the matching provider conversation must be restored before continuation. Cancelled or uncertain turns are expired instead of replayed.
 
-## Authoritative Zag service
+Writes preserve a prior complete main state until the new receipt files and state are written. Missing/corrupt state, origin conflicts, ambiguous controls and incompatible histories fail explicitly. This is application-level durability source, not a claim of proven power-loss durability or resistance to a hostile local administrator.
 
-`backend/app.zag` integrates the event loop and admission decisions. `core/json.zag` has a bounded strict parser and canonicalizer. `server/` owns nonblocking Linux IPv4 loopback sockets, strict HTTP/1.1 request parsing, SSE and client buffers. `protocol/normalized.zag` normalizes the documented subsets and rejects unsupported controls; `protocol/wire.zag` serializes the three response formats.
+## Bounds
 
-`providers/registry.zag` owns provider/model state. `browser/evidence.zag` rebuilds a whitelisted observation object; raw payloads never become stored evidence. `detector/symbolic.zag` and `recorder.zag` infer and user-confirm semantic control mappings. `sessions/manager.zag` owns transcript matching and per-provider conversation state. `tools/parser.zag` is a bounded, incremental nonce-scoped JSON framing parser. `storage/` persists metadata and local-token files using owned private paths, exclusive temporary files and atomic replacement.
+The process admits at most 32 HTTP clients, four active generations and one active generation per provider. Provider/session/model catalogs and metadata buffers have explicit limits; body, output, tool and inline-file limits are enforced. Idle unpinned provider views can be closed while their profile data remains. No busy-loop UI polling is used.
 
-The service is Linux x86_64 only and uses explicit Linux syscalls. Native ownership/resource, ABI, parser and scheduler correctness remain unverified until compiled and exercised. It is not represented as cross-platform source qualification.
+TNN prediction parsing and safety authority remain separate; the symbolic engine works without a TNN artifact. Research qualification is not silently inferred from the presence of integration source.
 
-## Resource bounds
+## Build and evidence
 
-| Resource | Source limit |
-|---|---|
-| Providers / discovered models | 16 / 32 per provider |
-| HTTP clients / active generations | 32 / 4 globally; one generation per provider |
-| Sessions | 128 retained records |
-| HTTP header bytes / fields | 16 KiB / 64 |
-| HTTP JSON body | 1 MiB |
-| JSON depth / token count | 32 / 8192 |
-| Incoming browser observation | 32 KiB |
-| Main-to-sidecar host message / host queue | 64 KiB / 128 messages |
-| Sidecar-to-host framed message | 1 MiB |
-| Prompt / raw generated output | 128 KiB / 128 KiB |
-| HTTP active stream pressure | 512 KiB |
-| Tool-frame pending payload / calls | 64 KiB / 16 per generation |
-| Request / generation timeout | 10 seconds / 120 seconds |
-| Active SSE heartbeat | 15 seconds |
-
-These are implementation constants, not measured performance results. Thread/process scheduling, memory use and timeouts need native tests.
-
-## Persistence and recovery
-
-The host creates private data directories. Zag verifies ownership/type/permissions and obtains an advisory instance lock before loading state. State includes providers, confirmed mapping recipes, a manually supplied model label, port configuration and session metadata. The local API token is a separate 0600 file. Browser authentication remains in the webview's native profile storage.
-
-**Full provider conversation restoration across restart is not implemented.** Gateway message bodies are kept in memory only. Restored session metadata is marked `PROVIDER_LOST`; requests are not silently replayed. Restoring live conversation identity reliably is a remaining release gate, not an incidental setting.
-
-## Detector and TNN boundary
-
-The production baseline currently consumes DOM semantics, not learned network request diffs. The browser emits bounded fetch/XHR/WebSocket/EventSource metadata, but the Zag app deliberately does not retain or route raw network diagnostics until a bounded diagnostic schema is qualified.
-
-A bounded TNN shadow-result decoder and a proposed research envelope are included. **No trained TNN artifact is loaded, no shadow comparison campaign ran, and hybrid control is disabled.** There is no working TNN inference plugin masquerading as an enabled mode.
-
-## Key deviations from the complete plan
-
-A live website is not yet qualified. Custom rich editors/model menus, attachment upload, provider-native tools, measured context/tokenizers, reasoning-mode actuation, external navigation controls, updater/auto-start, idle-view suspension, full recorder interaction causality and persistent live conversation restoration remain incomplete. The seven UI screens are source, not verified native UI execution. See `docs/PHASE_STATUS.md` and the execution report.
-
-Implementation references and retrieved primary documentation are listed in `docs/SOURCES.md`.
+`build-linux.sh` uses native Zag and Tauri, with no Rust/JavaScript substitution for the gateway. `dist/` is the compiled frontend; it cannot perform native operations when opened as an ordinary webpage. `tests/fixtures/` is separate test infrastructure. See `EXECUTION_REPORT.md` for executed versus native-unverified checks.

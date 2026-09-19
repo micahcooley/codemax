@@ -128,6 +128,48 @@ try:
         def isolation():
             p=mount();assert p.locator('#login').is_visible();p.close()
         record('fixture_state_containers_are_independent',isolation)
+        def attachment_upload():
+            page.select_option('#mode','normal')
+            page.evaluate("""(()=>{const e=document.createElement('input');e.type='file';e.multiple=true;e.accept='text/plain,image/png';e.id='bridge-fixture-file';e.setAttribute('aria-label','Attach files');document.getElementById('chat').append(e);__BRIDGE_RESCAN__();})()""")
+            page.wait_for_function("__events.filter(e=>e.type==='observation').at(-1).controls.some(n=>n.label==='Attach files')")
+            snap=page.evaluate("__events.filter(e=>e.type==='observation').at(-1)"); a=action('attachment')
+            a['attachment_node']=next(n['id'] for n in snap['controls'] if n['label']=='Attach files')
+            a['attachments']=[{'name':'attachment.txt','mime':'text/plain','data':'aGVsbG8='}]
+            execute(a);finish('attachment');assert page.evaluate("document.getElementById('bridge-fixture-file').files[0].size")==5
+            execute({**a,'request_id':'attachment-existing'});events=finish('attachment-existing','generation_error');assert events[-1]['code']=='EXISTING_ATTACHMENTS_REQUIRE_USER_ACTION'
+            page.evaluate("document.getElementById('bridge-fixture-file').value=''")
+            execute({**a,'request_id':'attachment-invalid','attachments':[{'name':'attachment.txt','mime':'text/plain','data':'Zg=A'}]})
+            events=finish('attachment-invalid','generation_error');assert events[-1]['code']=='INVALID_ATTACHMENT'
+            assert page.evaluate("document.getElementById('bridge-fixture-file').files.length")==0
+        record('client_attachment_upload_preserves_existing_files_and_refuses_malformed_base64',attachment_upload)
+        def reasoning_toggle():
+            page.evaluate("""(()=>{let e=document.createElement('button');e.id='bridge-reasoning';e.setAttribute('role','switch');e.setAttribute('aria-label','Thinking');e.setAttribute('aria-checked','false');e.textContent='Thinking';e.onclick=()=>e.setAttribute('aria-checked',e.getAttribute('aria-checked')==='true'?'false':'true');document.getElementById('chat').append(e);__BRIDGE_RESCAN__()})()""")
+            page.wait_for_function("__events.filter(e=>e.type==='observation').at(-1).controls.some(n=>n.label==='Thinking')")
+            snap=page.evaluate("__events.filter(e=>e.type==='observation').at(-1)");a=action('reasoning')
+            a['reasoning_control']=next(n['id'] for n in snap['controls'] if n['label']=='Thinking');a['reasoning_value']='thinking'
+            execute(a);finish('reasoning');assert page.get_attribute('#bridge-reasoning','aria-checked')=='true'
+        record('exact_reasoning_switch_precedes_submission',reasoning_toggle)
+        def cancelled_preparation():
+            before=page.locator('[data-bridge-assistant]').count();a=action('cancel-preparing')
+            page.evaluate("a=>{__BRIDGE_EXECUTE__(a);__BRIDGE_EXECUTE__({type:'stop',document_id:a.document_id,request_id:a.request_id,stop_node:a.stop_node})}",a)
+            events=finish('cancel-preparing','generation_error');assert events[-1]['code']=='CANCELLED'
+            page.wait_for_timeout(300);assert page.locator('[data-bridge-assistant]').count()==before
+            execute(action('after-prepare-cancel'));finish('after-prepare-cancel')
+        record('cancel_during_preparation_never_sends_and_next_request_recovers',cancelled_preparation)
+        def recorder_picker():
+            a=action('picker');old=page.input_value('#prompt')
+            execute({'type':'pick','document_id':a['document_id'],'mapping':'prompt'})
+            page.locator('#prompt').hover();page.locator('#prompt').click()
+            page.wait_for_function("__events.some(e=>e.type==='picked'&&e.mapping==='prompt')")
+            assert page.input_value('#prompt')==old
+        record('connector_picker_selects_control_without_editing_or_submitting',recorder_picker)
+        def custom_model_menu():
+            page.evaluate("""(()=>{const select=document.getElementById('model');select.style.display='none';const b=document.createElement('button');b.id='custom-model';b.setAttribute('aria-label','Model selector');b.textContent='Model selector';b.onclick=()=>{const m=document.createElement('div');m.id='custom-model-menu';m.setAttribute('role','listbox');for(const value of ['mock-small','mock-reasoner']){const o=document.createElement('button');o.setAttribute('role','option');o.setAttribute('data-value',value);o.textContent=value;o.onclick=()=>{select.value=value;m.remove()};m.append(o)}document.getElementById('chat').append(m)};document.getElementById('chat').append(b);__BRIDGE_RESCAN__()})()""")
+            page.wait_for_function("__events.filter(e=>e.type==='observation').at(-1).controls.some(n=>n.label==='Model selector')")
+            snap=page.evaluate("__events.filter(e=>e.type==='observation').at(-1)");a=action('custom-menu',model='mock-reasoner')
+            a['model_control']=next(n['id'] for n in snap['controls'] if n['label']=='Model selector')
+            execute(a);finish('custom-menu');assert page.input_value('#model')=='mock-reasoner'
+        record('custom_model_popover_selects_exact_observed_option',custom_model_menu)
         page.screenshot(path=str(OUT/'mock-provider-browser.png'),full_page=True)
         context.close();browser.close()
 except Exception:

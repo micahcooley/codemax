@@ -1,11 +1,12 @@
 @import("../core/runtime.zag")
 @import("../core/buffer.zag") as buf
 @import("../providers/registry.zag") as registry
+@import("../core/json.zag") as json
 // This validator is on the authoritative side of the IPC trust boundary.
 fn allowed(p: *registry.Provider) bool {
     return p.*.state == 4 && p.*.quota == 0 && p.*.prompt > 0 && p.*.send > 0 && p.*.response > 0 && p.*.document.len > 0;
 }
-fn generate(p: *registry.Provider, model_index: i32, request_id: []u8, prompt: []u8, new_chat: bool, out: *buf.Buffer) bool {
+fn generate(p: *registry.Provider, model_index: i32, request_id: []u8, prompt: []u8, reasoning: []u8, files: []u8, new_chat: bool, out: *buf.Buffer) bool {
     if (!allowed(p) || model_index < 0 || model_index >= p.*.model_count || _zag_strlen(prompt) > 131072) { return false; }
     buf.add(out, "{\"type\":\"action\",\"provider_id\":"); buf.integer(out, p.*.id as i64);
     buf.add(out, ",\"action\":{\"type\":\"generate\",\"document_id\":"); buf.json(out, buf.view(&p.*.document));
@@ -13,6 +14,12 @@ fn generate(p: *registry.Provider, model_index: i32, request_id: []u8, prompt: [
     buf.add(out, ",\"prompt_node\":"); buf.integer(out, p.*.prompt as i64); buf.add(out, ",\"send_node\":"); buf.integer(out, p.*.send as i64);
     buf.add(out, ",\"response_node\":"); buf.integer(out, p.*.response as i64); buf.add(out, ",\"stop_node\":"); buf.integer(out, p.*.stop as i64);
     buf.add(out, ",\"model_control\":"); buf.integer(out, p.*.model_control as i64); buf.add(out, ",\"model_value\":"); buf.json(out, buf.view(&p.*.models[model_index].value));
+    buf.add(out, ",\"model_label\":"); buf.json(out, buf.view(&p.*.models[model_index].label));
+    buf.add(out, ",\"reasoning_control\":"); buf.integer(out, p.*.reasoning_control as i64);
+    buf.add(out, ",\"reasoning_value\":"); if (_zag_strlen(reasoning) > 0) { buf.json(out, reasoning); } else { buf.json(out, buf.view(&p.*.reasoning_value)); }
+    buf.add(out, ",\"attachment_node\":"); buf.integer(out, p.*.attachment as i64);
+    buf.add(out, ",\"attachments\":"); buf.add(out, files);
+    buf.add(out, ",\"bindings\":"); bindings(p, out);
     buf.add(out, ",\"new_chat\":"); if (new_chat) { buf.integer(out, p.*.new_chat as i64); } else { buf.add(out, "0"); }
     buf.add(out, "}}\n"); return out.*.ok != 0;
 }
@@ -20,4 +27,21 @@ fn stop(p: *registry.Provider, request_id: []u8, out: *buf.Buffer) void {
     buf.add(out, "{\"type\":\"action\",\"provider_id\":"); buf.integer(out, p.*.id as i64);
     buf.add(out, ",\"action\":{\"type\":\"stop\",\"document_id\":"); buf.json(out, buf.view(&p.*.document));
     buf.add(out, ",\"request_id\":"); buf.json(out, request_id); buf.add(out, ",\"stop_node\":"); buf.integer(out, p.*.stop as i64); buf.add(out, "}}\n");
+}
+
+fn binding(p: *registry.Provider, node: i32, out: *buf.Buffer) void {
+    let d: json.Document = json.parse(buf.view(&p.*.evidence)); let controls: i32 = json.get(&d, 0, "controls"); let found: i32 = 0 - 1;
+    if (d.ok != 0 && json.kind(&d, controls) == 2) { let i: i32 = controls + 1; while (i < d.tokens[controls].next) { if (json.number(&d, json.get(&d, i, "id"), 0) == node as i64) { found = i; } i = d.tokens[i].next; } }
+    if (found >= 0) { buf.add(out, json.raw(&d, found)); } else { buf.add(out, "null"); } json.free(&d);
+}
+fn bindings(p: *registry.Provider, out: *buf.Buffer) void {
+    buf.add(out, "{\"prompt\":"); binding(p, p.*.prompt, out); buf.add(out, ",\"send\":"); binding(p, p.*.send, out);
+    buf.add(out, ",\"response\":"); binding(p, p.*.response, out); buf.add(out, ",\"stop\":"); binding(p, p.*.stop, out);
+    buf.add(out, ",\"model\":"); binding(p, p.*.model_control, out); buf.add(out, ",\"reasoning\":"); binding(p, p.*.reasoning_control, out); buf.byte(out, 125);
+}
+fn new_chat(p: *registry.Provider, request_id: []u8, out: *buf.Buffer) bool {
+    if (p.*.new_chat <= 0 || p.*.document.len == 0) { return false; }
+    buf.add(out, "{\"type\":\"action\",\"provider_id\":"); buf.integer(out, p.*.id as i64);
+    buf.add(out, ",\"action\":{\"type\":\"new_chat\",\"document_id\":"); buf.json(out, buf.view(&p.*.document));
+    buf.add(out, ",\"request_id\":"); buf.json(out, request_id); buf.add(out, ",\"node\":"); buf.integer(out, p.*.new_chat as i64); buf.add(out, "}}\n"); return out.*.ok != 0;
 }

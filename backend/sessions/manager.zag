@@ -1,9 +1,13 @@
 @import("../core/runtime.zag")
 @import("../core/buffer.zag") as buf
+@import("../core/json.zag") as json
+@import("../core/sha256.zag") as sha
 @import("../security/validation.zag") as validation
 @import("../protocol/normalized.zag") as normalized
+@import("../server/net.zag") as net
 struct Session {
     id: buf.Buffer, model: buf.Buffer, history: buf.Buffer, response: buf.Buffer, last_response_id: buf.Buffer,
+    url: buf.Buffer, title: buf.Buffer, receipts: buf.Buffer,
     provider_id: i32, turns: i32, input_messages: i32, created: i64, last_used: i64,
     status: i32, estimated_used: i64, tools_last_turn: bool,
 }
@@ -14,69 +18,119 @@ fn find(s: *Sessions, id: []u8) i32 {
 }
 fn add(s: *Sessions, id: []u8, provider: i32, model: []u8) i32 {
     if (s.*.count >= 128 || !validation.safe_id(id) || find(s, id) >= 0) { return 0 - 1; }
-    let now: i64 = _zag_clock_monotonic_ms();
-    let item: Session = Session{.id = buf.make(96), .model = buf.make(256), .history = buf.make(262144), .response = buf.make(262144), .last_response_id = buf.make(96),
+    let now: i64 = net.unix_seconds();
+    let item: Session = Session{.id = buf.make(96), .model = buf.make(256), .history = buf.make(1), .response = buf.make(262144), .last_response_id = buf.make(96),
+        .url = buf.make(2048), .title = buf.make(256), .receipts = buf.make(65536),
         .provider_id = provider, .turns = 0, .input_messages = 0, .created = now, .last_used = now, .status = 0, .estimated_used = 0, .tools_last_turn = false};
-    buf.copy(&item.id, id); buf.copy(&item.model, model); s.*.items[s.*.count] = item; s.*.count = s.*.count + 1; return s.*.count - 1;
+    buf.copy(&item.id, id); buf.copy(&item.model, model); buf.copy(&item.receipts, "[]");
+    s.*.items[s.*.count] = item; s.*.count = s.*.count + 1; return s.*.count - 1;
 }
 fn status_name(status: i32) []u8 {
     if (status == 1) { return "ACTIVE"; } if (status == 2) { return "PROVIDER_LOST"; }
-    if (status == 3) { return "RATE_LIMITED"; } if (status == 4) { return "EXPIRED"; } return "IDLE";
+    if (status == 3) { return "RATE_LIMITED"; } if (status == 4) { return "EXPIRED"; }
+    if (status == 5) { return "RESTORING"; } return "IDLE";
 }
-fn snapshot(s: *Sessions, out: *buf.Buffer) void {
+fn render(s: *Sessions, out: *buf.Buffer, persistent: bool) void {
     buf.add(out, "["); let i: i32 = 0;
     while (i < s.*.count) {
         let item: *Session = &s.*.items[i]; if (i > 0) { buf.byte(out, 44); }
         buf.add(out, "{\"id\":"); buf.json(out, buf.view(&item.*.id)); buf.add(out, ",\"provider\":"); buf.integer(out, item.*.provider_id as i64);
         buf.add(out, ",\"model\":"); buf.json(out, buf.view(&item.*.model)); buf.add(out, ",\"turn_count\":"); buf.integer(out, item.*.turns as i64);
         buf.add(out, ",\"status\":"); buf.json(out, status_name(item.*.status));
+        buf.add(out, ",\"url\":"); buf.json(out, buf.view(&item.*.url)); buf.add(out, ",\"title\":"); buf.json(out, buf.view(&item.*.title));
+        buf.add(out, ",\"created_at\":"); buf.integer(out, item.*.created); buf.add(out, ",\"last_used\":"); buf.integer(out, item.*.last_used);
+        buf.add(out, ",\"last_response_id\":"); buf.json(out, buf.view(&item.*.last_response_id));
+        if (persistent) { buf.add(out, ",\"receipts\":"); buf.add(out, buf.view(&item.*.receipts)); }
         buf.add(out, ",\"context\":{\"estimated_used\":"); buf.integer(out, item.*.estimated_used);
-        buf.add(out, ",\"source\":\"ESTIMATED_BYTES\",\"nominal\":null,\"reported_used\":null}}"); i = i + 1;
+        buf.add(out, ",\"source\":\"ESTIMATED_BYTE_UPPER_BOUND\",\"nominal\":null,\"reported_used\":null}}"); i = i + 1;
     }
     buf.add(out, "]");
 }
 fn free(s: *Sessions) void {
     let i: i32 = 0;
-    while (i < s.*.count) { let item: *Session = &s.*.items[i]; buf.free(&item.*.id); buf.free(&item.*.model); buf.free(&item.*.history); buf.free(&item.*.response); buf.free(&item.*.last_response_id); i = i + 1; }
+    while (i < s.*.count) {
+        let item: *Session = &s.*.items[i]; buf.free(&item.*.id); buf.free(&item.*.model); buf.free(&item.*.history);
+        buf.free(&item.*.response); buf.free(&item.*.last_response_id); buf.free(&item.*.url); buf.free(&item.*.title); buf.free(&item.*.receipts); i = i + 1;
+    }
     _zag_free(s.*.items as *i8); s.*.count = 0;
 }
-
 fn find_response(s: *Sessions, response_id: []u8) i32 {
-    let i: i32 = 0;
-    while (i < s.*.count) { if (buf.eq(buf.view(&s.*.items[i].last_response_id), response_id)) { return i; } i = i + 1; }
+    if (_zag_strlen(response_id) == 0) { return 0 - 1; }
+    let i: i32 = 0; while (i < s.*.count) { if (buf.eq(buf.view(&s.*.items[i].last_response_id), response_id)) { return i; } i = i + 1; }
     return 0 - 1;
 }
-// Full histories must extend the exact canonical previous input + output.
-// An explicit session may instead submit only new user/tool records.
-// Returned offset is the suffix to send to the existing browser conversation.
+// Verify the existing prefix with per-record SHA-256 receipts. This works after
+// process restart without writing prompts, tool inputs, or outputs to disk.
+fn matching_prefix(item: *Session, canonical: []u8) i32 {
+    let d: json.Document = json.parse(buf.view(&item.*.receipts));
+    if (d.ok == 0 || json.kind(&d, 0) != 2 || d.tokens[0].size > 512) { json.free(&d); return 0 - 1; }
+    let hash: buf.Buffer = buf.make(64); let cursor: i32 = 0; let i: i32 = 1; let ok: bool = true;
+    while (i < d.tokens[0].next && ok) {
+        let n: i64 = json.number(&d, json.get(&d, i, "n"), 0);
+        if (n < 1 || n > 262144 || n > (_zag_strlen(canonical) - cursor) as i64) { ok = false; break; }
+        let end: i32 = cursor + n as i32;
+        ok = sha.digest(canonical[cursor..end], &hash) && json.is_text(&d, json.get(&d, i, "h"), buf.view(&hash));
+        cursor = end; i = d.tokens[i].next;
+    }
+    json.free(&d); buf.free(&hash); if (!ok) { return 0 - 1; } return cursor;
+}
 fn prepare(item: *Session, r: *normalized.Request) i32 {
     if (item.*.status != 0 || !buf.eq(buf.view(&item.*.model), buf.view(&r.*.model))) { return 0 - 1; }
+    r.*.history_offset = 0;
     if (item.*.turns == 0) { return 0; }
-    let expected: buf.Buffer = buf.make(262144); buf.add(&expected, buf.view(&item.*.history)); buf.add(&expected, buf.view(&item.*.response));
-    let offset: i32 = expected.len;
-    if (expected.ok == 0) { buf.free(&expected); return 0 - 1; }
-    if (buf.prefix(buf.view(&r.*.canonical), buf.view(&expected)) && r.*.canonical.len > offset) {
-        buf.free(&expected); return offset;
-    }
-    // Incremental requests may not splice in a new assistant/system transcript.
-    if (!r.*.explicit_session && r.*.previous.len == 0) { buf.free(&expected); return 0 - 1; }
-    let remaining: []u8 = buf.view(&r.*.canonical); let cursor: i32 = 0; let safe: bool = true;
-    while (cursor < _zag_strlen(remaining)) {
-        let end: i32 = buf.find(remaining, "\n", cursor); if (end < 0) { safe = false; break; }
-        let line: []u8 = remaining[cursor..end];
-        if (!buf.prefix(line, "{\"role\":\"user\",") && !buf.prefix(line, "{\"role\":\"tool\",")) { safe = false; break; }
+    let offset: i32 = matching_prefix(item, buf.view(&r.*.canonical));
+    if (offset >= 0 && r.*.canonical.len > offset) { r.*.history_offset = offset; return offset; }
+    if (!r.*.explicit_session && r.*.previous.len == 0) { return 0 - 1; }
+    // Explicit incremental continuation can add user and tool records only.
+    let cursor: i32 = 0;
+    while (cursor < r.*.canonical.len) {
+        let end: i32 = buf.find(buf.view(&r.*.canonical), "\n", cursor); if (end < 0) { return 0 - 1; }
+        let line: []u8 = r.*.canonical.data[cursor..end];
+        if (!buf.prefix(line, "{\"role\":\"user\",") && !buf.prefix(line, "{\"role\":\"tool\",")) { return 0 - 1; }
         cursor = end + 1;
     }
-    if (!safe) { buf.free(&expected); return 0 - 1; }
-    buf.add(&expected, remaining);
-    if (expected.ok == 0) { buf.free(&expected); return 0 - 1; }
-    buf.copy(&r.*.canonical, buf.view(&expected)); buf.free(&expected); return offset;
+    return 0;
+}
+fn append_receipts(records: []u8, out: *buf.Buffer, count: *i32) bool {
+    let cursor: i32 = 0; let hash: buf.Buffer = buf.make(64); let ok: bool = true;
+    while (cursor < _zag_strlen(records) && ok) {
+        let end: i32 = buf.find(records, "\n", cursor); if (end < 0 || count.* >= 512) { ok = false; break; }
+        ok = sha.digest(records[cursor..end + 1], &hash);
+        if (count.* > 0) { buf.byte(out, 44); }
+        buf.add(out, "{\"n\":"); buf.integer(out, (end + 1 - cursor) as i64); buf.add(out, ",\"h\":"); buf.json(out, buf.view(&hash)); buf.byte(out, 125);
+        count.* = count.* + 1; cursor = end + 1;
+    }
+    buf.free(&hash); return ok && out.*.ok != 0;
 }
 fn complete(item: *Session, r: *normalized.Request, text: []u8, calls: []u8, has_tools: bool) bool {
-    buf.copy(&item.*.history, buf.view(&r.*.canonical)); buf.clear(&item.*.response);
-    normalized.message("assistant", text, calls, "", &item.*.response);
-    if (item.*.history.ok == 0 || item.*.response.ok == 0) { item.*.status = 2; return false; }
-    buf.copy(&item.*.last_response_id, buf.view(&r.*.id)); item.*.turns = item.*.turns + 1;
-    item.*.input_messages = r.*.message_count; item.*.last_used = _zag_clock_monotonic_ms(); item.*.status = 0;
-    item.*.estimated_used = (item.*.history.len + item.*.response.len) as i64; item.*.tools_last_turn = has_tools; return true;
+    let d: json.Document = json.parse(buf.view(&item.*.receipts)); let next: buf.Buffer = buf.make(65536);
+    let ok: bool = d.ok != 0 && json.kind(&d, 0) == 2; let count: i32 = 0;
+    if (ok) { count = d.tokens[0].size; buf.add(&next, item.*.receipts.data[0..item.*.receipts.len - 1]); }
+    buf.clear(&item.*.response); normalized.message("assistant", text, calls, "", &item.*.response);
+    if (r.*.history_offset < 0 || r.*.history_offset > r.*.canonical.len) { ok = false; }
+    if (ok) {
+        ok = append_receipts(r.*.canonical.data[r.*.history_offset..r.*.canonical.len], &next, &count) &&
+            append_receipts(buf.view(&item.*.response), &next, &count); buf.byte(&next, 93);
+    }
+    if (ok && next.ok != 0 && item.*.response.ok != 0) {
+        buf.copy(&item.*.receipts, buf.view(&next)); buf.copy(&item.*.last_response_id, buf.view(&r.*.id));
+        item.*.turns = item.*.turns + 1; item.*.input_messages = count; item.*.last_used = net.unix_seconds(); item.*.status = 0;
+        item.*.estimated_used = item.*.estimated_used + (r.*.canonical.len - r.*.history_offset + item.*.response.len) as i64;
+        item.*.tools_last_turn = has_tools;
+    } else { ok = false; item.*.status = 2; }
+    // Only digests survive completion; temporary transcript bytes are discarded.
+    buf.clear(&item.*.response); buf.free(&next); json.free(&d); return ok;
+}
+
+fn snapshot(s: *Sessions, out: *buf.Buffer) void { render(s, out, false); }
+fn persist(s: *Sessions, out: *buf.Buffer) void { render(s, out, true); }
+
+// Only rolls back the newest, never-dispatched admission. No live index moves.
+fn discard_unstarted(s: *Sessions, index: i32) void {
+    if (index < 0 || index != s.*.count - 1) { return; }
+    let item: *Session = &s.*.items[index];
+    if (item.*.status != 0 || item.*.turns != 0) { return; }
+    buf.free(&item.*.id); buf.free(&item.*.model); buf.free(&item.*.history); buf.free(&item.*.response);
+    buf.free(&item.*.last_response_id); buf.free(&item.*.url); buf.free(&item.*.title); buf.free(&item.*.receipts);
+    s.*.count = s.*.count - 1;
 }

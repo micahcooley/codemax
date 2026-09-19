@@ -28,9 +28,9 @@ fn sanitize(d: *json.Document, event: i32, origin: []u8, out: *buf.Buffer) bool 
             if (!first) { buf.byte(out, 44); } first = false;
             buf.add(out, "{\"id\":"); buf.integer(out, node);
             buf.byte(out, 44); string_field(d, i, "tag", out); buf.byte(out, 44); string_field(d, i, "role", out); buf.byte(out, 44); string_field(d, i, "label", out);
-            buf.byte(out, 44); string_field(d, i, "live", out); buf.byte(out, 44); boolean_field(d, i, "visible", out);
+            buf.byte(out, 44); string_field(d, i, "value", out); buf.byte(out, 44); string_field(d, i, "popup", out); buf.byte(out, 44); string_field(d, i, "live", out); buf.byte(out, 44); boolean_field(d, i, "visible", out);
             buf.byte(out, 44); boolean_field(d, i, "editable", out); buf.byte(out, 44); boolean_field(d, i, "disabled", out);
-            buf.byte(out, 44); boolean_field(d, i, "busy", out); buf.byte(out, 44); boolean_field(d, i, "assistant", out);
+            buf.byte(out, 44); boolean_field(d, i, "file_input", out); buf.byte(out, 44); boolean_field(d, i, "busy", out); buf.byte(out, 44); boolean_field(d, i, "assistant", out);
             buf.add(out, ",\"options\":["); let options: i32 = json.get(d, i, "options"); let count: i32 = 0;
             if (json.kind(d, options) == 2 && d.*.tokens[options].size <= 32) {
                 let j: i32 = options + 1;

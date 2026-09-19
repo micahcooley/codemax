@@ -1,6 +1,6 @@
 {
   "name": "desktop-ai-bridge",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-dev.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,7 +17,9 @@
     "test:browser:dom": "python3 tests/browser_dom.py",
     "doctor": "python3 scripts/doctor.py",
     "build:backend": "bash scripts/build-backend.sh",
-    "release:gate": "python3 scripts/release-gate.py"
+    "release:gate": "python3 scripts/release-gate.py",
+    "test:ui": "python3 tests/ui_browser.py",
+    "check:zag-contracts": "python3 scripts/check-zag-contracts.py"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

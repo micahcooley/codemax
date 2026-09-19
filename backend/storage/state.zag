@@ -5,17 +5,35 @@
 @import("../providers/registry.zag") as registry
 @import("../sessions/manager.zag") as sessions
 @import("files.zag") as files
+@import("../detector/recorder.zag") as recorder
 // Persistent state excludes message bodies, tool arguments/results and remote
-// credentials. Live conversation continuation is intentionally invalidated on
-// restart until a future verified provider-conversation restoration contract.
+// credentials. Only canonical-message digests and safe conversation URLs survive restart.
 fn save(root: []u8, port: i32, providers: *registry.Registry, s: *sessions.Sessions) bool {
-    let out: buf.Buffer = buf.make(1048576); buf.add(&out, "{\"schema\":1,\"port\":"); buf.integer(&out, port as i64); buf.add(&out, ",\"providers\":["); let i: i32 = 0;
+    let out: buf.Buffer = buf.make(1048576); buf.add(&out, "{\"schema\":1,\"port\":"); buf.integer(&out, port as i64); buf.add(&out, ",\"next_provider_id\":"); buf.integer(&out, providers.*.next_id as i64); buf.add(&out, ",\"providers\":["); let i: i32 = 0;
     while (i < providers.*.count) {
         let p: *registry.Provider = &providers.*.items[i]; if (i > 0) { buf.byte(&out, 44); }
         buf.add(&out, "{\"id\":"); buf.integer(&out, p.*.id as i64); buf.add(&out, ",\"url\":"); buf.json(&out, buf.view(&p.*.url));
         buf.add(&out, ",\"label\":"); buf.json(&out, buf.view(&p.*.label)); buf.add(&out, ",\"recipes\":"); buf.add(&out, buf.view(&p.*.recipes));
-        buf.add(&out, ",\"manual_model\":"); buf.json(&out, buf.view(&p.*.manual_model)); buf.byte(&out, 125); i = i + 1;
+        buf.add(&out, ",\"manual_model\":"); buf.json(&out, buf.view(&p.*.manual_model));
+        buf.add(&out, ",\"current_url\":"); buf.json(&out, buf.view(&p.*.current_url));
+        buf.add(&out, ",\"reasoning_value\":"); buf.json(&out, buf.view(&p.*.reasoning_value));
+        buf.add(&out, ",\"context_hint\":"); buf.integer(&out, p.*.context_hint);
+        buf.add(&out, ",\"open_tab\":"); if (p.*.open_tab) { buf.add(&out, "true"); } else { buf.add(&out, "false"); }
+        buf.add(&out, ",\"pinned\":"); if (p.*.pinned) { buf.add(&out, "true"); } else { buf.add(&out, "false"); }
+        buf.add(&out, ",\"models\":["); let m: i32 = 0;
+        while (m < p.*.model_count) {
+            if (m > 0) { buf.byte(&out, 44); }
+            buf.add(&out, "{\"value\":"); buf.json(&out, buf.view(&p.*.models[m].value));
+            buf.add(&out, ",\"label\":"); buf.json(&out, buf.view(&p.*.models[m].label)); buf.byte(&out, 125); m = m + 1;
+        }
+        buf.add(&out, "]}"); i = i + 1;
     }
+    let receipt_name: buf.Buffer = buf.make(128); let j: i32 = 0; let receipts_ok: bool = true;
+    while (j < s.*.count && receipts_ok) {
+        buf.copy(&receipt_name, "receipts-"); buf.add(&receipt_name, buf.view(&s.*.items[j].id)); buf.add(&receipt_name, "-"); buf.integer(&receipt_name, s.*.items[j].turns as i64); buf.add(&receipt_name, ".json");
+        receipts_ok = receipt_name.ok != 0 && files.save(root, buf.view(&receipt_name), buf.view(&s.*.items[j].receipts)); j = j + 1;
+    }
+    buf.free(&receipt_name); if (!receipts_ok) { buf.free(&out); return false; }
     buf.add(&out, "],\"sessions\":"); sessions.snapshot(s, &out); buf.byte(&out, 125);
     let ok: bool = out.ok != 0 && files.save(root, "state.json", buf.view(&out)); buf.free(&out); return ok;
 }
@@ -26,18 +44,38 @@ fn load(root: []u8, dev: bool, port: *i32, providers: *registry.Registry, s: *se
     let list: i32 = json.get(&d, 0, "providers"); let ok: bool = d.ok != 0 && json.number(&d, json.get(&d, 0, "schema"), 0) == 1 && value >= 1024 && value <= 65535 && json.kind(&d, list) == 2 && d.tokens[list].size <= 16;
     let url: buf.Buffer = buf.make(2048); let label: buf.Buffer = buf.make(256); let origin: buf.Buffer = buf.make(512);
     if (ok) {
-        port.* = value as i32; let i: i32 = list + 1;
+        port.* = value as i32; let next_id: i64 = json.number(&d, json.get(&d, 0, "next_provider_id"), 1);
+        if (next_id < 1 || next_id > 1000000) { ok = false; } else { providers.*.next_id = 1; }
+        let i: i32 = list + 1;
         while (i < d.tokens[list].next && ok) {
             json.field_text(&d, i, "url", &url); json.field_text(&d, i, "label", &label); let id: i64 = json.number(&d, json.get(&d, i, "id"), 0);
             ok = url.ok != 0 && label.ok != 0 && id > 0 && id < 1000000 && registry.index(providers, id as i32) < 0 && validation.provider_origin(buf.view(&url), dev, &origin);
             if (ok) {
-                let idx: i32 = registry.add(providers, buf.view(&origin), buf.view(&url), buf.view(&label)); let p: *registry.Provider = &providers.*.items[idx]; p.*.id = id as i32; p.*.state = 0;
+                let idx: i32 = registry.add(providers, buf.view(&origin), buf.view(&url), buf.view(&label));
+                if (idx < 0) { ok = false; break; }
+                let p: *registry.Provider = &providers.*.items[idx]; p.*.id = id as i32; p.*.state = 0;
                 if (providers.*.next_id <= id as i32) { providers.*.next_id = id as i32 + 1; }
-                let recipes: i32 = json.get(&d, i, "recipes"); if (json.kind(&d, recipes) != 2 || d.tokens[recipes].size > 5) { ok = false; } else { buf.copy(&p.*.recipes, json.raw(&d, recipes)); }
+                let recipes: i32 = json.get(&d, i, "recipes"); if (!recorder.validate_recipes(&d, recipes)) { ok = false; } else { buf.copy(&p.*.recipes, json.raw(&d, recipes)); }
                 json.field_text(&d, i, "manual_model", &p.*.manual_model); if (p.*.recipes.ok == 0 || p.*.manual_model.ok == 0) { ok = false; }
+                p.*.open_tab = json.kind(&d, json.get(&d, i, "open_tab")) == 5; p.*.pinned = json.kind(&d, json.get(&d, i, "pinned")) == 5;
+                p.*.context_hint = json.number(&d, json.get(&d, i, "context_hint"), 0);
+                if (p.*.context_hint < 0 || p.*.context_hint > 10000000) { ok = false; }
+                if (json.get(&d, i, "current_url") >= 0) {
+                    json.field_text(&d, i, "current_url", &url);
+                    if (url.ok != 0 && validation.provider_origin(buf.view(&url), dev, &origin) && buf.eq(buf.view(&origin), buf.view(&p.*.origin))) { buf.copy(&p.*.current_url, buf.view(&url)); }
+                    else { ok = false; }
+                }
+                if (json.get(&d, i, "reasoning_value") >= 0) { json.field_text(&d, i, "reasoning_value", &p.*.reasoning_value); }
+                let catalog: i32 = json.get(&d, i, "models");
+                if (json.kind(&d, catalog) == 2 && d.tokens[catalog].size <= 32) {
+                    let m: i32 = catalog + 1;
+                    while (m < d.tokens[catalog].next) { json.field_text(&d, m, "value", &url); json.field_text(&d, m, "label", &label); if (url.ok != 0 && label.ok != 0) { registry.model(p, buf.view(&url), buf.view(&label), 0); } m = d.tokens[m].next; }
+                }
+
             }
             i = d.tokens[i].next;
         }
+        if (providers.*.next_id < next_id as i32) { providers.*.next_id = next_id as i32; }
     }
     let old: i32 = json.get(&d, 0, "sessions");
     if (ok && json.kind(&d, old) == 2 && d.tokens[old].size <= 128) {
@@ -50,6 +88,23 @@ fn load(root: []u8, dev: bool, port: *i32, providers: *registry.Registry, s: *se
                 if (idx < 0) { ok = false; } else {
                     s.*.items[idx].status = 2; let turns: i64 = json.number(&d, json.get(&d, i, "turn_count"), 0);
                     if (turns < 0 || turns > 1000000) { ok = false; } else { s.*.items[idx].turns = turns as i32; }
+                    let item: *sessions.Session = &s.*.items[idx];
+                    let receipt_name: buf.Buffer = buf.make(128); buf.copy(&receipt_name, "receipts-"); buf.add(&receipt_name, buf.view(&item.*.id)); buf.add(&receipt_name, "-"); buf.integer(&receipt_name, item.*.turns as i64); buf.add(&receipt_name, ".json");
+                    let receipt_code: i32 = files.load(root, buf.view(&receipt_name), &item.*.receipts); buf.free(&receipt_name);
+                    if (receipt_code != 1 && turns > 0) { item.*.status = 4; buf.copy(&item.*.receipts, "[]"); }
+                    if (receipt_code == 1) { let check: json.Document = json.parse(buf.view(&item.*.receipts)); if (check.ok == 0 || json.kind(&check, 0) != 2 || check.tokens[0].size > 512) { ok = false; } json.free(&check); }
+                    if (json.get(&d, i, "url") >= 0) {
+                        json.field_text(&d, i, "url", &url); let pi: i32 = registry.index(providers, provider as i32);
+                        if (url.len > 0 && pi >= 0 && validation.provider_origin(buf.view(&url), dev, &origin) && buf.eq(buf.view(&origin), buf.view(&providers.*.items[pi].origin))) { buf.copy(&item.*.url, buf.view(&url)); }
+                    }
+                    if (json.get(&d, i, "title") >= 0) { json.field_text(&d, i, "title", &item.*.title); }
+                    if (json.get(&d, i, "last_response_id") >= 0) { json.field_text(&d, i, "last_response_id", &item.*.last_response_id); }
+                    item.*.created = json.number(&d, json.get(&d, i, "created_at"), item.*.created);
+                    item.*.last_used = json.number(&d, json.get(&d, i, "last_used"), item.*.last_used);
+                    item.*.estimated_used = json.number(&d, json.get(&d, json.get(&d, i, "context"), "estimated_used"), 0);
+                    if (item.*.estimated_used < 0 || item.*.estimated_used > 100000000 || item.*.title.ok == 0 || item.*.last_response_id.ok == 0) { ok = false; }
+                    if (json.is_text(&d, json.get(&d, i, "status"), "EXPIRED")) { item.*.status = 4; }
+
                 }
             }
             i = d.tokens[i].next;

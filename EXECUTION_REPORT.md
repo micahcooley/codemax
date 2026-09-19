@@ -1,62 +1,50 @@
-# Execution report — Desktop AI Bridge source alpha
+# Implementation delivery — September 19, 2026
 
-**Recorded:** 2026-09-19T18:44:58+00:00
+## Delivered
 
-**Overall status: PARTIAL IMPLEMENTATION / SOURCE ALPHA. The entire uploaded plan is NOT complete.** There is no compiled installer or qualified live-provider bridge in this delivery.
+Version `0.1.0-dev.2` replaces the supplied source-alpha interface and fills its desktop/browser/backend wiring gaps. It contains source and a built frontend, not a native executable. The original masterplan is preserved byte-for-byte.
 
-## COMPLETED
+The central surface is an attached native provider webview. The production application has no extension and no provider iframe. Rust handles OS/webview/process boundaries; Zag remains authoritative for providers, detection, configuration, sessions, routing and protocol logic.
 
-Authored the requested architecture as a local source tree: 26 Zag modules, 14 Svelte components/screens, 5 Rust host/build files, browser instrumentation, deterministic mock provider, native integration-test source, build/CI scripts, contract schemas and project documentation. Preserved the original MASTERPLAN.md byte-for-byte. Prepared a full source archive with test evidence, file checksums and Git recovery history. Upload/share outcome is recorded separately by the delivery tool response rather than asserted in this immutable archive.
+### Changes in this round
 
-Svelte contains seven screens: Overview, Provider Browser, Models, Harness Setup, Sessions, Detector Lab and Settings. Rust remains a thin process/webview host; authoritative HTTP, registry, detector, protocol, session, token and persistence source is in Zag. No Python/TypeScript fallback production gateway is supplied.
+Browser-first chrome with reorderable tabs, address/navigation controls, native find/zoom, persistent workspace layout, resizable/collapsible panes, keyboard shortcuts, command palette, theme/density/reduced-motion settings and scoped window controls. Every application view has data/actions connected to the host/backend interfaces.
 
-## VERIFIED
+Completed profile management, native data clearing, pinned/idle suspension rules, connector pick/record/import/export/reset, fixed-model declarations, exact custom-menu and reasoning selection, client snippets/key reveal/copy/regeneration, gateway probe, session rename/search/resume/end, bounded activity log/export, and settings persistence.
 
-| Actually executed check | Result | Exact scope |
+Added durable conversation URLs and per-canonical-message SHA-256 receipts. Restart recovery verifies the prefix rather than storing/replaying transcripts. Interrupted or cancelled turns are expired; failed pre-dispatch admission rolls back the new session slot. Old response IDs and conflicting histories fail explicitly.
+
+Added bounded client-supplied inline attachments, exact named tool choice, single-tool policy, per-request reasoning selection, explicit estimated streaming usage, context admission, developer-only diagnostic endpoints and opt-in pre-dispatch fallback. Provider pages do not grant model capabilities by naming them.
+
+Fixed the UI subscription being removed at startup, native autostart path selection for AppImage, state-restore provider-ID handling, malformed base64 acceptance, and cancellation during asynchronous preparation. Expanded real browser regressions and native test source.
+
+## Verified here
+
+| Evidence | Result | Exact scope |
 |---|---|---|
-| `node --test tests/*.test.mjs` | **17 PASS, 0 FAIL** | 6 instrumentation helpers + 3 actual local HTTP mock tests + 8 static boundary checks |
-| `python3 tests/browser_dom.py` | **17 PASS, 0 FAIL** | Actual agent JS in Chromium; explicitly in-memory transport/storage fixture |
-| TypeScript syntax parser | PASS for 18 script files | Parser diagnostics only, including Svelte script blocks; NOT typecheck/component build |
-| JSON/TOML/Python parse and shell syntax checks | PASS | Configuration/script syntax, not native execution |
-| Uploaded masterplan preservation | PASS | Byte equality against the supplied file |
+| `tests/evidence/frontend-build.json` | PASS | Actual Svelte 5.48.0 compiler, 22 application modules, zero component warnings; local offline ESM build |
+| `tests/evidence/ui-browser.json` | 13 PASS | Compiled Svelte UI in Chromium with explicit native-host/provider test doubles |
+| `tests/evidence/browser-dom-tests.json` | 22 PASS | Actual injected agent with in-memory DOM/network fixtures; includes a 22-turn sequence, Unicode deltas, quota/auth errors, cancellation, redesign, inline files, custom menus, reasoning and picking |
+| `tests/evidence/node-current.log` | 17 PASS | Six helpers, three actual loopback HTTP fixture tests, eight static configuration/source checks |
+| `tests/evidence/zag-static-contracts.json` | PASS | 30 Zag source modules and 2,988 qualified import/symbol/argument-count checks—not compilation |
+| `tests/evidence/typescript-syntax.json` | PASS | TypeScript parser on scripts; not a full Svelte typecheck |
 
-The browser suite includes login-field exclusion, Unicode deltas, model selection ordering, a **22-turn browser-agent fixture sequence**, cancel, quota/auth/broken streams, response rewrite refusal, WebSocket/EventSource fixture metadata, payload bounds, stale-document rejection, sensitive-target rechecking, semantic fixture redesign, and independent in-memory state containers.
+Screenshots in `screenshots/` are rendered captures of this compiled interface. Their provider content and state are labelled fixtures. No generated design image is represented as a running app.
 
-**The 22-turn result is not a Zag session-manager, WebKitGTK profile-persistence, real AI model, or coding-harness result.** The Node HTTP tests exercise the JavaScript mock server, not the uncompiled Zag gateway. No test results were fabricated to fill missing layers.
+## Not verified here
 
-## FAILED / BLOCKED ATTEMPTS
+`tests/evidence/native-build-current.log` records build exit 77 because the Zag executable is absent. Cargo/rustc are absent, and package/compiler downloads could not be completed in this environment. Native Zag/Rust compilation, WebKitGTK behavior, native attachment support, real profile persistence/isolation, live model access, a real coding harness, 100 restarts and installation remain host-side checks. The static audits cannot catch every type, ABI, ownership or runtime defect.
 
-| Attempt | Outcome | Evidence |
-|---|---|---|
-| `npm run check` | BLOCKED; `svelte-check` missing, exit 127 | tests/evidence/svelte-check-attempt.log |
-| `bash scripts/test-native.sh` | BLOCKED; native Zag compiler missing, exit 77 | tests/evidence/native-build-attempt.log |
-| `cargo test --manifest-path src-tauri/Cargo.toml` | BLOCKED; Cargo unavailable, exit 127 | tests/evidence/rust-build-attempt.log |
-| Native gateway fixture | BLOCKED; no compiled binary, exit 77 | tests/evidence/native-gateway-tests.json |
-| Chromium HTTP navigation | BLOCKED by administrator URL policy; exit 77 | tests/evidence/browser-tests.json |
-| `scripts/release-gate.py` | EXPECTED FAIL-CLOSED | tests/evidence/release-gate.json |
-| Package retrieval / external Git clone | DNS/package access errors in this execution environment | prerequisite report and session execution history |
-| GitHub write / Actions attempt | Integration permission denied; no remote change or run claimed | connected GitHub response in session; docs/SOURCES.md |
+The actual Svelte compilation succeeded using an existing local compiler, not npm/Vite. No native installer or lockfile-resolved reproducible build is claimed. `build-linux.sh` runs the complete real build path on a provisioned Linux x86_64 host and stops on failures.
 
-Earlier browser fixture tests exposed a pre-submission stale-status race; that regression was corrected before the final passing runs. Review also corrected explicit webview event targeting, output queue timing, stale descriptor-slot handling, stderr EOF handling and other source paths. Uncompiled source fixes are not represented as native regression passes.
+## Feature boundaries, not simulated success
 
-## CURRENT BLOCKER
+TNN/hybrid control requires a qualified research artifact that is not in this package. The running discovery path is symbolic. Provider-native tool calls, exact tokenizers, unexposed context limits, arbitrary sampling controls, unknown iframe/shadow-root editors, audio and video are not fabricated. Protocol requests outside the implemented subset are rejected. The generic executor works with observable semantic controls and user-recorded mappings; support for every arbitrary website is not claimed.
 
-The environment has no native Zag compiler, Rust toolchain, WebKitGTK development libraries, installed Svelte/Vite dependencies, or functioning external dependency retrieval. The GitHub integration refused the attempted execution/write action. Browser administrator policy blocks even loopback navigation in Chromium. The policy was not altered or bypassed; the passing browser suite declares its narrower in-memory scope.
+Files are client-supplied bounded base64 data, not paths or fetched URLs. Website upload controls and platform File/DataTransfer behavior must allow the operation; failures remain visible. Model/tool/usage support in this document must not be confused with provider-native capabilities.
 
-## NOT IMPLEMENTED OR NOT QUALIFIED
+## GitHub / delivery
 
-No compiled Svelte/Tauri/Zag application; no Linux installer; no actual product UI smoke; no real provider login/inference; no Codex/Claude Code/OpenCode qualification; no native tokenizer/calibrated context detector; no trained TNN artifact or measured hybrid experiment; no complete unknown-site/custom-editor/model-menu discovery; no live session restoration across restart; no 100-restart/native security/performance campaign; no complete updater/auto-start/background suspension or all planned browser controls.
+GitHub was used to inspect the pinned Zag revision and official Tauri/Svelte source contracts. The current GitHub connector exposes no write/create action; earlier attempts returned 403. Changes are committed locally and preserved in the recovery bundle; no remote push or Actions run is claimed. The current Drive connector exposes read actions, not file upload/share actions, so this revision is attached directly rather than represented by the old Drive file.
 
-HTTP protocol source is an explicitly limited subset. Context/tokenizer values remain unknown or labelled estimates. System roles and tools are web-prompt emulation, not upstream native capabilities. Stream serializers, native storage locks, resource bounds and ABI correctness still need actual compilation and runtime testing. The source may contain remaining defects.
-
-## NEXT CAUSAL STEP
-
-On an authorized, provisioned Linux x86_64 host, obtain the pinned Zag compiler, run the native unit suite, fix compiler/runtime diagnostics, then execute the supplied actual-Zag gateway fixture. Resolve dependencies and qualify Svelte/Rust/Tauri before live-provider and real-harness tests. `docs/PHASE_STATUS.md` and `docs/release-gates.json` retain every unverified phase. No work is promised or running asynchronously.
-
-## REGRESSION STATUS
-
-Executed JavaScript/helper/HTTP/static suites and the actual browser-agent in-memory suite are green at the archived source revision. Native, full frontend, live website, TNN and harness regressions are **UNVERIFIED**, not green. Release admission is intentionally blocked.
-
-## Artifact boundaries
-
-All authored application sources, the uploaded masterplan, tests, evidence and build documents are included. Compiler binaries, third-party dependencies, native installers, real profile data, user credentials, font binaries and cache directories are excluded. `RECOVERY.bundle` preserves a local source commit; it is not evidence of a GitHub push. `MANIFEST.sha256` checks every packaged file except the manifest itself and its companion metadata.
+Earlier alpha reports remain under `docs/history/source-alpha/` and are historical, not the current result. Release qualification remains separate in `docs/release-gates.json`.

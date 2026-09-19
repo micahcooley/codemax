@@ -1,6 +1,16 @@
 <script lang="ts">
   let {name, size = 18}: {name: string; size?: number} = $props();
   const paths: Record<string,string> = {
+    activity:'M3 12h4l3-8 4 16 3-8h4',
+    minimize:'M5 12h14', maximize:'M5 5h14v14H5z', chevron:'m8 10 4 4 4-4', more:'M5 12h.01M12 12h.01M19 12h.01',
+    external:'M14 3h7v7m0-7-11 11M10 3H3v18h18v-7', lock:'M6 10h12v11H6zM8 10V7a4 4 0 0 1 8 0v3',
+    eye:'M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Zm7 0a3 3 0 1 0 6 0 3 3 0 0 0-6 0Z',
+    download:'M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4', upload:'M12 16V4m-5 5 5-5 5 5M4 17v4h16v-4',
+    pin:'m9 3 12 12-4 1-3 5-3-3-6 6m0-17 4-4ZM5 5 3 9l12 12', alert:'m12 3 10 18H2L12 3Zm0 6v5m0 3h.01',
+    home:'m3 10 9-7 9 7v11h-6v-7H9v7H3V10Z', play:'m7 4 14 8-14 8V4Z', trash:'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7',
+    sun:'M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1M8 12a4 4 0 1 0 8 0 4 4 0 0 0-8 0Z',
+    moon:'M20 14A9 9 0 0 1 10 3a9 9 0 1 0 10 11Z', monitor:'M3 3h18v14H3zM8 21h8m-4-4v4',
+    folder:'M2 5h8l2 3h10v13H2V5Z', command:'M8 8H5a3 3 0 1 1 3-3v14a3 3 0 1 1-3-3h14a3 3 0 1 1-3 3V5a3 3 0 1 1 3 3H8Z',
     grid:'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
     globe:'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z',
     layers:'m12 3 10 5-10 5L2 8l10-5Zm-10 9 10 5 10-5M2 16l10 5 10-5',

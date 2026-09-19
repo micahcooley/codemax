@@ -4,11 +4,13 @@
 @import("../providers/registry.zag") as registry
 @import("../security/validation.zag") as validation
 fn role_valid(role: []u8) bool {
-    return buf.eq(role, "prompt") || buf.eq(role, "send") || buf.eq(role, "response") || buf.eq(role, "stop") || buf.eq(role, "new_chat");
+    return buf.eq(role, "prompt") || buf.eq(role, "send") || buf.eq(role, "response") || buf.eq(role, "stop") || buf.eq(role, "new_chat") || buf.eq(role, "model") || buf.eq(role, "reasoning") || buf.eq(role, "attachment");
 }
 fn compatible(d: *json.Document, control: i32, role: []u8) bool {
     if (buf.eq(role, "prompt")) { return json.kind(d, json.get(d, control, "editable")) == 5; }
-    if (buf.eq(role, "response")) { return json.is_text(d, json.get(d, control, "role"), "log") || json.kind(d, json.get(d, control, "assistant")) == 5; }
+    if (buf.eq(role, "attachment")) { return json.is_text(d, json.get(d, control, "tag"), "input") && json.kind(d, json.get(d, control, "file_input")) == 5; }
+    if (buf.eq(role, "model") || buf.eq(role, "reasoning")) { return json.is_text(d, json.get(d, control, "tag"), "select") || json.is_text(d, json.get(d, control, "tag"), "button") || json.is_text(d, json.get(d, control, "role"), "combobox") || json.is_text(d, json.get(d, control, "role"), "button") || (buf.eq(role, "reasoning") && (json.is_text(d, json.get(d, control, "role"), "switch") || json.is_text(d, json.get(d, control, "role"), "checkbox"))); }
+    if (buf.eq(role, "response")) { return json.is_text(d, json.get(d, control, "role"), "log") || json.kind(d, json.get(d, control, "assistant")) == 5 || json.is_text(d, json.get(d, control, "tag"), "main") || json.is_text(d, json.get(d, control, "role"), "main"); }
     return json.is_text(d, json.get(d, control, "tag"), "button") || json.is_text(d, json.get(d, control, "role"), "button");
 }
 // User-confirmed exact semantic recipes, not arbitrary CSS/JS. Duplicate label
@@ -44,7 +46,7 @@ fn record(p: *registry.Provider, role: []u8, document: []u8, node: i32) bool {
 }
 fn apply(p: *registry.Provider, d: *json.Document, controls: i32) bool {
     let recipes: json.Document = json.parse(buf.view(&p.*.recipes));
-    if (recipes.ok == 0 || json.kind(&recipes, 0) != 2 || recipes.tokens[0].size > 5) { json.free(&recipes); return false; }
+    if (recipes.ok == 0 || json.kind(&recipes, 0) != 2 || recipes.tokens[0].size > 8) { json.free(&recipes); return false; }
     let label: buf.Buffer = buf.make(256); let tag: buf.Buffer = buf.make(32); let role: buf.Buffer = buf.make(32); let mapping: buf.Buffer = buf.make(32);
     let ok: bool = true; let recipe: i32 = 1;
     while (recipe < recipes.tokens[0].next) {
@@ -62,7 +64,24 @@ fn apply(p: *registry.Provider, d: *json.Document, controls: i32) bool {
         if (buf.eq(buf.view(&mapping), "response")) { p.*.response = found; }
         if (buf.eq(buf.view(&mapping), "stop")) { p.*.stop = found; }
         if (buf.eq(buf.view(&mapping), "new_chat")) { p.*.new_chat = found; }
+        if (buf.eq(buf.view(&mapping), "model")) { p.*.model_control = found; }
+        if (buf.eq(buf.view(&mapping), "reasoning")) { p.*.reasoning_control = found; }
+        if (buf.eq(buf.view(&mapping), "attachment")) { p.*.attachment = found; }
         recipe = recipes.tokens[recipe].next;
     }
     json.free(&recipes); buf.free(&label); buf.free(&tag); buf.free(&role); buf.free(&mapping); return ok;
+}
+
+fn validate_recipes(d: *json.Document, at: i32) bool {
+    if (d.*.ok == 0 || json.kind(d, at) != 2 || d.*.tokens[at].size > 8 || _zag_strlen(json.raw(d, at)) > 8192) { return false; }
+    let role: buf.Buffer = buf.make(32); let label: buf.Buffer = buf.make(256); let lower: buf.Buffer = buf.make(256);
+    let seen: buf.Buffer = buf.make(256); buf.copy(&seen, "|"); let key: buf.Buffer = buf.make(64); let i: i32 = at + 1; let ok: bool = true;
+    while (i < d.*.tokens[at].next && ok) {
+        json.field_text(d, i, "mapping", &role); json.field_text(d, i, "label", &label); validation.ascii_lower(buf.view(&label), &lower);
+        buf.copy(&key, "|"); buf.add(&key, buf.view(&role)); buf.byte(&key, 124);
+        ok = json.kind(d, i) == 1 && role.ok != 0 && label.ok != 0 && role_valid(buf.view(&role)) && !validation.sensitive_label(buf.view(&lower)) && buf.find(buf.view(&seen), buf.view(&key), 0) < 0;
+        if (json.kind(d, json.get(d, i, "tag")) != 3 || json.kind(d, json.get(d, i, "role")) != 3) { ok = false; }
+        buf.add(&seen, buf.view(&role)); buf.byte(&seen, 124); i = d.*.tokens[i].next;
+    }
+    buf.free(&role); buf.free(&label); buf.free(&lower); buf.free(&seen); buf.free(&key); return ok;
 }

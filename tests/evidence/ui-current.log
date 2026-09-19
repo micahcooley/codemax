@@ -1,0 +1,13 @@
+PASS compiled Svelte startup, real runes and native-transport handshake
+PASS browser-first layout with separately positioned provider surface
+PASS Ctrl-L address focus and keyboard command palette with provider hiding
+PASS endpoint/key controls and all five client configuration formats
+PASS model filtering, exact identifier copy and backend-driven default selection
+PASS theme, density, API port, listener control and developer setting round trips
+PASS session rename, retained title, search and context provenance
+PASS evidence inspection, connector import/export and page-picker action wiring
+PASS keyboard-resizable panes and collapse/restore bounds
+PASS new website workflow, tab creation and close operation
+PASS profile context menu and destructive-action confirmation with surface hiding
+PASS reduced motion and compact-window overflow checks
+PASS no browser JavaScript runtime errors

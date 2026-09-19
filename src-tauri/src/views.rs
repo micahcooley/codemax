@@ -2,10 +2,10 @@ use crate::host::Host;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{fs, path::{Path, PathBuf}, sync::{Arc, atomic::Ordering}, time::{Duration, Instant}};
-use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Webview, WebviewUrl, webview::{NewWindowResponse, WebviewBuilder}};
+use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Webview, WebviewUrl, webview::{DownloadEvent, NewWindowResponse, WebviewBuilder}};
 use url::Url;
 
-pub struct ProviderView { pub origin: String, pub profile: PathBuf, pub window_start: Instant, pub observations: u32 }
+pub struct ProviderView { pub origin: String, pub profile: PathBuf, pub window_start: Instant, pub observations: u32, pub popup_until: Option<Instant>, pub download_until: Option<Instant>, pub last_url: String, pub zoom: f64 }
 
 pub fn private_directory(path: &Path) -> Result<(), String> {
     use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
@@ -25,7 +25,7 @@ pub fn private_directory(path: &Path) -> Result<(), String> {
     if meta.uid() != owner { return Err("DIRECTORY_OWNER_MISMATCH".into()); }
     fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|_| "DIRECTORY_MODE_FAILED")
 }
-fn safe_provider_url(url: &Url, dev: bool) -> bool {
+pub fn safe_provider_url(url: &Url, dev: bool) -> bool {
     if !url.username().is_empty() || url.password().is_some() || url.host_str().is_none() { return false; }
     if url.scheme() == "https" {
         return !matches!(url.host_str(), Some("tauri.localhost" | "ipc.localhost" | "localhost" | "127.0.0.1" | "::1"));
@@ -51,22 +51,51 @@ async fn open(app: &AppHandle, host: &Arc<Host>, id: u32, url: Url, origin: Stri
     {
         let mut views = host.views.lock().map_err(|_| "HOST_LOCK_FAILED")?;
         if views.len() >= 16 { return Err("WEBVIEW_LIMIT".into()); }
-        views.insert(id, ProviderView { origin: origin.clone(), profile: profile.clone(), window_start: Instant::now(), observations: 0 });
+        views.insert(id, ProviderView { origin: origin.clone(), profile: profile.clone(), window_start: Instant::now(), observations: 0, popup_until: None, download_until: None, last_url: String::new(), zoom: 1.0 });
     }
     let config = serde_json::to_string(&json!({"origin":origin})).map_err(|_| "CONFIG_ENCODE_FAILED")?;
     let script = format!("Object.defineProperty(globalThis,'__BRIDGE_BOOT__',{{value:Object.freeze({config})}});\n{}", include_str!("../../browser/agent.js"));
     let app_on_main = app.clone(); let app_for_events = app.clone(); let dev = host.dev_fixture;
+    let host_events=host.clone(); let host_popup=host.clone(); let host_download=host.clone(); let popup_app=app.clone(); let download_app=app.clone();
     let (tx, rx) = tokio::sync::oneshot::channel();
     app.run_on_main_thread(move || {
         let result = (|| -> Result<(), String> {
             let parent = app_on_main.get_window("main").ok_or("MAIN_WINDOW_MISSING")?;
             let builder = WebviewBuilder::new(&label, WebviewUrl::External(url)).data_directory(profile)
-                .initialization_script(&script).devtools(false).focused(false)
+                .initialization_script(&script).devtools(true).focused(false)
                 .on_navigation(move |next| safe_provider_url(next, dev))
-                .on_download(|_, _| false)
-                .on_new_window(|_, _| NewWindowResponse::Deny)
+                .on_download(move |_, event| {
+                    match event {
+                        DownloadEvent::Requested { url, destination } => {
+                            let allowed=host_download.views.lock().ok().and_then(|mut all| all.get_mut(&id).and_then(|v| v.download_until.take())).is_some_and(|until| Instant::now()<until);
+                            if !allowed || !safe_provider_url(&url, dev) {
+                                let _=download_app.emit_to(tauri::EventTarget::Webview{label:"main".into()},"bridge:browser-error",json!({"provider_id":id,"code":"DOWNLOAD_PERMISSION_REQUIRED"})); return false;
+                            }
+                            let Ok(directory)=download_app.path().download_dir() else {return false;};
+                            let name=destination.file_name().and_then(|n|n.to_str()).unwrap_or("download");
+                            let clean:String=name.chars().filter(|c|c.is_ascii_alphanumeric()||matches!(*c,'.'|'-'|'_')).take(120).collect();
+                            let nonce=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d|d.as_millis()).unwrap_or(0);
+                            *destination=directory.join(format!("bridge-{nonce}-{}", if clean.is_empty(){"download"}else{&clean}));
+                            if destination.exists() { return false; }
+                            true
+                        }
+                        DownloadEvent::Finished {success,..} => {
+                            let _=download_app.emit_to(tauri::EventTarget::Webview{label:"main".into()},"bridge:notice",json!({"message":if success {"Download saved to your Downloads folder."}else{"Download failed."}})); true
+                        }
+                        _ => false,
+                    }
+                })
+                .on_new_window(move |url, _| {
+                    let allowed=host_popup.views.lock().ok().and_then(|mut all|all.get_mut(&id).and_then(|v|v.popup_until.take())).is_some_and(|until|Instant::now()<until);
+                    if allowed && safe_provider_url(&url,dev) { NewWindowResponse::Allow }
+                    else {
+                        let _=popup_app.emit_to(tauri::EventTarget::Webview{label:"main".into()},"bridge:browser-error",json!({"provider_id":id,"code":"POPUP_PERMISSION_REQUIRED"}));
+                        NewWindowResponse::Deny
+                    }
+                })
                 .on_page_load(move |view, _| {
                     // Do not emit OAuth codes, credentials or full navigation URLs.
+                    report_location(&view, &host_events, id);
                     let origin = view.url().ok().map(|url| url.origin().ascii_serialization());
                     let _ = app_for_events.emit_to(tauri::EventTarget::Webview { label: "main".into() }, "bridge:browser", json!({"provider_id":id,"origin":origin}));
                 });
@@ -84,16 +113,21 @@ pub fn rescan_all(app: &AppHandle, host: &Arc<Host>) {
     for id in ids { if let Some(view) = app.get_webview(&format!("provider-{id}")) { let _ = view.eval("globalThis.__BRIDGE_RESCAN__?.()"); } }
 }
 pub async fn host_action(app: &AppHandle, host: &Arc<Host>, value: &Value) -> Result<(), String> {
+    if value["name"] == "platform.settings" { return crate::platform::autostart(app,value["auto_start"].as_bool().ok_or("INVALID_AUTOSTART_STATE")?); }
     let id = provider_id(value)?; let label = format!("provider-{id}");
     match value["name"].as_str().unwrap_or("") {
-        "browser.open" => {
+        "browser.open" | "browser.navigate" => {
             let url = Url::parse(value["url"].as_str().ok_or("INVALID_PROVIDER_URL")?).map_err(|_| "INVALID_PROVIDER_URL")?;
             let origin = value["origin"].as_str().ok_or("INVALID_PROVIDER_ORIGIN")?.to_owned();
+            if value["name"] == "browser.navigate" {
+                if !safe_provider_url(&url,host.dev_fixture) || url.origin().ascii_serialization()!=origin {return Err("PROVIDER_URL_DENIED".into());}
+                if let Some(view)=app.get_webview(&label) { view.navigate(url).map_err(|_|"NAVIGATION_FAILED")?;return Ok(()); }
+            }
             open(app, host, id, url, origin).await
         }
         "browser.scan" => app.get_webview(&label).ok_or("PROVIDER_VIEW_CLOSED")?.eval("globalThis.__BRIDGE_RESCAN__?.()").map_err(|_| "RESCAN_FAILED".into()),
         "browser.close" | "browser.clear_profile" => {
-            if let Some(view) = app.get_webview(&label) { view.close().map_err(|_| "WEBVIEW_CLOSE_FAILED")?; }
+            if let Some(view) = app.get_webview(&label) { if value["name"] == "browser.clear_profile" { view.clear_all_browsing_data().map_err(|_| "PROFILE_CLEAR_FAILED")?; } view.close().map_err(|_| "WEBVIEW_CLOSE_FAILED")?; }
             let profile = host.views.lock().map_err(|_| "HOST_LOCK_FAILED")?.remove(&id).map(|view| view.profile)
                 .unwrap_or_else(|| host.root.join("profiles").join(&label));
             if value["name"] == "browser.clear_profile" && profile.exists() {
@@ -109,7 +143,7 @@ pub async fn host_action(app: &AppHandle, host: &Arc<Host>, value: &Value) -> Re
 }
 pub fn execute(app: &AppHandle, host: &Arc<Host>, frame: &Value) -> Result<(), String> {
     let id = provider_id(frame)?; let action = frame.get("action").ok_or("ACTION_REQUIRED")?;
-    if !matches!(action["type"].as_str(), Some("generate" | "stop" | "scan")) { return Err("ACTION_DENIED".into()); }
+    if !matches!(action["type"].as_str(), Some("generate" | "stop" | "scan" | "pick" | "new_chat")) { return Err("ACTION_DENIED".into()); }
     let view = app.get_webview(&format!("provider-{id}")).ok_or("PROVIDER_VIEW_CLOSED")?;
     let actual = view.url().map_err(|_| "VIEW_URL_UNAVAILABLE")?;
     let origin = host.views.lock().map_err(|_| "HOST_LOCK_FAILED")?.get(&id).ok_or("UNKNOWN_VIEW")?.origin.clone();
@@ -126,7 +160,7 @@ pub fn bounds(app: &AppHandle, host: &Arc<Host>, rect: Bounds) -> Result<(), Str
     let parent = app.get_window("main").ok_or("MAIN_WINDOW_MISSING")?;
     let scale = parent.scale_factor().map_err(|_| "WINDOW_SCALE_UNAVAILABLE")?;
     let size = parent.inner_size().map_err(|_| "WINDOW_SIZE_UNAVAILABLE")?.to_logical::<f64>(scale);
-    let x = rect.x.clamp(64.0, (size.width - 1.0).max(64.0)); let y = rect.y.clamp(80.0, (size.height - 1.0).max(80.0));
+    let x = rect.x.clamp(0.0, (size.width - 1.0).max(0.0)); let y = rect.y.clamp(80.0, (size.height - 1.0).max(80.0));
     let width = rect.width.clamp(1.0, (size.width - x).max(1.0)); let height = rect.height.clamp(1.0, (size.height - y).max(1.0));
     let ids: Vec<u32> = host.views.lock().map_err(|_| "HOST_LOCK_FAILED")?.keys().copied().collect();
     for id in ids {
@@ -146,7 +180,7 @@ pub async fn provider_observe(webview: Webview, host: tauri::State<'_, Arc<Host>
     if !host.ready.load(Ordering::Acquire) { return Err("BACKEND_UNAVAILABLE".into()); }
     let size = serde_json::to_vec(&event).map_err(|_| "INVALID_OBSERVATION")?.len();
     if size > 32768 || event["v"] != 1 || !event.is_object() { return Err("OBSERVATION_LIMIT".into()); }
-    if !matches!(event["type"].as_str(), Some("observation" | "network" | "generation_delta" | "generation_done" | "generation_error" | "action_result" | "quota" | "login_required" | "interaction" | "instrumentation_warning")) { return Err("OBSERVATION_TYPE_DENIED".into()); }
+    if !matches!(event["type"].as_str(), Some("picked" | "shortcut" | "observation" | "network" | "generation_delta" | "generation_done" | "generation_error" | "action_result" | "quota" | "login_required" | "interaction" | "instrumentation_warning")) { return Err("OBSERVATION_TYPE_DENIED".into()); }
     let url = webview.url().map_err(|_| "VIEW_URL_UNAVAILABLE")?;
     {
         let mut views = host.views.lock().map_err(|_| "HOST_LOCK_FAILED")?;
@@ -155,5 +189,39 @@ pub async fn provider_observe(webview: Webview, host: tauri::State<'_, Arc<Host>
         if view.window_start.elapsed() >= Duration::from_secs(1) { view.observations = 0; view.window_start = Instant::now(); }
         view.observations += 1; if view.observations > 256 { return Err("OBSERVATION_RATE_LIMIT".into()); }
     }
+    report_location(&webview,host.inner(),id);
+    if event["type"]=="shortcut" {
+        if !matches!(event["key"].as_str(),Some("address"|"commands")) {return Err("SHORTCUT_DENIED".into());}
+        if let Some(main)=webview.app_handle().get_webview("main") {let _=main.set_focus();}
+        let _=webview.app_handle().emit_to(tauri::EventTarget::Webview{label:"main".into()},"bridge:shortcut",json!({"key":event["key"]}));
+        return Ok(());
+    }
     host.notify("observation", json!({"provider_id":id,"event":event}))
+}
+
+// Only the native URL is authoritative. Query strings/fragments and auth paths
+// never enter the detector, event log, or persistent conversation metadata.
+fn report_location(view: &Webview, host: &Arc<Host>, id:u32) {
+    let Ok(mut url)=view.url() else{return;};
+    let path=url.path().to_ascii_lowercase();
+    if ["oauth","callback","authorize","access_token","id_token","reset-password"].iter().any(|part|path.contains(part)){return;}
+    url.set_query(None);url.set_fragment(None);
+    if url.as_str().len()>2048 {return;}
+    let changed=if let Ok(mut all)=host.views.lock(){
+        if let Some(item)=all.get_mut(&id){
+            if url.origin().ascii_serialization()!=item.origin || item.last_url==url.as_str(){false}
+            else{item.last_url=url.to_string();true}
+        }else{false}
+    }else{false};
+    if changed {let _=host.notify("browser.location",json!({"provider_id":id,"url":url.as_str()}));}
+}
+
+#[tauri::command]
+pub async fn browser_find(webview:Webview,host:tauri::State<'_,Arc<Host>>,provider_id:u32,query:String,backwards:bool)->Result<(),String>{
+    trusted_main(&webview)?;
+    if query.len()>256 {return Err("FIND_LIMIT".into());}
+    if !host.views.lock().map_err(|_|"HOST_LOCK_FAILED")?.contains_key(&provider_id){return Err("UNKNOWN_VIEW".into());}
+    let view=webview.app_handle().get_webview(&format!("provider-{provider_id}")).ok_or("PROVIDER_VIEW_CLOSED")?;
+    let encoded=serde_json::to_string(&query).map_err(|_|"FIND_ENCODE_FAILED")?;
+    view.eval(&format!("window.find({encoded},false,{backwards},true,false,false,false);")).map_err(|_|"FIND_FAILED".into())
 }

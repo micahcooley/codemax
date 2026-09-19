@@ -1,28 +1,12 @@
 <script lang="ts">
-  import {app} from '../lib/state/app.svelte';
-  import Icon from '../lib/components/Icon.svelte';
-  import Badge from '../lib/components/Badge.svelte';
-  import Empty from '../lib/components/Empty.svelte';
-  const readyProviders = $derived(app.providers.filter(p => p.state === 'READY').length);
+ import {app} from '../lib/state/app.svelte';import * as bridge from '../lib/api/bridge';import {dateTime,number} from '../lib/format';import Icon from '../lib/components/Icon.svelte';
+ let level=$state('all');const events=$derived(app.events.filter(e=>level==='all'||e.level===level));
+ async function exportLogs(){const data=await app.perform('logs.export');if(data!==undefined)await app.export('bridge-diagnostics.json',{exported_at:new Date().toISOString(),events:data});}
 </script>
-<section class="screen">
-  <div class="page-heading"><div><div class="eyebrow">LOCAL MODEL WORKSPACE</div><h1>Overview</h1><p>Your websites. One local endpoint. Explicit capability evidence.</p></div><button class="primary" disabled={!app.ready} onclick={() => app.showPopup('add')}><Icon name="plus"/>Add provider</button></div>
-  <div class="metric-grid">
-    <article class="metric"><div><Icon name="bolt"/><span>Local API</span></div><strong>{app.snapshot?.api.running ? 'Listening' : 'Not connected'}</strong><small class="mono">{app.snapshot ? `127.0.0.1:${app.snapshot.api.port}` : 'Waiting for Zag handshake'}</small></article>
-    <article class="metric"><div><Icon name="globe"/><span>Ready providers</span></div><strong>{readyProviders}<span class="muted"> / {app.providers.length}</span></strong><small>Signed-in, mapped and available</small></article>
-    <article class="metric"><div><Icon name="layers"/><span>Registered models</span></div><strong>{app.models.length}</strong><small>Observed or explicitly supplied</small></article>
-    <article class="metric"><div><Icon name="history"/><span>Active sessions</span></div><strong>{app.snapshot?.sessions.filter(s => s.status === 'ACTIVE').length ?? 0}</strong><small>No automatic provider fallback</small></article>
-  </div>
-  <div class="notice warning"><Icon name="shield"/><div><strong>Source alpha — not a qualified release</strong><p>The native build, live website compatibility and coding-harness tool cycle have not been verified. The included fixture tests do not establish those capabilities.</p></div></div>
-  <div class="two-columns">
-    <article class="panel"><div class="panel-heading"><h2>Providers</h2><button class="text-button" onclick={() => app.route = 'browser'}>Open browser<Icon name="arrow" size={14}/></button></div>
-      {#if !app.providers.length}<Empty title="No websites connected" description="Start with a chat website you are authorized to use. Passwords stay in the browser profile." icon="globe"/>
-      {:else}<div class="row-list">{#each app.providers as provider (provider.id)}<button class="list-row" onclick={() => app.openProvider(provider.id)}><div class="provider-mark">{provider.label.slice(0,1).toUpperCase()}</div><span class="grow"><strong>{provider.label}</strong><small>{provider.origin}</small></span><Badge state={provider.state}/></button>{/each}</div>{/if}
-    </article>
-    <article class="panel"><div class="panel-heading"><h2>Connection path</h2><span class="subtle-tag">Local-first</span></div><div class="setup-steps">
-      <div><span class="step">01</span><section><h3>Open a provider</h3><p>Use the native browser and sign in manually. There is no credential-import or account-rotation flow.</p></section></div>
-      <div><span class="step">02</span><section><h3>Inspect the evidence</h3><p>Confirm discovered controls and models. Use the recorder when a semantic mapping needs correction.</p></section></div>
-      <div><span class="step">03</span><section><h3>Connect a client</h3><p>Copy the local URL and reveal the API key explicitly. Unknown capabilities stay unknown.</p></section></div>
-    </div><button class="wide secondary" onclick={() => app.route = 'harness'}>Open harness setup<Icon name="arrow" size={16}/></button></article>
-  </div>
-</section>
+<section class="screen"><div class="screen-inner"><header class="screen-head"><div><div class="breadcrumb">Workspace / Diagnostics</div><h1>Activity</h1><p>A bounded, redacted view of what the local gateway is doing.</p></div><div class="button-group"><button class="secondary" disabled={!app.ready} onclick={exportLogs}><Icon name="download" size={14}/>Export diagnostics</button></div></header>
+<div class="metric-strip"><div><span class="label">Ready websites</span><strong>{app.providers.filter(p=>p.state==='READY').length}<span class="muted" style="font-size:16px;letter-spacing:0"> / {app.providers.length}</span></strong><small>Independent browser profiles</small></div><div><span class="label">Available models</span><strong>{app.models.length}</strong><small>Observed or user supplied</small></div><div><span class="label">Completed requests</span><strong>{number(app.snapshot?.metrics.completed_requests)}</strong><small>During this backend process</small></div><div><span class="label">Failed requests</span><strong>{number(app.snapshot?.metrics.failed_requests)}</strong><small>No silent automatic retries</small></div></div>
+<div class="section-title"><h2>Gateway events</h2><span class="tag"><span class="dot" class:online={app.ready}></span>Push updates</span></div><div class="filterbar"><span class="muted" style="font-size:11px">{events.length} retained events</span><span class="spacer"></span><select aria-label="Event severity" bind:value={level}><option value="all">All levels</option><option value="ERROR">Errors</option><option value="WARN">Warnings</option><option value="INFO">Information</option><option value="DEBUG">Debug</option></select><button class="text-button" disabled={!app.events.length} onclick={()=>app.perform('logs.clear')}><Icon name="trash" size={13}/>Clear</button></div>
+{#each events as event(event.id)}<div class="log-row"><span class="faint" title={dateTime(event.time)}>{event.time?new Date(event.time*1000).toLocaleTimeString([], {hour12:false}):'—'}</span><span class={`log-level ${event.level}`}>{event.level}</span><code>{event.kind}</code><span class="log-detail">{event.detail}</span></div>{/each}
+{#if !events.length}<div class="empty-state"><Icon name="activity" size={26}/><h2>No retained events</h2><p>Gateway and connector events will appear here. Debug-level browser metadata requires an explicit logging setting.</p><button class="text-button" onclick={()=>app.navigate('settings')}>Logging settings<Icon name="arrow" size={13}/></button></div>{/if}
+<div class="note"><Icon name="shield" size={15}/><span>No prompts, response bodies, authentication headers, or cookies are written to the diagnostic event ring. Export only diagnostics you intend to share.</span></div>
+</div></section>

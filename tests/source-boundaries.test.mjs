@@ -19,7 +19,7 @@ test('static: remote capability has only bounded observation permission',()=>{
 test('static: host events target main webview explicitly',()=>{
  for(const name of ['host.rs','views.rs']){
   const code=read('src-tauri/src/'+name);assert.doesNotMatch(code,/emit_to\("main"/);
-  for(const line of code.split('\n').filter(l=>l.includes('.emit_to(')))assert.match(line,/EventTarget::Webview \{ label: "main"/);
+  for(const line of code.split('\n').filter(l=>l.includes('.emit_to(')))assert.match(line,/EventTarget::Webview\s*\{\s*label:\s*"main"/);
  }
 });
 test('static: production entry points remain in Zag and no preview backend exists',()=>{
@@ -39,7 +39,7 @@ test('static: all Zag imports resolve inside the package',()=>{
 });
 test('static: seven real Svelte screens exist and unknowns are explicit',()=>{
  for(const name of ['Home','ProviderBrowser','Models','Harness','Sessions','Detector','Settings'])assert(read(`src/screens/${name}.svelte`).includes('<script lang="ts">'));
- assert.match(read('src/screens/Detector.svelte'),/Not admitted/);assert.match(read('src/screens/Home.svelte'),/not a qualified release/);
+ assert.match(read('src/screens/Detector.svelte'),/detector.reason/);assert.match(read('src/screens/Models.svelte'),/Unknown/);
 });
 test('static: provider execution code has no credential extraction or shell calls',()=>{
  const agent=read('browser/agent.js');assert.doesNotMatch(agent,/document\.cookie|\.headers\.get\(['"](?:Authorization|Cookie)|child_process|execSync|window\.open\(/i);

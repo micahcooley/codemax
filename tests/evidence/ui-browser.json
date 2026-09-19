@@ -1,0 +1,82 @@
+{
+  "kind": "ACTUAL_COMPILED_SVELTE_UI_WITH_EXPLICIT_TAURI_TEST_DOUBLE",
+  "native_tauri_executed": false,
+  "zag_executed": false,
+  "live_provider_contacted": false,
+  "chromium": "144.0.7559.96",
+  "results": [
+    {
+      "name": "compiled Svelte startup, real runes and native-transport handshake",
+      "status": "PASS",
+      "seconds": 0.015
+    },
+    {
+      "name": "browser-first layout with separately positioned provider surface",
+      "status": "PASS",
+      "seconds": 0.377
+    },
+    {
+      "name": "Ctrl-L address focus and keyboard command palette with provider hiding",
+      "status": "PASS",
+      "seconds": 0.116
+    },
+    {
+      "name": "endpoint/key controls and all five client configuration formats",
+      "status": "PASS",
+      "seconds": 0.489
+    },
+    {
+      "name": "model filtering, exact identifier copy and backend-driven default selection",
+      "status": "PASS",
+      "seconds": 0.283
+    },
+    {
+      "name": "theme, density, API port, listener control and developer setting round trips",
+      "status": "PASS",
+      "seconds": 0.624
+    },
+    {
+      "name": "session rename, retained title, search and context provenance",
+      "status": "PASS",
+      "seconds": 0.253
+    },
+    {
+      "name": "evidence inspection, connector import/export and page-picker action wiring",
+      "status": "PASS",
+      "seconds": 0.351
+    },
+    {
+      "name": "keyboard-resizable panes and collapse/restore bounds",
+      "status": "PASS",
+      "seconds": 0.451
+    },
+    {
+      "name": "new website workflow, tab creation and close operation",
+      "status": "PASS",
+      "seconds": 0.388
+    },
+    {
+      "name": "profile context menu and destructive-action confirmation with surface hiding",
+      "status": "PASS",
+      "seconds": 0.387
+    },
+    {
+      "name": "reduced motion and compact-window overflow checks",
+      "status": "PASS",
+      "seconds": 0.206
+    },
+    {
+      "name": "no browser JavaScript runtime errors",
+      "status": "PASS",
+      "seconds": 0.0
+    }
+  ],
+  "runtime_errors": [],
+  "screenshots": [
+    "01-browser-workspace.png",
+    "03-client-setup.png",
+    "02-model-registry.png",
+    "04-settings.png"
+  ],
+  "fixture_code_shipped_in_production_dist": false
+}

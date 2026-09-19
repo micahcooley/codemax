@@ -17,8 +17,9 @@ fn chat_prefix(r: *normalized.Request, created: i64, out: *buf.Buffer) void {
 fn response_object(r: *normalized.Request, created: i64, status: []u8, output: []u8, out: *buf.Buffer) void {
     buf.add(out, "{\"id\":"); buf.json(out, buf.view(&r.*.id)); buf.add(out, ",\"object\":\"response\",\"created_at\":"); buf.integer(out, created);
     buf.add(out, ",\"status\":"); buf.json(out, status); buf.add(out, ",\"model\":"); buf.json(out, buf.view(&r.*.model));
-    buf.add(out, ",\"output\":"); buf.add(out, output); buf.add(out, ",\"error\":null,\"incomplete_details\":null,\"usage\":null,\"store\":false,\"parallel_tool_calls\":false,\"metadata\":{\"bridge_session\":");
-    buf.json(out, buf.view(&r.*.session_hint)); buf.add(out, "}}");
+    buf.add(out, ",\"output\":"); buf.add(out, output); buf.add(out, ",\"error\":null,\"incomplete_details\":null,\"usage\":null,\"store\":false,\"parallel_tool_calls\":");
+    if (r.*.parallel_tools) { buf.add(out, "true"); } else { buf.add(out, "false"); }
+    buf.add(out, ",\"metadata\":{\"bridge_session\":"); buf.json(out, buf.view(&r.*.session_hint)); buf.add(out, "}}");
 }
 fn text_item(r: *normalized.Request, text: []u8, status: []u8, out: *buf.Buffer) void {
     let id: buf.Buffer = buf.make(128); message_id(r, &id);
@@ -164,7 +165,15 @@ fn body(w: *Writer, r: *normalized.Request, all_text: []u8, segments: []u8, call
 fn complete(w: *Writer, r: *normalized.Request, all_text: []u8, segments: []u8, calls: []u8, out: *buf.Buffer) void {
     let b: buf.Buffer = buf.make(2097152);
     if (r.*.protocol == 1) {
-        chat_prefix(r, w.*.created, &b); buf.add(&b, "{},\"finish_reason\":"); if (w.*.calls > 0) { buf.json(&b, "tool_calls"); } else { buf.json(&b, "stop"); } buf.add(&b, "}]}"); sse.emit(out, "", buf.view(&b)); sse.emit(out, "", "[DONE]");
+        chat_prefix(r, w.*.created, &b); buf.add(&b, "{},\"finish_reason\":"); if (w.*.calls > 0) { buf.json(&b, "tool_calls"); } else { buf.json(&b, "stop"); } buf.add(&b, "}]}"); sse.emit(out, "", buf.view(&b));
+        if (r.*.include_usage) {
+            buf.clear(&b); buf.add(&b, "{\"id\":"); buf.json(&b, buf.view(&r.*.id)); buf.add(&b, ",\"object\":\"chat.completion.chunk\",\"created\":"); buf.integer(&b, w.*.created);
+            buf.add(&b, ",\"model\":"); buf.json(&b, buf.view(&r.*.model)); buf.add(&b, ",\"choices\":[],\"usage\":{\"prompt_tokens\":"); buf.integer(&b, r.*.prompt.len as i64);
+            buf.add(&b, ",\"completion_tokens\":"); buf.integer(&b, (_zag_strlen(all_text) + _zag_strlen(calls)) as i64);
+            buf.add(&b, ",\"total_tokens\":"); buf.integer(&b, (r.*.prompt.len + _zag_strlen(all_text) + _zag_strlen(calls)) as i64);
+            buf.add(&b, "},\"bridge_usage_provenance\":\"estimated_utf8_bytes_not_provider_reported\"}"); sse.emit(out, "", buf.view(&b));
+        }
+        sse.emit(out, "", "[DONE]");
     } else if (r.*.protocol == 2) {
         close_anthropic_text(w, out); buf.add(&b, "{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":"); if (w.*.calls > 0) { buf.json(&b, "tool_use"); } else { buf.json(&b, "end_turn"); }
         buf.add(&b, ",\"stop_sequence\":null},\"usage\":{\"output_tokens\":"); buf.integer(&b, (_zag_strlen(all_text) + _zag_strlen(calls)) as i64); buf.add(&b, "}}"); sse.emit(out, "message_delta", buf.view(&b));

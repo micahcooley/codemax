@@ -1,0 +1,25 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../security/redaction.zag") as redaction
+@import("../server/net.zag") as net
+// Fixed ring: message bodies and provider credentials never enter this store.
+struct Events { rows: *buf.Buffer, count: i32, cursor: i32, sequence: i64, }
+fn make() Events {
+    let e: Events = Events{.rows = _zag_malloc(160 * @sizeOf[buf.Buffer]()) as *buf.Buffer, .count = 0, .cursor = 0, .sequence = 0};
+    let i: i32 = 0; while (i < 160) { e.rows[i] = buf.make(1024); i = i + 1; } return e;
+}
+fn add(e: *Events, provider: i32, level: []u8, kind: []u8, code: []u8) void {
+    let row: *buf.Buffer = &e.*.rows[e.*.cursor]; buf.clear(row); e.*.sequence = e.*.sequence + 1;
+    let safe: buf.Buffer = buf.make(256); redaction.label(code, &safe);
+    buf.add(row, "{\"id\":"); buf.integer(row, e.*.sequence); buf.add(row, ",\"time\":"); buf.integer(row, net.unix_seconds());
+    buf.add(row, ",\"provider_id\":"); buf.integer(row, provider as i64); buf.add(row, ",\"level\":"); buf.json(row, level);
+    buf.add(row, ",\"kind\":"); buf.json(row, kind); buf.add(row, ",\"detail\":"); buf.json(row, buf.view(&safe)); buf.byte(row, 125); buf.free(&safe);
+    e.*.cursor = (e.*.cursor + 1) % 160; if (e.*.count < 160) { e.*.count = e.*.count + 1; }
+}
+fn render(e: *Events, out: *buf.Buffer) void {
+    buf.byte(out, 91); let i: i32 = 0;
+    while (i < e.*.count) { if (i > 0) { buf.byte(out, 44); } let at: i32 = (e.*.cursor + 159 - i) % 160; buf.add(out, buf.view(&e.*.rows[at])); i = i + 1; }
+    buf.byte(out, 93);
+}
+fn clear(e: *Events) void { e.*.count = 0; e.*.cursor = 0; }
+fn free(e: *Events) void { let i: i32 = 0; while (i < 160) { buf.free(&e.*.rows[i]); i = i + 1; } _zag_free(e.*.rows as *i8); }

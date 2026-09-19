@@ -1,0 +1,69 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../core/json.zag") as json
+@import("../core/sha256.zag") as sha
+// Only client-supplied, bounded base64 data. Never fetch a URL, read a path,
+// capture an existing page file, or persist attachment bytes.
+fn mime_allowed(mime: []u8) bool {
+    return buf.eq(mime, "image/png") || buf.eq(mime, "image/jpeg") || buf.eq(mime, "image/webp") ||
+        buf.eq(mime, "image/gif") || buf.eq(mime, "application/pdf") || buf.eq(mime, "text/plain");
+}
+fn filename(mime: []u8) []u8 {
+    if (buf.eq(mime, "image/png")) { return "attachment.png"; }
+    if (buf.eq(mime, "image/jpeg")) { return "attachment.jpg"; }
+    if (buf.eq(mime, "image/webp")) { return "attachment.webp"; }
+    if (buf.eq(mime, "image/gif")) { return "attachment.gif"; }
+    if (buf.eq(mime, "application/pdf")) { return "attachment.pdf"; } return "attachment.txt";
+}
+fn digit(c: u8) i32 {
+    if (c >= 65 && c <= 90) { return (c - 65) as i32; }
+    if (c >= 97 && c <= 122) { return (c - 97 + 26) as i32; }
+    if (c >= 48 && c <= 57) { return (c - 48 + 52) as i32; }
+    if (c == 43) { return 62; } if (c == 47) { return 63; } return 0 - 1;
+}
+fn valid_base64(data: []u8) bool {
+    let n: i32 = _zag_strlen(data); if (n < 4 || n > 131072 || n % 4 != 0) { return false; }
+    let pad: i32 = 0; if (data[n - 1] == 61) { pad = 1; if (data[n - 2] == 61) { pad = 2; } }
+    let i: i32 = 0; while (i < n - pad) { if (digit(data[i]) < 0) { return false; } i = i + 1; }
+    if (pad == 2 && (digit(data[n - 3]) & 15) != 0) { return false; }
+    if (pad == 1 && (digit(data[n - 2]) & 3) != 0) { return false; }
+    return true;
+}
+fn append(d: *json.Document, block: i32, offset: i32, files: *buf.Buffer, marker: *buf.Buffer) bool {
+    let mime: buf.Buffer = buf.make(64); let data: buf.Buffer = buf.make(131072); let encoded: buf.Buffer = buf.make(131200);
+    let kind: i32 = json.get(d, block, "type"); let source: i32 = json.get(d, block, "source"); let ok: bool = true;
+    if (json.is_text(d, kind, "image") || json.is_text(d, kind, "document")) {
+        ok = json.is_text(d, json.get(d, source, "type"), "base64");
+        json.field_text(d, source, "media_type", &mime); json.field_text(d, source, "data", &data);
+    } else {
+        let image: i32 = json.get(d, block, "image_url");
+        if (json.kind(d, image) == 1) { json.field_text(d, image, "url", &encoded); }
+        else if (image >= 0) { json.text(d, image, &encoded); }
+        else { json.field_text(d, block, "file_data", &encoded); }
+        let cut: i32 = buf.find(buf.view(&encoded), ";base64,", 0);
+        if (!buf.prefix(buf.view(&encoded), "data:") || cut < 6 || cut > 64) { ok = false; }
+        else { buf.copy(&mime, encoded.data[5..cut]); buf.copy(&data, encoded.data[cut + 8..encoded.len]); }
+    }
+    ok = ok && mime.ok != 0 && data.ok != 0 && encoded.ok != 0 && mime_allowed(buf.view(&mime)) && valid_base64(buf.view(&data));
+    if (ok) {
+        let hash: buf.Buffer = buf.make(64); ok = sha.digest(buf.view(&data), &hash);
+        buf.add(files, "{\"at\":"); buf.integer(files, offset as i64); buf.add(files, ",\"name\":"); buf.json(files, filename(buf.view(&mime)));
+        buf.add(files, ",\"mime\":"); buf.json(files, buf.view(&mime)); buf.add(files, ",\"data\":"); buf.json(files, buf.view(&data)); buf.add(files, "}\n");
+        buf.add(marker, "\n[Client attachment: "); buf.add(marker, filename(buf.view(&mime))); buf.add(marker, "; base64 SHA-256 "); buf.add(marker, buf.view(&hash)); buf.add(marker, "]\n");
+        ok = ok && files.*.ok != 0 && marker.*.ok != 0; buf.free(&hash);
+    }
+    buf.free(&mime); buf.free(&data); buf.free(&encoded); return ok;
+}
+fn pending(records: []u8, offset: i32, out: *buf.Buffer) bool {
+    buf.clear(out); buf.byte(out, 91); let cursor: i32 = 0; let count: i32 = 0;
+    while (cursor < _zag_strlen(records)) {
+        let end: i32 = buf.find(records, "\n", cursor); if (end < 0) { return false; }
+        let d: json.Document = json.parse(records[cursor..end]);
+        if (d.ok == 0 || json.kind(&d, 0) != 1) { json.free(&d); return false; }
+        if (json.number(&d, json.get(&d, 0, "at"), 0 - 1) >= offset as i64) {
+            if (count > 0) { buf.byte(out, 44); } buf.add(out, records[cursor..end]); count = count + 1;
+        }
+        json.free(&d); cursor = end + 1;
+    }
+    buf.byte(out, 93); return count <= 4 && out.*.ok != 0;
+}

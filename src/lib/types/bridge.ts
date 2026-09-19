@@ -1,44 +1,51 @@
-export type ProviderState = 'UNCONFIGURED' | 'LOADING' | 'LOGIN_REQUIRED' | 'DISCOVERING' | 'READY' | 'RATE_LIMITED' | 'BROKEN_MAPPING' | 'REDISCOVERING';
-export type Route = 'home' | 'browser' | 'models' | 'harness' | 'sessions' | 'detector' | 'settings';
+export type ProviderState = 'UNCONFIGURED'|'LOADING'|'LOGIN_REQUIRED'|'DISCOVERING'|'READY'|'RATE_LIMITED'|'BROKEN_MAPPING'|'REDISCOVERING';
+export type Route = 'home'|'browser'|'models'|'harness'|'sessions'|'detector'|'settings';
+export type Mapping = 'prompt'|'send'|'response'|'stop'|'new_chat'|'model'|'reasoning'|'attachment';
 export interface Model {
-  id: string; display_name: string; confidence: 'OBSERVED' | 'USER_SUPPLIED';
-  context: { nominal: number | null; effective: number | null; source: string };
-  tokenizer: { mode: 'estimated'; name: string | null };
-  tools: 'emulated'; vision: boolean | null;
-  reasoning: { supported: boolean | null; control_observed: boolean } | null;
+  id:string; display_name:string; confidence:'OBSERVED'|'USER_SUPPLIED';
+  context:{nominal:number|null;effective:number|null;source:string};
+  tokenizer:{mode:string;name:string|null}; tools:'emulated'; vision:boolean|null;
+  reasoning:{supported:boolean|null;control_observed:boolean}|null;
 }
 export interface Provider {
-  id: number; label: string; origin: string; url: string; state: ProviderState;
-  mapping_version: number; last_error: string; models: Model[];
-  mappings: Record<'prompt'|'send'|'response'|'stop'|'new_chat'|'model'|'reasoning', number>;
+  id:number; label:string; origin:string; url:string; current_url:string; state:ProviderState;
+  open_tab:boolean; pinned:boolean; active:boolean; last_seen:number; mapping_version:number;
+  last_error:string; models:Model[]; mappings:Record<Mapping,number>;
+  context_hint:number; reasoning_value:string;
 }
 export interface Session {
-  id: string; provider: number; model: string; turn_count: number;
-  status: 'IDLE'|'ACTIVE'|'PROVIDER_LOST'|'RATE_LIMITED'|'EXPIRED';
-  context: { estimated_used: number; source: string; nominal: number | null; reported_used: number | null };
+  id:string; provider:number; model:string; title:string; url:string; turn_count:number;
+  created_at:number; last_used:number; last_response_id:string;
+  status:'IDLE'|'ACTIVE'|'PROVIDER_LOST'|'RATE_LIMITED'|'EXPIRED'|'RESTORING';
+  context:{estimated_used:number;source:string;nominal:number|null;reported_used:number|null};
 }
+export interface Preferences {
+  theme:'dark'|'light'|'system';compact:boolean;restore_tabs:boolean;auto_start:boolean;idle_minutes:number;
+  logging:'ERROR'|'WARN'|'INFO'|'DEBUG'; fallback_enabled:boolean;fallback_model:string;default_model:string;
+  raw_capture:false;developer_mode:boolean;
+}
+export interface LogEntry {id:number;time:number;provider_id:number;level:string;kind:string;detail:string}
 export interface Snapshot {
-  protocol: 1; backend: 'zag'; version: string;
-  api: {host: '127.0.0.1'; port: number; running: boolean; desired_port: number; key_present: boolean};
-  providers: Provider[]; sessions: Session[];
-  detector: {engine: 'symbolic'; tnn_artifact_loaded: boolean; hybrid_qualified: boolean; reason: string};
-  settings: {fallback: 'disabled'; logging: string; raw_capture: false; developer_mode: boolean};
-  metrics: {completed_requests: number; failed_requests: number};
-  qualification: {release: false; live_provider_verified: false; harness_verified: false; native_build_evidence: string};
+  protocol:1;backend:'zag';version:string;
+  api:{host:'127.0.0.1';port:number;running:boolean;desired_port:number;key_present:boolean};
+  providers:Provider[];sessions:Session[];settings:Preferences;developer_mode:boolean;events:LogEntry[];
+  detector:{engine:'symbolic';tnn_artifact_loaded:boolean;hybrid_qualified:boolean;reason:string};
+  metrics:{completed_requests:number;failed_requests:number};
 }
-export interface HostStatus {state: 'STARTING'|'READY'|'LOST'|'FAILED'|'STOPPED'|'BROWSER_ONLY'; code: string | null}
+export interface HostStatus {state:'STARTING'|'READY'|'LOST'|'FAILED'|'STOPPED'|'BROWSER_ONLY';code:string|null}
 export interface Control {
-  id: number; tag: string; role: string; label: string; visible: boolean; editable: boolean;
-  disabled: boolean; live: string; busy: boolean; assistant: boolean;
-  options: Array<{label: string; value: string; selected: boolean; disabled: boolean}>;
+  id:number;tag:string;role:string;label:string;visible:boolean;editable:boolean;disabled:boolean;
+  live:string;busy:boolean;assistant:boolean;file_input:boolean;value:string;popup:string;
+  options:Array<{label:string;value:string;selected:boolean;disabled:boolean}>;
 }
-export interface Evidence {type: 'observation'; origin: string; document_id: string; controls: Control[]; password_fields_present: boolean}
-export const routes: Array<{id: Route; title: string; icon: string; description: string}> = [
-  {id:'home',title:'Overview',icon:'grid',description:'Runtime and connection health'},
-  {id:'browser',title:'Provider browser',icon:'globe',description:'Sign in and inspect a website'},
-  {id:'models',title:'Models',icon:'layers',description:'Observed model capabilities'},
-  {id:'harness',title:'Harness setup',icon:'terminal',description:'Local endpoint and client examples'},
-  {id:'sessions',title:'Sessions',icon:'history',description:'Conversation continuity and cancellation'},
-  {id:'detector',title:'Detector lab',icon:'scan',description:'Evidence and confirmed connector mappings'},
-  {id:'settings',title:'Settings',icon:'settings',description:'Local access, privacy and runtime'},
+export interface Evidence {type:'observation';origin:string;document_id:string;controls:Control[];password_fields_present:boolean}
+export const routes:Array<{id:Route;title:string;icon:string;description:string}> = [
+  {id:'browser',title:'Browser',icon:'globe',description:'Your provider websites'},
+  {id:'models',title:'Models',icon:'layers',description:'Discovered models and capabilities'},
+  {id:'sessions',title:'Sessions',icon:'history',description:'Conversations and request continuity'},
+  {id:'harness',title:'Connect a client',icon:'terminal',description:'Endpoint, local key and configuration'},
+  {id:'detector',title:'Detector',icon:'scan',description:'Inspect and record website controls'},
+  {id:'home',title:'Activity',icon:'activity',description:'Gateway health and recent events'},
+  {id:'settings',title:'Settings',icon:'settings',description:'Appearance, profiles and privacy'},
 ];
+export const mappingNames:Record<Mapping,string>={prompt:'Prompt input',send:'Send message',response:'Response region',stop:'Stop generation',new_chat:'New conversation',model:'Model selector',reasoning:'Reasoning control',attachment:'File attachment'};

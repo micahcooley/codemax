@@ -16,3 +16,8 @@ build/
 __pycache__/
 *.pyc
 *.log
+
+# Generated delivery wrappers; source history lives inside the bundle.
+RECOVERY.bundle
+MANIFEST.sha256
+docs/LOCAL_COMMIT.txt

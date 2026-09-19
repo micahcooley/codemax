@@ -1,3 +1,23 @@
+# Protocol contract — implementation revision 2
+
+The implementation remains a bounded compatibility subset, not a claim of complete wire parity with every hosted API or coding client. Unsupported controls are rejected rather than silently ignored.
+
+## Revision 2 additions
+
+All three routes share the Zag normalized request/session/tool core. Exact named tool choices restrict allowed tool names; `parallel_tool_calls:false` rejects a second call. Responses `reasoning.effort` and `metadata.bridge_reasoning` specify an exact observed website choice, not an assumed mapping from vendor terminology. Missing or ambiguous controls fail explicitly.
+
+Chat `stream_options.include_usage` emits a final usage chunk when requested. All unavailable token accounting remains a UTF-8-byte estimate with explicit bridge provenance; it is not provider-reported exact usage. Context admission includes the configured nominal/user limit, retained estimate, new prompt, reserved output and safety allowance.
+
+User content can include bounded base64 data-URI images/input files or Anthropic base64 image/document blocks. Supported declared media types: PNG, JPEG, WebP, GIF, PDF and plain text. There are at most four files; per-file encoded data is at most 131,072 characters and the browser batch is bounded to 190,000. Empty/noncanonical base64, URL retrieval, local paths, existing website-selected files, disallowed file controls and unsupported input acceptance are rejected. Bytes are never persisted; the canonical session record includes a digest. Attachments are sent only for the new message suffix.
+
+Explicit session IDs and Responses previous-response IDs use persisted canonical-message receipts. Mismatched full histories, replaced system prefixes, lost conversations and cancelled/partially submitted turns cannot silently resume. Opt-in fallback is applied only before dispatch to a new conversation; it never rotates accounts, bypasses quotas or migrates an existing conversation.
+
+Developer diagnostic endpoints are disabled unless the persisted developer setting is enabled. The normal local interface always requires its local key for model listing/inference. `/health` is public on loopback.
+
+The detailed original bounded endpoint/framing contract follows. Where its descriptions of absent attachments, exact reasoning/named tool choice, or restart continuity differ, the revision-2 behavior above and the source are authoritative. No full native execution is claimed by this document.
+
+---
+
 # Protocol contract — source alpha
 
 Protocol serializers and native integration tests are authored but **not compiled or wire-qualified in this delivery**. This is a compatibility subset, not a drop-in claim for Claude Code, Codex, OpenCode or every SDK version.

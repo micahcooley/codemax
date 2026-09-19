@@ -13,13 +13,15 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
     let document: buf.Buffer = buf.make(96); json.field_text(d, event, "document_id", &document);
     if (document.ok == 0 || !validation.safe_id(buf.view(&document))) { buf.free(&document); return false; }
     let changed: bool = !buf.eq(buf.view(&p.*.document), buf.view(&document));
-    if (changed && p.*.active_request >= 0) { p.*.state = 6; buf.copy(&p.*.last_error, "SITE_CHANGED"); buf.free(&document); return false; }
+    if (changed && p.*.preparing) { p.*.prepared = true; }
+    if (changed && p.*.active_request >= 0 && !p.*.preparing) { p.*.state = 6; buf.copy(&p.*.last_error, "SITE_CHANGED"); buf.free(&document); return false; }
     buf.copy(&p.*.document, buf.view(&document)); buf.free(&document);
     if (json.kind(d, json.get(d, event, "password_fields_present")) == 5) { p.*.state = 2; return true; }
-    p.*.prompt = 0; p.*.send = 0; p.*.response = 0; p.*.stop = 0; p.*.new_chat = 0; p.*.model_control = 0; p.*.reasoning_control = 0;
+    p.*.prompt = 0; p.*.send = 0; p.*.response = 0; p.*.stop = 0; p.*.new_chat = 0; p.*.model_control = 0; p.*.reasoning_control = 0; p.*.attachment = 0;
     // During generation, a disappearing model menu must not rewrite the model
     // selected by an in-flight request. Registry indices remain stable.
-    if (p.*.active_request < 0) { p.*.model_count = 0; }
+    // Retain the catalog when a popover closes. Selection validates availability
+    // immediately before dispatch; only an explicit complete <select> replaces it.
     let prompt_score: i32 = 0; let response_score: i32 = 0; let send_score: i32 = 0;
     let label: buf.Buffer = buf.make(256); let lower: buf.Buffer = buf.make(256); let value: buf.Buffer = buf.make(256);
     let i: i32 = controls + 1;
@@ -47,12 +49,24 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
                 let score: i32 = 1; if (json.is_text(d, json.get(d, i, "role"), "log")) { score = 3; }
                 if (score > response_score) { response_score = score; p.*.response = node; }
             }
+            if (json.kind(d, json.get(d, i, "file_input")) == 5) { p.*.attachment = node; }
+            if (is_visible && (json.is_text(d, json.get(d, i, "tag"), "main") || json.is_text(d, json.get(d, i, "role"), "main")) && response_score == 0) { p.*.response = node; }
+            if (is_visible && (json.is_text(d, json.get(d, i, "role"), "combobox") || json.is_text(d, json.get(d, i, "tag"), "button"))) {
+                if (validation.contains(s, "model")) { p.*.model_control = node; }
+                if (validation.contains(s, "reasoning") || validation.contains(s, "thinking")) { p.*.reasoning_control = node; }
+            }
+            if (is_visible && p.*.model_control > 0 && p.*.active_request < 0 &&
+                (json.is_text(d, json.get(d, i, "role"), "option") || json.is_text(d, json.get(d, i, "role"), "menuitemradio"))) {
+                json.field_text(d, i, "value", &value); json.field_text(d, i, "label", &label);
+                if (value.len == 0) { buf.copy(&value, buf.view(&label)); }
+                if (value.ok != 0 && label.ok != 0) { registry.model(p, buf.view(&value), buf.view(&label), node); }
+            }
             if (is_visible && json.is_text(d, json.get(d, i, "tag"), "select")) {
                 if (validation.contains(s, "reason") || validation.contains(s, "thinking")) { p.*.reasoning_control = node; }
                 else if (validation.contains(s, "model")) {
                     p.*.model_control = node; let options: i32 = json.get(d, i, "options");
                     if (json.kind(d, options) == 2 && d.*.tokens[options].size <= 32 && p.*.active_request < 0) {
-                        let opt: i32 = options + 1;
+                        p.*.model_count = 0; let opt: i32 = options + 1;
                         while (opt < d.*.tokens[options].next) {
                             if (json.kind(d, json.get(d, opt, "disabled")) != 5) {
                                 json.field_text(d, opt, "value", &value); json.field_text(d, opt, "label", &label);
