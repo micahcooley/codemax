@@ -93,11 +93,11 @@ async fn open(app: &AppHandle, host: &Arc<Host>, id: u32, url: Url, origin: Stri
                         NewWindowResponse::Deny
                     }
                 })
-                .on_page_load(move |view, _| {
+                .on_page_load(move |view, payload| {
                     // Do not emit OAuth codes, credentials or full navigation URLs.
                     report_location(&view, &host_events, id);
                     let origin = view.url().ok().map(|url| url.origin().ascii_serialization());
-                    let _ = app_for_events.emit_to(tauri::EventTarget::Webview { label: "main".into() }, "bridge:browser", json!({"provider_id":id,"origin":origin}));
+                    let _ = app_for_events.emit_to(tauri::EventTarget::Webview { label: "main".into() }, "bridge:browser", json!({"provider_id":id,"origin":origin,"loading":matches!(payload.event(),tauri::webview::PageLoadEvent::Started)}));
                 });
             let view = parent.add_child(builder, LogicalPosition::new(80.0, 100.0), LogicalSize::new(1.0, 1.0)).map_err(|_| "WEBVIEW_CREATE_FAILED")?;
             view.hide().map_err(|_| "WEBVIEW_HIDE_FAILED")?;

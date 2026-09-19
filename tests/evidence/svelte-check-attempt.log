@@ -1,0 +1,5 @@
+
+> desktop-ai-bridge@0.1.0-alpha.1 check
+> svelte-check --tsconfig ./tsconfig.json
+
+sh: 1: svelte-check: not found

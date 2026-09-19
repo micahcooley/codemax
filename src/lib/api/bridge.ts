@@ -4,7 +4,7 @@ export const native=():boolean=>isTauri();
 export const request=<T>(op:string,params:Record<string,unknown>={}):Promise<T>=>invoke<T>('bridge_request',{op,params});
 export interface Events {
   snapshot(state:Snapshot):void;host(state:HostStatus):void;error(error:string):void;
-  notice(message:string):void;shortcut(key:'address'|'commands'):void;browser(id:number,origin:string):void;
+  notice(message:string):void;shortcut(key:'address'|'commands'):void;browser(id:number,origin:string,loading:boolean):void;
 }
 export async function observe(events:Events):Promise<UnlistenFn>{
   if(!native()){events.host({state:'BROWSER_ONLY',code:'NATIVE_HOST_REQUIRED'});return ()=>{};}
@@ -18,7 +18,7 @@ export async function observe(events:Events):Promise<UnlistenFn>{
     cleanup.push(await listen<{code:string}>('bridge:browser-error',event=>events.error(event.payload.code)));
     cleanup.push(await listen<{message:string}>('bridge:notice',event=>events.notice(event.payload.message)));
     cleanup.push(await listen<{key:'address'|'commands'}>('bridge:shortcut',event=>events.shortcut(event.payload.key)));
-    cleanup.push(await listen<{provider_id:number;origin:string}>('bridge:browser',event=>events.browser(event.payload.provider_id,event.payload.origin)));
+    cleanup.push(await listen<{provider_id:number;origin:string;loading?:boolean}>('bridge:browser',event=>events.browser(event.payload.provider_id,event.payload.origin,event.payload.loading===true)));
     events.host(await invoke<HostStatus>('host_status'));
     try{events.snapshot(await request<Snapshot>('state.get'));}catch{ /* Startup is driven by the subsequent push handshake, never by polling. */ }
   }catch(error){cleanup.forEach(stop=>stop());throw error;}

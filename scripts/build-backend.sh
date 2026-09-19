@@ -9,6 +9,11 @@ mkdir -p "$ROOT/build" "$ROOT/src-tauri/binaries"
 cd "$ROOT/backend"
 # The nearest zag.mod selects edition 2027. No transpiler or foreign backend fallback.
 "$ZNC" "$ROOT/backend/tests/unit.zag" -o "$ROOT/build/zag-unit"
+"$ZNC" "$ROOT/backend/tests/file_probe.zag" -o "$ROOT/build/zag-file-probe-unit"
+PROBE_ROOT=$(mktemp -d)
+trap 'rm -rf -- "$PROBE_ROOT"' EXIT
+chmod 700 "$PROBE_ROOT"
+"$ROOT/build/zag-file-probe-unit" "$PROBE_ROOT"
 "$ROOT/build/zag-unit"
 "$ZNC" "$ROOT/backend/main.zag" -o "$ROOT/build/bridge-zag"
 python3 - "$ROOT/build/bridge-zag" <<'VERIFY'

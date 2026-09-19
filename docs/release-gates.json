@@ -79,6 +79,12 @@
       "description": "Install, launch and uninstall produced Linux package",
       "status": "NOT_VERIFIED",
       "evidence": null
+    },
+    {
+      "id": "native_synthetic_file_probe",
+      "description": "Actual built-in Zag client + exact live model + two turns + one permitted read + final proof + cleanup",
+      "status": "NOT_VERIFIED",
+      "evidence": "tests/evidence/zai-live.json"
     }
   ]
 }

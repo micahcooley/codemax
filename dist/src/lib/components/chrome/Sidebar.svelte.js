@@ -1,11 +1,12 @@
 import '../../../../runtime/svelte_internal_disclose-version.js';
 import * as $ from '../../../../runtime/svelte_internal_client.js';
+import TabActivity from '../TabActivity.svelte.js';
 import { app } from '../../state/app.svelte.js';
 import { routes } from '../../types/bridge.js';
 import { initials, providerText } from '../../format.js';
 import Icon from '../Icon.svelte.js';
 
-var root_1 = $.from_html(`<button><span class="site-letter"> </span><span class="site-details"><strong> </strong><small> </small></span> <span></span> <!></button>`);
+var root_1 = $.from_html(`<button><span class="site-letter"> </span><span class="site-details"><strong> </strong><small> </small></span> <!> <!></button>`);
 var root_4 = $.from_html(`<small> </small>`);
 var root_6 = $.from_html(`<span class="dot busy"></span>`);
 var root_3 = $.from_html(`<button><!><span> </span><!></button>`);
@@ -73,16 +74,34 @@ export default function Sidebar($$anchor, $$props) {
 		$.reset(small);
 		$.reset(span_3);
 
-		var span_4 = $.sibling(span_3, 2);
-		let classes_2;
-		var node_2 = $.sibling(span_4, 2);
+		var node_2 = $.sibling(span_3, 2);
+
+		{
+			let $0 = $.derived(() => app.loading[$.get(provider).id] === true);
+
+			TabActivity(node_2, {
+				get provider() {
+					return $.get(provider);
+				},
+
+				get loading() {
+					return $.get($0);
+				},
+
+				get online() {
+					return app.ready;
+				}
+			});
+		}
+
+		var node_3 = $.sibling(node_2, 2);
 
 		{
 			var consequent = ($$anchor) => {
 				Icon($$anchor, { name: 'pin', size: 11 });
 			};
 
-			$.if(node_2, ($$render) => {
+			$.if(node_3, ($$render) => {
 				if ($.get(provider).pinned && app.sidebarVisible) $$render(consequent);
 			});
 		}
@@ -90,7 +109,7 @@ export default function Sidebar($$anchor, $$props) {
 		$.reset(button);
 
 		$.template_effect(
-			($0, $1, $2, $3) => {
+			($0, $1, $2) => {
 				classes_1 = $.set_class(button, 1, 'site-row', null, classes_1, {
 					selected: app.selectedProvider === $.get(provider).id && app.route === 'browser'
 				});
@@ -99,20 +118,13 @@ export default function Sidebar($$anchor, $$props) {
 				$.set_text(text_1, $1);
 				$.set_text(text_2, $.get(provider).label);
 				$.set_text(text_3, $2);
-				classes_2 = $.set_class(span_4, 1, 'dot', null, classes_2, $3);
 			},
 			[
 				() => `${$.get(provider).label} · ${providerText($.get(provider))}`,
 				() => initials($.get(provider).label),
 				() => $.get(provider).active
 					? 'Generating a response'
-					: providerText($.get(provider)),
-
-				() => ({
-					online: $.get(provider).state === 'READY',
-					busy: $.get(provider).active,
-					warn: ['LOGIN_REQUIRED', 'RATE_LIMITED', 'BROKEN_MAPPING'].includes($.get(provider).state)
-				})
+					: providerText($.get(provider))
 			]
 		);
 
@@ -123,9 +135,9 @@ export default function Sidebar($$anchor, $$props) {
 
 	button_1.__click = () => app.showPopup('add');
 
-	var node_3 = $.child(button_1);
+	var node_4 = $.child(button_1);
 
-	Icon(node_3, { name: 'plus', size: 17 });
+	Icon(node_4, { name: 'plus', size: 17 });
 	$.next();
 	$.reset(button_1);
 	$.reset(div_2);
@@ -137,22 +149,22 @@ export default function Sidebar($$anchor, $$props) {
 
 		button_2.__click = () => app.navigate($.get(route).id);
 
-		let classes_3;
-		var node_4 = $.child(button_2);
+		let classes_2;
+		var node_5 = $.child(button_2);
 
-		Icon(node_4, {
+		Icon(node_5, {
 			get name() {
 				return $.get(route).icon;
 			},
 			size: 16
 		});
 
-		var span_5 = $.sibling(node_4);
-		var text_4 = $.child(span_5, true);
+		var span_4 = $.sibling(node_5);
+		var text_4 = $.child(span_4, true);
 
-		$.reset(span_5);
+		$.reset(span_4);
 
-		var node_5 = $.sibling(span_5);
+		var node_6 = $.sibling(span_4);
 
 		{
 			var consequent_1 = ($$anchor) => {
@@ -166,17 +178,17 @@ export default function Sidebar($$anchor, $$props) {
 
 			var alternate = ($$anchor) => {
 				var fragment_2 = $.comment();
-				var node_6 = $.first_child(fragment_2);
+				var node_7 = $.first_child(fragment_2);
 
 				{
 					var consequent_2 = ($$anchor) => {
-						var span_6 = root_6();
+						var span_5 = root_6();
 
-						$.append($$anchor, span_6);
+						$.append($$anchor, span_5);
 					};
 
 					$.if(
-						node_6,
+						node_7,
 						($$render) => {
 							if ($.get(route).id === 'sessions' && app.sessions.some((s) => s.status === 'ACTIVE')) $$render(consequent_2);
 						},
@@ -187,7 +199,7 @@ export default function Sidebar($$anchor, $$props) {
 				$.append($$anchor, fragment_2);
 			};
 
-			$.if(node_5, ($$render) => {
+			$.if(node_6, ($$render) => {
 				if ($.get(route).id === 'models') $$render(consequent_1); else $$render(alternate, false);
 			});
 		}
@@ -197,7 +209,7 @@ export default function Sidebar($$anchor, $$props) {
 		$.template_effect(() => {
 			$.set_attribute(button_2, 'aria-current', app.route === $.get(route).id ? 'page' : undefined);
 			$.set_attribute(button_2, 'title', $.get(route).title);
-			classes_3 = $.set_class(button_2, 1, '', null, classes_3, { active: app.route === $.get(route).id });
+			classes_2 = $.set_class(button_2, 1, '', null, classes_2, { active: app.route === $.get(route).id });
 			$.set_text(text_4, $.get(route).title);
 		});
 
@@ -211,10 +223,10 @@ export default function Sidebar($$anchor, $$props) {
 
 	button_3.__click = () => app.navigate('settings');
 
-	let classes_4;
-	var node_7 = $.child(button_3);
+	let classes_3;
+	var node_8 = $.child(button_3);
 
-	Icon(node_7, { name: 'settings', size: 16 });
+	Icon(node_8, { name: 'settings', size: 16 });
 	$.next();
 	$.reset(button_3);
 
@@ -222,11 +234,11 @@ export default function Sidebar($$anchor, $$props) {
 
 	button_4.__click = () => app.showPopup('commands');
 
-	var node_8 = $.child(button_4);
+	var node_9 = $.child(button_4);
 
-	Icon(node_8, { name: 'command', size: 15 });
+	Icon(node_9, { name: 'command', size: 15 });
 
-	var node_9 = $.sibling(node_8, 2);
+	var node_10 = $.sibling(node_9, 2);
 
 	{
 		var consequent_3 = ($$anchor) => {
@@ -235,7 +247,7 @@ export default function Sidebar($$anchor, $$props) {
 			$.append($$anchor, kbd);
 		};
 
-		$.if(node_9, ($$render) => {
+		$.if(node_10, ($$render) => {
 			if (app.sidebarVisible) $$render(consequent_3);
 		});
 	}
@@ -243,21 +255,21 @@ export default function Sidebar($$anchor, $$props) {
 	$.reset(button_4);
 
 	var div_4 = $.sibling(button_4);
-	var node_10 = $.child(div_4);
+	var node_11 = $.child(div_4);
 
-	Icon(node_10, { name: 'shield', size: 12 });
+	Icon(node_11, { name: 'shield', size: 12 });
 	$.next();
 	$.reset(div_4);
 	$.reset(div_3);
 	$.reset(aside);
 
-	var node_11 = $.sibling(aside, 2);
+	var node_12 = $.sibling(aside, 2);
 
 	{
 		var consequent_5 = ($$anchor) => {
 			const provider = $.derived(() => app.providers.find((p) => p.id === app.contextMenu?.id));
 			var fragment_3 = $.comment();
-			var node_12 = $.first_child(fragment_3);
+			var node_13 = $.first_child(fragment_3);
 
 			{
 				var consequent_4 = ($$anchor) => {
@@ -267,9 +279,9 @@ export default function Sidebar($$anchor, $$props) {
 
 					button_5.__click = () => app.openProvider($.get(provider).id);
 
-					var node_13 = $.child(button_5);
+					var node_14 = $.child(button_5);
 
-					Icon(node_13, { name: 'globe', size: 14 });
+					Icon(node_14, { name: 'globe', size: 14 });
 					$.next();
 					$.reset(button_5);
 
@@ -284,11 +296,11 @@ export default function Sidebar($$anchor, $$props) {
 						app.contextMenu = null;
 					};
 
-					var node_14 = $.child(button_6);
+					var node_15 = $.child(button_6);
 
-					Icon(node_14, { name: 'pin', size: 14 });
+					Icon(node_15, { name: 'pin', size: 14 });
 
-					var text_6 = $.sibling(node_14, 1, true);
+					var text_6 = $.sibling(node_15, 1, true);
 
 					$.reset(button_6);
 
@@ -299,9 +311,9 @@ export default function Sidebar($$anchor, $$props) {
 						app.navigate('detector');
 					};
 
-					var node_15 = $.child(button_7);
+					var node_16 = $.child(button_7);
 
-					Icon(node_15, { name: 'scan', size: 14 });
+					Icon(node_16, { name: 'scan', size: 14 });
 					$.next();
 					$.reset(button_7);
 
@@ -312,9 +324,9 @@ export default function Sidebar($$anchor, $$props) {
 						void app.closeProvider($.get(provider).id);
 					};
 
-					var node_16 = $.child(button_8);
+					var node_17 = $.child(button_8);
 
-					Icon(node_16, { name: 'close', size: 14 });
+					Icon(node_17, { name: 'close', size: 14 });
 					$.next();
 					$.reset(button_8);
 
@@ -322,9 +334,9 @@ export default function Sidebar($$anchor, $$props) {
 
 					button_9.__click = () => app.showPopup('clear-profile', $.get(provider).id);
 
-					var node_17 = $.child(button_9);
+					var node_18 = $.child(button_9);
 
-					Icon(node_17, { name: 'refresh', size: 14 });
+					Icon(node_18, { name: 'refresh', size: 14 });
 					$.next();
 					$.reset(button_9);
 
@@ -332,9 +344,9 @@ export default function Sidebar($$anchor, $$props) {
 
 					button_10.__click = () => app.showPopup('remove-provider', $.get(provider).id);
 
-					var node_18 = $.child(button_10);
+					var node_19 = $.child(button_10);
 
-					Icon(node_18, { name: 'trash', size: 14 });
+					Icon(node_19, { name: 'trash', size: 14 });
 					$.next();
 					$.reset(button_10);
 					$.reset(div_5);
@@ -348,7 +360,7 @@ export default function Sidebar($$anchor, $$props) {
 					$.append($$anchor, div_5);
 				};
 
-				$.if(node_12, ($$render) => {
+				$.if(node_13, ($$render) => {
 					if ($.get(provider)) $$render(consequent_4);
 				});
 			}
@@ -356,7 +368,7 @@ export default function Sidebar($$anchor, $$props) {
 			$.append($$anchor, fragment_3);
 		};
 
-		$.if(node_11, ($$render) => {
+		$.if(node_12, ($$render) => {
 			if (app.contextMenu) $$render(consequent_5);
 		});
 	}
@@ -365,7 +377,7 @@ export default function Sidebar($$anchor, $$props) {
 		classes = $.set_class(aside, 1, 'workspace-sidebar', null, classes, { collapsed: !app.sidebarVisible });
 		$.set_text(text, app.providers.length);
 		button_1.disabled = !app.ready;
-		classes_4 = $.set_class(button_3, 1, '', null, classes_4, { active: app.route === 'settings' });
+		classes_3 = $.set_class(button_3, 1, '', null, classes_3, { active: app.route === 'settings' });
 	});
 
 	$.append($$anchor, fragment);

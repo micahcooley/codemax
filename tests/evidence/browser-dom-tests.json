@@ -4,87 +4,92 @@
     {
       "name": "login_form_sensitive_fields_excluded",
       "status": "PASS",
-      "seconds": 0.025
+      "seconds": 0.032
     },
     {
       "name": "generic_controls_observed",
       "status": "PASS",
-      "seconds": 0.007
+      "seconds": 0.008
+    },
+    {
+      "name": "manual_website_generation_emits_busy_then_idle_observations",
+      "status": "PASS",
+      "seconds": 0.495
     },
     {
       "name": "real_dom_incremental_unicode_stream",
       "status": "PASS",
-      "seconds": 0.234
+      "seconds": 0.265
     },
     {
       "name": "model_selection_precedes_submission",
       "status": "PASS",
-      "seconds": 0.296
+      "seconds": 0.262
     },
     {
       "name": "22_turn_browser_conversation_continuity",
       "status": "PASS",
-      "seconds": 5.912
+      "seconds": 5.901
     },
     {
       "name": "cancellation_stops_provider_generation",
       "status": "PASS",
-      "seconds": 0.223
+      "seconds": 0.22
     },
     {
       "name": "provider_quota_stops_without_retry",
       "status": "PASS",
-      "seconds": 0.092
+      "seconds": 0.094
     },
     {
       "name": "login_expiration_surfaces_auth_error",
       "status": "PASS",
-      "seconds": 0.101
+      "seconds": 0.099
     },
     {
       "name": "broken_stream_never_reports_success",
       "status": "PASS",
-      "seconds": 0.15
+      "seconds": 0.158
     },
     {
       "name": "response_rewrite_never_duplicates_text",
       "status": "PASS",
-      "seconds": 0.287
+      "seconds": 0.276
     },
     {
       "name": "websocket_metadata_and_dom_stream",
       "status": "PASS",
-      "seconds": 0.28
+      "seconds": 0.316
     },
     {
       "name": "eventsource_metadata_and_dom_stream",
       "status": "PASS",
-      "seconds": 0.283
+      "seconds": 0.268
     },
     {
       "name": "all_observations_remain_bounded_and_redacted",
       "status": "PASS",
-      "seconds": 0.005
+      "seconds": 0.007
     },
     {
       "name": "fixture_state_rehydration_rejects_stale_document_actions",
       "status": "PASS",
-      "seconds": 0.358
+      "seconds": 0.337
     },
     {
       "name": "sensitive_target_rechecked_at_execution",
       "status": "PASS",
-      "seconds": 0.044
+      "seconds": 0.045
     },
     {
       "name": "semantic_mapping_survives_fixture_redesign",
       "status": "PASS",
-      "seconds": 0.574
+      "seconds": 0.576
     },
     {
       "name": "fixture_state_containers_are_independent",
       "status": "PASS",
-      "seconds": 0.107
+      "seconds": 0.123
     },
     {
       "name": "client_attachment_upload_preserves_existing_files_and_refuses_malformed_base64",
@@ -94,24 +99,24 @@
     {
       "name": "exact_reasoning_switch_precedes_submission",
       "status": "PASS",
-      "seconds": 0.318
+      "seconds": 0.317
     },
     {
       "name": "cancel_during_preparation_never_sends_and_next_request_recovers",
       "status": "PASS",
-      "seconds": 0.599
+      "seconds": 0.597
     },
     {
       "name": "connector_picker_selects_control_without_editing_or_submitting",
       "status": "PASS",
-      "seconds": 0.119
+      "seconds": 0.113
     },
     {
       "name": "custom_model_popover_selects_exact_observed_option",
       "status": "PASS",
-      "seconds": 0.348
+      "seconds": 0.34
     }
   ],
-  "passed": 22,
+  "passed": 23,
   "failed": 0
 }

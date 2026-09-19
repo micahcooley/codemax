@@ -1,0 +1,36 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../security/file_probe.zag") as probe
+// Native unit/integration fixture. Run only with a newly created 0700 temp root.
+// This test is not live-provider evidence and does not execute an LLM.
+fn check(ok: bool, label: []u8) void { if (!ok) { _zag_eprintln(label); _zag_exit(1); } }
+fn main() i32 {
+    if (_zag_argc()!=2) { _zag_eprintln("Expected isolated temporary directory"); return 64; }
+    let p: probe.Probe=probe.make(); let out: buf.Buffer=buf.make(128);
+    check(probe.prepare(&p,_zag_arg(1),1,"p1/glm-5.3-flash"),"prepare real synthetic file");
+    check(p.state==1 && !p.granted && p.file_created,"preparation is not permission");
+    check(!probe.read_permitted(&p,buf.view(&p.id),1,buf.view(&p.model),"bridge-probe.txt",&out),"deny before grant");
+    check(!probe.allow(&p,"wrong-test",true),"wrong test cannot authorize");
+    check(!probe.allow(&p,buf.view(&p.id),false),"false consent cannot authorize");
+    check(probe.allow(&p,buf.view(&p.id),true),"explicit grant");
+    check(!probe.read_permitted(&p,buf.view(&p.id),1,"other-model","bridge-probe.txt",&out),"model bound grant");
+    check(!probe.read_permitted(&p,buf.view(&p.id),2,buf.view(&p.model),"bridge-probe.txt",&out),"provider bound grant");
+    check(!probe.read_permitted(&p,buf.view(&p.id),1,buf.view(&p.model),"../bridge-probe.txt",&out),"traversal refused");
+    check(probe.build_request(&p,"sk-local-unit-only",7331),"same private HTTP request path");
+    check(buf.find(buf.view(&p.outgoing),buf.view(&p.secret),0)<0,"first prompt never discloses nonce");
+    // Controlled fixture response requests the real file through the native broker.
+    buf.copy(&p.incoming,"HTTP/1.1 200 OK\r\n\r\n{\"model\":\"p1/glm-5.3-flash\",\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"file1\",\"type\":\"function\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{\\\"path\\\":\\\"bridge-probe.txt\\\"}\"}}]}}]}");
+    probe.response(&p);
+    check(p.state==3 && p.reads==1 && !p.granted && p.pending,"one actual native read and continuation");
+    check(buf.find(buf.view(&p.history),buf.view(&p.secret),0)>0,"tool result enters same history");
+    check(!probe.read_permitted(&p,buf.view(&p.id),1,buf.view(&p.model),"bridge-probe.txt",&out),"grant is single use");
+    check(probe.build_request(&p,"sk-local-unit-only",7331),"second request built with retained session");
+    buf.copy(&p.incoming,"HTTP/1.1 200 OK\r\n\r\n{\"model\":\"p1/glm-5.3-flash\",\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":");
+    buf.json(&p.incoming,buf.view(&p.secret)); buf.add(&p.incoming,"}}]}"); probe.response(&p);
+    check(p.state==4 && !p.granted && !p.file_created && p.cleanup_ok && p.secret.len==0,"exact proof, grant revocation and deletion");
+    check(probe.prepare(&p,_zag_arg(1),1,"p1/glm-5.3-flash"),"second isolated canary");
+    p.deadline=0; probe.pump(&p); check(p.state==5 && !p.file_created,"expiry deletes canary without reading");
+    check(probe.prepare(&p,_zag_arg(1),1,"p1/glm-5.3-flash"),"third isolated canary");
+    probe.terminal(&p,6,"USER_REVOKED"); check(!p.granted && !p.file_created,"explicit revocation deletes canary");
+    buf.free(&out); probe.free(&p); _zag_println("native file permission fixture passed"); return 0;
+}

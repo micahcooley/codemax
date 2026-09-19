@@ -8,7 +8,7 @@ struct Provider {
     state: i32, models: *Model, model_count: i32, prompt: i32, send: i32, response: i32,
     stop: i32, new_chat: i32, model_control: i32, reasoning_control: i32,
     last_seen: i64, last_used: i64, version: i32, quota: i32, active_request: i32, session: i32,
-    last_error: buf.Buffer, evidence: buf.Buffer, recipes: buf.Buffer, manual_model: buf.Buffer, current_url: buf.Buffer, reasoning_value: buf.Buffer, open_tab: bool, pinned: bool, context_hint: i64, attachment: i32, preparing: bool, prepared: bool,
+    last_error: buf.Buffer, evidence: buf.Buffer, recipes: buf.Buffer, manual_model: buf.Buffer, current_url: buf.Buffer, reasoning_value: buf.Buffer, open_tab: bool, pinned: bool, context_hint: i64, attachment: i32, preparing: bool, prepared: bool, browser_busy: bool,
 }
 struct Registry { items: *Provider, count: i32, next_id: i32, }
 fn make() Registry { return Registry{.items = _zag_malloc(16 * @sizeOf[Provider]()) as *Provider, .count = 0, .next_id = 1}; }
@@ -25,7 +25,7 @@ fn add(r: *Registry, origin: []u8, url: []u8, label: []u8) i32 {
         .state = 1, .models = _zag_malloc(32 * @sizeOf[Model]()) as *Model, .model_count = 0,
         .prompt = 0, .send = 0, .response = 0, .stop = 0, .new_chat = 0, .model_control = 0, .reasoning_control = 0,
         .last_seen = 0, .last_used = _zag_clock_monotonic_ms(), .version = 0, .quota = 0, .active_request = 0 - 1, .session = 0 - 1,
-        .last_error = buf.make(256), .evidence = buf.make(32768), .recipes = buf.make(8192), .manual_model = buf.make(256), .current_url = buf.make(2048), .reasoning_value = buf.make(192), .open_tab = true, .pinned = false, .context_hint = 0, .attachment = 0, .preparing = false, .prepared = false};
+        .last_error = buf.make(256), .evidence = buf.make(32768), .recipes = buf.make(8192), .manual_model = buf.make(256), .current_url = buf.make(2048), .reasoning_value = buf.make(192), .open_tab = true, .pinned = false, .context_hint = 0, .attachment = 0, .preparing = false, .prepared = false, .browser_busy = false};
     buf.copy(&p.recipes, "[]"); buf.copy(&p.origin, origin); buf.copy(&p.url, url); buf.copy(&p.current_url, url); buf.copy(&p.label, label);
     let m: i32 = 0;
     while (m < 32) { p.models[m] = Model{.id = buf.make(256), .label = buf.make(256), .value = buf.make(192), .option_node = 0, .supplied = false}; m = m + 1; }
@@ -81,6 +81,7 @@ fn snapshot(r: *Registry, out: *buf.Buffer) void {
         buf.add(out, ",\"reasoning_value\":"); buf.json(out, buf.view(&p.*.reasoning_value));
         buf.add(out, ",\"last_seen\":"); buf.integer(out, p.*.last_seen);
         buf.add(out, ",\"active\":"); if (p.*.active_request >= 0) { buf.add(out, "true"); } else { buf.add(out, "false"); }
+        buf.add(out, ",\"browser_busy\":"); if (p.*.browser_busy) { buf.add(out, "true"); } else { buf.add(out, "false"); }
         buf.add(out, ",\"state\":"); buf.json(out, state_name(p.*.state)); buf.add(out, ",\"mapping_version\":"); buf.integer(out, p.*.version as i64);
         buf.add(out, ",\"last_error\":"); buf.json(out, buf.view(&p.*.last_error));
         buf.add(out, ",\"mappings\":{\"prompt\":"); buf.integer(out, p.*.prompt as i64);

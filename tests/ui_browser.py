@@ -44,6 +44,7 @@ with sync_playwright() as pw:
   record('Ctrl-L address focus and keyboard command palette with provider hiding',keyboard)
   page.screenshot(animations='disabled',path=str(SHOTS/'03-client-setup.png'))
   def client_controls():
+   page.locator('.advanced-client summary').click()
    page.get_by_role('button',name='Copy API endpoint').click();page.wait_for_function("window.__clipboard==='http://127.0.0.1:7331/v1'")
    page.get_by_role('button',name='Reveal API key').click();page.get_by_text('sk-local-ui-fixture-not-a-real-key',exact=True).wait_for()
    page.get_by_role('button',name='Hide API key').click();assert not page.get_by_text('sk-local-ui-fixture-not-a-real-key',exact=True).count()
@@ -52,6 +53,76 @@ with sync_playwright() as pw:
    value=json.loads(page.evaluate('window.__lastExport.content'));assert value['provider']['bridge']['npm']=='@ai-sdk/openai-compatible'
    for label in ['Claude Code','Chat API','Responses API','Messages API','OpenCode']:page.locator('.segmented button').filter(has_text=label).click()
   record('endpoint/key controls and all five client configuration formats',client_controls)
+  def file_permissions():
+   page.locator('.advanced-client summary').click()
+   assert not page.get_by_role('button',name='Copy API endpoint').is_visible()
+   page.get_by_role('button',name='Prepare file test',exact=True).click()
+   page.get_by_text('Allow this exact read?',exact=True).wait_for()
+   assert not page.evaluate('window.__uiFixture.snapshot.file_probe.granted')
+   assert page.get_by_role('combobox',name='Website test model').is_disabled()
+   assert not page.evaluate("window.__uiFixture.calls.some(c=>c.op==='filesystem.allow')")
+   if page.get_by_role('button',name='Dismiss notification').count():page.get_by_role('button',name='Dismiss notification').click()
+   page.set_viewport_size({'width':1500,'height':1150})
+   page.locator('.screen').evaluate('(e)=>e.scrollTop=0')
+   page.wait_for_timeout(100)
+   page.screenshot(animations='disabled',path=str(SHOTS/'05-file-permission.png'))
+   page.set_viewport_size({'width':1500,'height':940})
+   page.get_by_role('button',name='Deny',exact=True).click()
+   page.get_by_text('Permission revoked',exact=True).wait_for()
+   assert page.evaluate('window.__uiFixture.snapshot.file_probe.read_count')==0
+   page.get_by_role('button',name='Prepare file test',exact=True).click()
+   page.get_by_role('button',name='Allow one read and run',exact=True).click()
+   page.get_by_text('Permissioned test in progress',exact=True).wait_for()
+   assert page.evaluate("window.__uiFixture.calls.filter(c=>c.op==='filesystem.allow').at(-1).params.confirmed")
+   assert page.get_by_role('combobox',name='Website test model').is_disabled()
+   page.evaluate("Object.assign(window.__uiFixture.snapshot.file_probe,{state:'WAITING_FOR_REPLY',granted:false,read_count:1});window.__uiFixture.push()")
+   page.wait_for_function("document.querySelectorAll('.proof-step.done').length>=2")
+   page.screenshot(animations='disabled',path=str(SHOTS/'06-tool-in-progress.png'))
+   page.get_by_role('button',name='Cancel and revoke',exact=True).click()
+   page.get_by_text('Permission revoked',exact=True).wait_for()
+   assert not page.evaluate('window.__uiFixture.snapshot.file_probe.granted')
+   page.get_by_role('button',name='Prepare file test',exact=True).click()
+   page.get_by_role('button',name='Allow one read and run',exact=True).click()
+   # Test the pass presentation, not a claim of actual tool execution here.
+   page.evaluate("Object.assign(window.__uiFixture.snapshot.file_probe,{state:'PASSED',granted:false,read_count:1,proof_verified:true,file_removed:true});window.__uiFixture.snapshot.providers[0].active=false;window.__uiFixture.push()")
+   page.get_by_text('File contents verified',exact=True).wait_for()
+   assert not page.get_by_role('button',name='Allow one read and run',exact=True).count()
+  record('website-first client setup, explicit one-file consent, deny/revoke and state rendering',file_permissions)
+  def tab_activity():
+   page.locator('.site-row').first.click()
+   ring=page.locator('.browser-tab').first.locator('.tab-activity')
+   arc=ring.locator('.activity-ring')
+   page.wait_for_function("document.querySelector('.browser-tab .tab-activity').dataset.state==='idle'")
+   assert arc.evaluate('(e)=>getComputedStyle(e).animationName')=='none'
+   page.evaluate("window.__uiFixture.emit('bridge:browser',{provider_id:1,origin:'http://127.0.0.1:7340',loading:true})")
+   page.wait_for_function("document.querySelector('.browser-tab .tab-activity').dataset.state==='working'")
+   assert arc.evaluate('(e)=>getComputedStyle(e).animationName')!='none'
+   page.evaluate("window.__uiFixture.emit('bridge:browser',{provider_id:1,origin:'http://127.0.0.1:7340',loading:false})")
+   page.wait_for_function("document.querySelector('.browser-tab .tab-activity').dataset.state==='idle'")
+   page.evaluate("window.__uiFixture.snapshot.providers[0].browser_busy=true;window.__uiFixture.push()")
+   page.wait_for_function("document.querySelector('.browser-tab .tab-activity').dataset.state==='working'")
+   assert ring.get_attribute('aria-label').endswith(': Generating')
+   assert page.locator('.browser-tab').nth(1).locator('.tab-activity').get_attribute('data-state')=='idle'
+   page.screenshot(path=str(SHOTS/'07-active-idle-tabs.png'))
+   from PIL import Image
+   import io
+   frames=[]
+   for frame in range(16):
+    frames.append(Image.open(io.BytesIO(page.screenshot(clip={'x':0,'y':0,'width':1050,'height':150}))).convert('RGB'))
+    page.wait_for_timeout(80)
+   frames[0].save(SHOTS/'08-tab-activity.gif',save_all=True,append_images=frames[1:],duration=100,loop=0)
+   page.emulate_media(reduced_motion='reduce')
+   assert arc.evaluate('(e)=>getComputedStyle(e).animationName')=='none'
+   assert ring.get_attribute('data-state')=='working'
+   page.emulate_media(reduced_motion='no-preference')
+   page.evaluate("window.__uiFixture.snapshot.providers[0].browser_busy=false;window.__uiFixture.snapshot.providers[0].state='DISCOVERING';window.__uiFixture.push()")
+   page.wait_for_function("document.querySelector('.browser-tab .tab-activity').dataset.state==='idle'")
+   assert ring.get_attribute('aria-label').endswith(': Needs control mapping')
+   page.evaluate("window.__uiFixture.snapshot.providers[0].state='RATE_LIMITED';window.__uiFixture.push()")
+   page.wait_for_function("document.querySelector('.browser-tab .tab-activity').dataset.state==='attention'")
+   assert arc.evaluate('(e)=>getComputedStyle(e).animationName')=='none'
+   page.evaluate("window.__uiFixture.snapshot.providers[0].state='READY';window.__uiFixture.push()")
+  record('real CSS spinner, manual generation, idle ring, limit state and reduced motion',tab_activity)
   def model_search():
    route('Models');page.get_by_role('textbox',name='Search models').fill('coder');assert page.locator('tbody tr').count()==1
    page.get_by_role('button',name='Set Mock Coder as default').click();page.wait_for_function("window.__uiFixture.snapshot.settings.default_model==='p1/mock-coder'")

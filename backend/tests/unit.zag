@@ -10,6 +10,8 @@
 @import("../protocol/attachments.zag") as attachments
 @import("../sessions/manager.zag") as sessions
 @import("../storage/settings.zag") as settings
+@import("../providers/registry.zag") as registry
+@import("../detector/symbolic.zag") as symbolic
 fn check(condition: bool, name: []u8) void {
     if (!condition) { _zag_eprintln(name); _zag_exit(1); }
 }
@@ -93,7 +95,24 @@ fn extended_protocol_cases() void {
     check(buf.find(buf.view(&image.canonical), "Zg==", 0) < 0, "file bytes excluded from canonical transcript"); normalized.free(&image);
 }
 
+
+fn activity_cases() void {
+    let r: registry.Registry=registry.make(); let idx: i32=registry.add(&r,"https://chat.example.test","https://chat.example.test/","Fixture");
+    let a: json.Document=json.parse("{\"origin\":\"https://chat.example.test\",\"document_id\":\"test_doc\",\"controls\":[{\"id\":1,\"tag\":\"button\",\"label\":\"Stop generating\",\"visible\":true,\"disabled\":false}]}");
+    check(symbolic.observe(&r.items[idx],&a,0) && r.items[idx].browser_busy,"visible stop sets manual activity"); json.free(&a);
+    let b: json.Document=json.parse("{\"origin\":\"https://chat.example.test\",\"document_id\":\"test_doc\",\"controls\":[{\"id\":1,\"tag\":\"button\",\"label\":\"Stop generating\",\"visible\":false}]}");
+    check(symbolic.observe(&r.items[idx],&b,0) && !r.items[idx].browser_busy,"hidden stop returns idle"); json.free(&b);
+    let c: json.Document=json.parse("{\"origin\":\"https://chat.example.test\",\"document_id\":\"test_doc\",\"controls\":[{\"id\":1,\"tag\":\"button\",\"label\":\"Stop generating\",\"visible\":true,\"disabled\":true}]}");
+    check(symbolic.observe(&r.items[idx],&c,0) && !r.items[idx].browser_busy,"disabled stop remains idle"); json.free(&c);
+    let d: json.Document=json.parse("{\"origin\":\"https://chat.example.test\",\"document_id\":\"test_doc\",\"controls\":[{\"id\":2,\"role\":\"log\",\"label\":\"Assistant responses\",\"visible\":true,\"busy\":true}]}");
+    check(symbolic.observe(&r.items[idx],&d,0) && r.items[idx].browser_busy,"assistant aria-busy is activity"); json.free(&d);
+    let e: json.Document=json.parse("{\"origin\":\"https://chat.example.test\",\"document_id\":\"test_doc\",\"controls\":[{\"id\":2,\"role\":\"log\",\"label\":\"Assistant responses\",\"visible\":true,\"busy\":false}]}");
+    check(symbolic.observe(&r.items[idx],&e,0) && !r.items[idx].browser_busy,"assistant completion is idle"); json.free(&e);
+    registry.free(&r);
+}
+
 fn main() i32 {
+    activity_cases();
     receipt_and_attachment_cases(); extended_protocol_cases();
     json_cases(); tool_cases(); normalized_cases();
     let origin: buf.Buffer = buf.make(512);

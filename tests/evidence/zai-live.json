@@ -1,0 +1,38 @@
+{
+  "kind": "LIVE_WEBSITE_UI_SMOKE_TEST_AND_MANUAL_SPLIT_RELAY",
+  "date": "2026-09-19",
+  "provider_url": "https://chat.z.ai/",
+  "requested_model": "GLM-5.3-Flash",
+  "native_zag_executed": false,
+  "native_tauri_executed": false,
+  "request_probe": {
+    "run_id": "d37e7b98-5d12-4bd7-bcbc-3d96e49d377b",
+    "status": "PASS_TOOL_SHAPED_RESPONSE",
+    "selected_model": "GLM-5.3-Flash",
+    "login_required_in_this_session": false,
+    "captcha_required": false,
+    "provider_api_key_used": false,
+    "prompt": "Desktop AI Bridge test. You do NOT have direct filesystem access. A separate local client MAY execute a permitted read-only tool. Return only a JSON tool request, not a claimed file result: {\"id\":\"bridge-read-probe\",\"name\":\"read_file\",\"arguments\":{\"path\":\"bridge-probe.txt\"}}. Do not guess the file contents.",
+    "response": "{\"id\":\"bridge-read-probe\",\"name\":\"read_file\",\"arguments\":{\"path\":\"bridge-probe.txt\"}}",
+    "scope": "Bare-JSON output smoke test; not the production nonce-framed parser or the native gateway."
+  },
+  "local_execution": {
+    "evidence": "file-permission-probe.json",
+    "status": "PASS_LOCAL_SYNTHETIC_READ",
+    "client": "test-only Python reference client, not Zag",
+    "actual_file_io": true,
+    "project_or_home_files_read": false
+  },
+  "continuation_probe": {
+    "run_id": "550b9678-9249-4e62-a1c7-bac12b80968f",
+    "status": "FAIL_NEW_SESSION_CONTEXT",
+    "conversation_url": "https://chat.z.ai/c/33af7973-ef9c-44cc-950c-3c822a24eb30",
+    "selected_model": "GLM-5.3-Flash",
+    "same_website_session": false,
+    "exact_echo_verified": false,
+    "response": "I don't have any record of making a read_file request for \"bridge-probe.txt\" \u2014 this is the first message in our conversation, and I have no prior tool calls in context. I can't relay this as if it were a result from my own action. If you're testing some kind of relay/bridge system, I'm not able to serve as a conduit for content presented as if it originated from tool calls I made.",
+    "interpretation": "The manually reconstructed follow-up in a new browser session failed. This is not evidence of native application failure or success. Native retained-conversation flow still needs execution."
+  },
+  "screenshots": "Browser automation reported in-run captures; no reusable screenshot file was returned. Packaged UI screenshots are independently rendered labelled fixtures.",
+  "end_to_end_live_native_pass": false
+}

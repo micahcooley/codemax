@@ -21,3 +21,5 @@ __pycache__/
 RECOVERY.bundle
 MANIFEST.sha256
 docs/LOCAL_COMMIT.txt
+
+PACKAGE_METADATA.json

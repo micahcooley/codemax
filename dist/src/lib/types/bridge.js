@@ -2,7 +2,7 @@ export const routes = [
     { id: 'browser', title: 'Browser', icon: 'globe', description: 'Your provider websites' },
     { id: 'models', title: 'Models', icon: 'layers', description: 'Discovered models and capabilities' },
     { id: 'sessions', title: 'Sessions', icon: 'history', description: 'Conversations and request continuity' },
-    { id: 'harness', title: 'Connect a client', icon: 'terminal', description: 'Endpoint, local key and configuration' },
+    { id: 'harness', title: 'Connect a client', icon: 'terminal', description: 'Website access, local file permissions and client connections' },
     { id: 'detector', title: 'Detector', icon: 'scan', description: 'Inspect and record website controls' },
     { id: 'home', title: 'Activity', icon: 'activity', description: 'Gateway health and recent events' },
     { id: 'settings', title: 'Settings', icon: 'settings', description: 'Appearance, profiles and privacy' },

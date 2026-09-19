@@ -16,6 +16,7 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
     if (changed && p.*.preparing) { p.*.prepared = true; }
     if (changed && p.*.active_request >= 0 && !p.*.preparing) { p.*.state = 6; buf.copy(&p.*.last_error, "SITE_CHANGED"); buf.free(&document); return false; }
     buf.copy(&p.*.document, buf.view(&document)); buf.free(&document);
+    p.*.browser_busy = false;
     if (json.kind(d, json.get(d, event, "password_fields_present")) == 5) { p.*.state = 2; return true; }
     p.*.prompt = 0; p.*.send = 0; p.*.response = 0; p.*.stop = 0; p.*.new_chat = 0; p.*.model_control = 0; p.*.reasoning_control = 0; p.*.attachment = 0;
     // During generation, a disappearing model menu must not rewrite the model
@@ -42,10 +43,16 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
                     let score: i32 = 1; if (validation.contains(s, "message")) { score = 2; }
                     if (score > send_score) { send_score = score; p.*.send = node; }
                 }
-                if (validation.contains(s, "stop") && (validation.contains(s, "generat") || buf.eq(s, "stop"))) { p.*.stop = node; }
+                if (validation.contains(s, "stop") && (validation.contains(s, "generat") || buf.eq(s, "stop"))) {
+                    p.*.stop = node;
+                    // Presentation only: no grant or routing authority. Hidden or disabled
+                    // stop controls are idle, and analytics/network activity never counts.
+                    if (is_visible && json.kind(d, json.get(d, i, "disabled")) != 5) { p.*.browser_busy = true; }
+                }
                 if (is_visible && (validation.contains(s, "new chat") || validation.contains(s, "new conversation"))) { p.*.new_chat = node; }
             }
             if (is_visible && (json.is_text(d, json.get(d, i, "role"), "log") || json.kind(d, json.get(d, i, "assistant")) == 5)) {
+                if (json.kind(d, json.get(d, i, "busy")) == 5) { p.*.browser_busy = true; }
                 let score: i32 = 1; if (json.is_text(d, json.get(d, i, "role"), "log")) { score = 3; }
                 if (score > response_score) { response_score = score; p.*.response = node; }
             }

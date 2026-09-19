@@ -45,3 +45,18 @@ test('static: provider execution code has no credential extraction or shell call
  const agent=read('browser/agent.js');assert.doesNotMatch(agent,/document\.cookie|\.headers\.get\(['"](?:Authorization|Cookie)|child_process|execSync|window\.open\(/i);
  assert.match(read('backend/storage/files.zag'),/lock_state/);assert.match(read('backend/app.zag'),/STATE_LOCK_FAILED/);
 });
+test('static: every custom command is declared in AppManifest for capability enforcement',()=>{
+ const main=read('src-tauri/src/main.rs');const names=main.match(/generate_handler!\[([^\]]+)\]/)[1].split(',').map(s=>s.trim().split('::').at(-1));
+ const manifest=read('src-tauri/build.rs');for(const name of names)assert(manifest.includes(`"${name}"`),`Missing ACL declaration: ${name}`);
+});
+test('static: synthetic-file broker is Zag-only, one-use, expiry and exact-path bound',()=>{
+ const code=read('backend/security/file_probe.zag');for(const check of ['!p.*.granted','p.*.reads!=0','_zag_clock_monotonic_ms()>=p.*.deadline','provider!=p.*.provider','!buf.eq(model,buf.view(&p.*.model))','!buf.eq(path,"bridge-probe.txt")','stat[2]==1'])assert(code.includes(check),check);
+ assert.match(code,/131072 \| 524288 \| 2048/);assert.match(code,/p\.\*\.granted=false/);
+ assert.doesNotMatch(code,/_zag_exec|sh -c|\/etc\/|\/home\//);
+ const server=read('backend/app.zag');assert(!server.includes('/filesystem/'));assert(server.includes('_zag_raw_syscall(53,1,1 | 2048 | 524288'));
+});
+test('static: tab activity includes manual generation and no polling-based fake activity',()=>{
+ const tab=read('src/lib/components/TabActivity.svelte');assert(tab.includes('provider.browser_busy'));assert(!tab.includes('setInterval'));
+ const detector=read('backend/detector/symbolic.zag');assert(detector.includes('p.*.browser_busy = false'));assert(detector.includes('"disabled"'));
+ assert(read('src/lib/design/app.css').includes('prefers-reduced-motion'));
+});

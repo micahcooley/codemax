@@ -8,6 +8,7 @@ class Application {
   error=$state('');notification=$state('');pending=$state(0);sidebarWidth=$state(212);inspectorWidth=$state(272);
   sidebarVisible=$state(true);inspectorVisible=$state(true);inspectorTab=$state<'connection'|'browser'>('connection');
   focusAddress=$state(0);findVisible=$state(false);zoom=$state(100);liveOrigins=$state<Record<number,string>>({});
+  loading=$state<Record<number,boolean>>({});
   contextMenu=$state<{id:number;y:number}|null>(null);tabOrder=$state<number[]>([]);secret=$state('');
   preferences=$derived(this.snapshot?.settings??initial);
   providers=$derived(this.snapshot?.providers??[]);
@@ -39,7 +40,7 @@ class Application {
     if(p.active&&!confirmed){await this.showPopup('close-provider',id);return;}
     const next=this.tabs.find(p=>p.id!==id);
     if(await this.perform('provider.close',{provider_id:id})!==undefined){
-      this.popup=null;if(this.selectedProvider===id){this.selectedProvider=next?.id??null;if(next)await this.openProvider(next.id);}
+      this.loading={...this.loading,[id]:false};this.popup=null;if(this.selectedProvider===id){this.selectedProvider=next?.id??null;if(next)await this.openProvider(next.id);}
     }
   }
   newTab():void{this.selectedProvider=null;this.route='browser';this.findVisible=false;this.focusAddress++;void this.perform('workspace.focus',{provider_id:0});}

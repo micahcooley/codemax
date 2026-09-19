@@ -17,6 +17,7 @@
 @import("detector/recorder.zag") as recorder
 @import("detector/tnn_bridge.zag") as tnn
 @import("security/local_token.zag") as token
+@import("security/file_probe.zag") as probe
 @import("security/validation.zag") as validation
 @import("security/redaction.zag") as redaction
 @import("storage/files.zag") as files
@@ -27,14 +28,14 @@
 // All business decisions remain in this Zag process. The host is a bounded
 // pipe and webview adapter. Every command is admitted in this process.
 struct App {
-    providers: registry.Registry, sessions: sessions.Sessions, settings: prefs.Settings, events: events.Events, clients: *connection.Client,
+    file_probe: probe.Probe, providers: registry.Registry, sessions: sessions.Sessions, settings: prefs.Settings, events: events.Events, clients: *connection.Client,
     root: buf.Buffer, key: buf.Buffer, ipc_in: buf.Buffer, ipc_out: buf.Buffer,
     focused_provider: i32, last_idle_check: i64, listener: i64, lock_fd: i64, port: i32, desired_port: i32, dev: bool, running: bool,
     dirty: bool, snapshot_pending: bool, last_snapshot: i64, last_ipc_write: i64,
     failed_requests: i64, completed_requests: i64, persistence_failed: bool,
 }
 fn make(root: []u8, dev: bool) App {
-    let a: App = App{.providers = registry.make(), .sessions = sessions.make(), .settings = prefs.make(), .events = events.make(), .clients = _zag_malloc(32 * @sizeOf[connection.Client]()) as *connection.Client,
+    let a: App = App{.file_probe = probe.make(), .providers = registry.make(), .sessions = sessions.make(), .settings = prefs.make(), .events = events.make(), .clients = _zag_malloc(32 * @sizeOf[connection.Client]()) as *connection.Client,
         .root = buf.make(4096), .key = buf.make(128), .ipc_in = buf.make(1048576), .ipc_out = buf.make(2097152),
         .focused_provider = 0, .last_idle_check = 0, .listener = 0 - 1, .lock_fd = 0 - 1, .port = 7331, .desired_port = 7331, .dev = dev, .running = true, .dirty = false,
         .snapshot_pending = false, .last_snapshot = 0, .last_ipc_write = _zag_clock_monotonic_ms(),
@@ -55,7 +56,7 @@ fn suspend_idle(a: *App, now: i64) void {
     a.*.last_idle_check = now; let i: i32 = 0;
     while (i < a.*.providers.count) {
         let p: *registry.Provider = &a.*.providers.items[i];
-        if (p.*.id == a.*.focused_provider || p.*.active_request >= 0 || p.*.pinned) { p.*.last_used = now; }
+        if (p.*.id == a.*.focused_provider || p.*.active_request >= 0 || p.*.pinned || (probe.active(&a.*.file_probe) && a.*.file_probe.provider==p.*.id)) { p.*.last_used = now; }
         else if (p.*.state != 0 && p.*.open_tab && now - p.*.last_used >= (a.*.settings.idle_minutes as i64) * 60000) {
             if (p.*.session >= 0) { a.*.sessions.items[p.*.session].status = 2; p.*.session = 0 - 1; }
             p.*.state = 0; buf.clear(&p.*.document); buf.clear(&p.*.evidence); host_event(a, "browser.close", p);
@@ -68,6 +69,7 @@ fn snapshot(a: *App, out: *buf.Buffer) void {
     buf.clear(out); buf.add(out, "{\"protocol\":1,\"backend\":\"zag\",\"version\":\"0.1.0\",\"api\":{\"host\":\"127.0.0.1\",\"port\":"); buf.integer(out, a.*.port as i64);
     buf.add(out, ",\"running\":"); if (a.*.listener >= 0) { buf.add(out, "true"); } else { buf.add(out, "false"); }
     buf.add(out, ",\"desired_port\":"); buf.integer(out, a.*.desired_port as i64); buf.add(out, ",\"key_present\":true},\"providers\":"); registry.snapshot(&a.*.providers, out);
+    buf.add(out, ",\"file_probe\":"); probe.render(&a.*.file_probe, out);
     buf.add(out, ",\"sessions\":"); sessions.snapshot(&a.*.sessions, out); buf.add(out, ",\"detector\":"); tnn.status(out);
     buf.add(out, ",\"settings\":"); prefs.render(&a.*.settings, out);
     buf.add(out, ",\"events\":"); events.render(&a.*.events, out);
@@ -144,7 +146,7 @@ fn begin_generation(a: *App, index: i32, protocol: i32) void {
     if (p.*.quota != 0) { http_error(c, 429, "PROVIDER_RATE_LIMITED"); return; }
     if (p.*.state == 2) { http_error(c, 401, "AUTH_REQUIRED"); return; }
     if (!actions.allowed(p)) { http_error(c, 409, "MAPPING_BROKEN"); return; }
-    if (p.*.active_request >= 0) { http_error(c, 409, "PROVIDER_BUSY"); return; }
+    if (p.*.active_request >= 0 || p.*.browser_busy) { http_error(c, 409, "PROVIDER_BUSY"); return; }
     let concurrent: i32 = 0; let n: i32 = 0;
     while (n < 32) { if (a.*.clients[n].fd >= 0 && a.*.clients[n].phase == 2) { concurrent = concurrent + 1; } n = n + 1; }
     if (concurrent >= 4) { http_error(c, 503, "CONCURRENCY_LIMIT"); return; }
@@ -257,7 +259,7 @@ fn generation_done(a: *App, index: i32) void {
     if (rendered.ok == 0 || rendered.len > c.*.output.cap - c.*.output.len) { buf.free(&rendered); cancel(a, index, "OUTPUT_LIMIT", 502); return; }
     buf.add(&c.*.output, buf.view(&rendered)); buf.free(&rendered); c.*.phase = 3; c.*.deadline = _zag_clock_monotonic_ms() + 15000;
     log_event(a, a.*.providers.items[c.*.provider].id, "INFO", "request.completed", buf.view(&c.*.request.id));
-    a.*.providers.items[c.*.provider].active_request = 0 - 1; a.*.completed_requests = a.*.completed_requests + 1; a.*.dirty = true; a.*.snapshot_pending = true;
+    a.*.providers.items[c.*.provider].active_request = 0 - 1; a.*.providers.items[c.*.provider].browser_busy = false; a.*.completed_requests = a.*.completed_requests + 1; a.*.dirty = true; a.*.snapshot_pending = true;
 }
 fn observed_error(d: *json.Document, event: i32) []u8 {
     let code: i32 = json.get(d, event, "code");
@@ -337,7 +339,29 @@ fn ipc(a: *App, frame: []u8) void {
         if (pi >= 0) { observe(a, provider_id as i32, &d, json.get(&d, params, "event")); }
         buf.add(&result, "null");
     } else if (json.is_text(&d, op, "state.get")) { snapshot(a, &result); }
-    else if (json.is_text(&d, op, "workspace.focus")) {
+    else if (json.is_text(&d, op, "filesystem.prepare")) {
+        let model: buf.Buffer=buf.make(256); json.field_text(&d,params,"model",&model);
+        let mi: i32=registry.find_model(&a.*.providers,buf.view(&model));
+        if (probe.active(&a.*.file_probe)) { error="FILE_TEST_BUSY"; }
+        else if (pi<0 || model.ok==0 || mi<0 || mi/32!=pi) { error="MODEL_UNAVAILABLE"; }
+        else if (!actions.allowed(&a.*.providers.items[pi]) || a.*.providers.items[pi].quota!=0) { error="PROVIDER_NOT_READY"; }
+        else if (a.*.providers.items[pi].browser_busy || a.*.providers.items[pi].active_request>=0 || a.*.providers.items[pi].session>=0) { error="END_CURRENT_SESSION_FIRST"; }
+        else if (!probe.prepare(&a.*.file_probe,buf.view(&a.*.root),provider_id as i32,buf.view(&model))) { error="PROBE_PREPARATION_FAILED"; }
+        else { probe.render(&a.*.file_probe,&result); }
+        buf.free(&model); a.*.snapshot_pending=true;
+    } else if (json.is_text(&d,op,"filesystem.allow")) {
+        let id_text: buf.Buffer=buf.make(96); json.field_text(&d,params,"test_id",&id_text);
+        let provider: i32=registry.index(&a.*.providers,a.*.file_probe.provider);
+        if (provider<0 || a.*.providers.items[provider].browser_busy || !actions.allowed(&a.*.providers.items[provider])) { error="PROVIDER_NOT_READY"; }
+        else if (!probe.allow(&a.*.file_probe,buf.view(&id_text),json.kind(&d,json.get(&d,params,"confirmed"))==5)) { error="FILE_PERMISSION_REQUIRED_OR_EXPIRED"; }
+        else { probe.render(&a.*.file_probe,&result); }
+        buf.free(&id_text); a.*.snapshot_pending=true;
+    } else if (json.is_text(&d,op,"filesystem.revoke")) {
+        let id_text: buf.Buffer=buf.make(96); json.field_text(&d,params,"test_id",&id_text);
+        if (!buf.eq(buf.view(&id_text),buf.view(&a.*.file_probe.id))) { error="FILE_TEST_MISMATCH"; }
+        else { probe.terminal(&a.*.file_probe,6,"USER_REVOKED"); probe.render(&a.*.file_probe,&result); }
+        buf.free(&id_text); a.*.snapshot_pending=true;
+    } else if (json.is_text(&d, op, "workspace.focus")) {
         if (provider_id == 0) { a.*.focused_provider = 0; buf.add(&result, "null"); }
         else if (pi < 0) { error = "PROVIDER_NOT_FOUND"; }
         else { a.*.focused_provider = provider_id as i32; a.*.providers.items[pi].last_used = _zag_clock_monotonic_ms(); buf.add(&result, "null"); }
@@ -628,10 +652,48 @@ fn start(a: *App) bool {
     log_event(a, 0, "INFO", "backend.started", "Loopback gateway ready");
     a.*.snapshot_pending = true; return true;
 }
+
+fn drive_file_probe(a: *App) void {
+    probe.pump(&a.*.file_probe);
+    if (a.*.file_probe.cleanup_session) {
+        let si: i32=sessions.find(&a.*.sessions,buf.view(&a.*.file_probe.id));
+        if (si>=0) {
+            let pi: i32=registry.index(&a.*.providers,a.*.file_probe.provider);
+            if (pi>=0 && a.*.providers.items[pi].session==si) {
+                let p: *registry.Provider=&a.*.providers.items[pi];
+                if (p.*.active_request>=0) { cancel(a,p.*.active_request,"CANCELLED",409); }
+                p.*.session=0 - 1;
+            }
+            a.*.sessions.items[si].status=4;
+            buf.clear(&a.*.sessions.items[si].history); buf.clear(&a.*.sessions.items[si].response); a.*.dirty=true;
+        }
+        a.*.file_probe.cleanup_session=false;
+    }
+    if (probe.active(&a.*.file_probe) && a.*.file_probe.pending && a.*.file_probe.fd<0) {
+        let slot: i32=0; while (slot<32 && a.*.clients[slot].fd>=0) { slot=slot+1; }
+        if (slot==32) { probe.terminal(&a.*.file_probe,5,"CLIENT_LIMIT"); }
+        else {
+            let pair: *i32=_zag_malloc(8) as *i32;
+            let rc: i64=_zag_raw_syscall(53,1,1 | 2048 | 524288,0,pair as i64,0,0);
+            if (rc!=0) { probe.terminal(&a.*.file_probe,5,"PRIVATE_CLIENT_TRANSPORT_FAILED"); }
+            else {
+                a.*.file_probe.fd=pair[0] as i64;
+                if (!probe.build_request(&a.*.file_probe,buf.view(&a.*.key),a.*.port)) { net.close(pair[1] as i64); probe.terminal(&a.*.file_probe,5,"TEST_REQUEST_LIMIT"); }
+                else { a.*.clients[slot]=connection.make(pair[1] as i64); }
+            }
+            _zag_free(pair as *i8);
+        }
+    }
+    if (a.*.file_probe.changed) {
+        a.*.file_probe.changed=false; a.*.snapshot_pending=true;
+        log_event(a,a.*.file_probe.provider,"INFO","filesystem.test",probe.state_name(a.*.file_probe.state));
+    }
+}
+
 fn run(a: *App) void {
-    let entries: *u64 = _zag_malloc(35 * 8) as *u64;
+    let entries: *u64 = _zag_malloc(36 * 8) as *u64;
     while (a.*.running) {
-        pump_ipc(a); let now: i64 = _zag_clock_monotonic_ms(); suspend_idle(a, now);
+        pump_ipc(a); drive_file_probe(a); let now: i64 = _zag_clock_monotonic_ms(); suspend_idle(a, now);
         if (a.*.dirty) {
             if (!storage.save(buf.view(&a.*.root), a.*.desired_port, &a.*.providers, &a.*.sessions)) { a.*.persistence_failed = true; }
             a.*.dirty = false;
@@ -664,7 +726,11 @@ fn run(a: *App) void {
             } else { entries[i + 3] = net.poll_entry(0 - 1, 0); }
             i = i + 1;
         }
-        let ready: i64 = net.poll(entries, 35, timeout);
+        let test_events: u64=1;
+        if (a.*.file_probe.offset<a.*.file_probe.outgoing.len) { test_events=test_events | 4; }
+        entries[35]=net.poll_entry(a.*.file_probe.fd,test_events);
+        if (a.*.file_probe.state>=1 && a.*.file_probe.state<=3 && (timeout<0 || timeout>1000)) { timeout=1000; }
+        let ready: i64 = net.poll(entries, 36, timeout);
         if (ready < 0 && ready != 0 - 4) { a.*.running = false; break; }
         let input_events: i32 = net.poll_revents(entries[0]);
         if ((input_events & 1) != 0) {
@@ -720,6 +786,6 @@ fn free(a: *App) void {
     if (a.*.ipc_out.len > 0) { let wrote: i64 = _zag_raw_syscall(1, 1, a.*.ipc_out.data as i64, a.*.ipc_out.len as i64, 0, 0, 0); }
     if (!a.*.persistence_failed) { let saved: bool = storage.save(buf.view(&a.*.root), a.*.desired_port, &a.*.providers, &a.*.sessions); }
     if (a.*.lock_fd >= 0) { files.close(a.*.lock_fd); a.*.lock_fd = 0 - 1; }
-    registry.free(&a.*.providers); sessions.free(&a.*.sessions); prefs.free(&a.*.settings); events.free(&a.*.events); _zag_free(a.*.clients as *i8);
+    probe.free(&a.*.file_probe); registry.free(&a.*.providers); sessions.free(&a.*.sessions); prefs.free(&a.*.settings); events.free(&a.*.events); _zag_free(a.*.clients as *i8);
     buf.free(&a.*.root); buf.free(&a.*.key); buf.free(&a.*.ipc_in); buf.free(&a.*.ipc_out);
 }

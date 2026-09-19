@@ -1,7 +1,7 @@
 {
   "scope": "Static import/export and qualified-call arity audit, NOT a Zag compiler.\nDoes not evaluate types, ownership, capabilities, code generation or runtime.",
-  "modules": 30,
-  "qualified_calls": 2988,
+  "modules": 32,
+  "qualified_calls": 3300,
   "errors": [],
   "status": "PASS"
 }

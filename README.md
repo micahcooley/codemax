@@ -34,23 +34,31 @@ npm run desktop
 
 ## Use
 
-Open a website from **Add website**, sign in in its native webview, and let discovery identify controls. Use **Detector** to pick or record controls when a site needs help. In **Connect a client**, copy the local endpoint and revealed key, select an observed model, and use the appropriate client snippet. The default gateway is `127.0.0.1:7331`; it never automatically binds a public interface. Keys are not provider credentials.
+Open a website from **Add website** and sign in normally. Requests use its website session and quota; no provider API credential is needed. In **Connect a client**, select an observed website model. For Z.ai use the exact GLM-5.3-Flash option when the website exposes it. Use **Detector** for missing/ambiguous controls.
 
+To test file tools, choose **Prepare file test**, inspect the exact synthetic file and selected model, then **Allow one read and run**. The intended built-in flow runs two website turns through the same conversation. Grants expire after five minutes and are revoked after one use, denial, cancellation or restart. Only the app-created test file is eligible; this does not grant project/home access or shell commands.
+
+External coding harnesses use **External coding tools · advanced local connection**. The loopback address/token configure their connection to Bridge, not a paid provider API. That token stays required; default binding remains `127.0.0.1:7331`. Each external harness enforces its own tool permissions.
+
+Tabs show spinning rings for page loading, active rediscovery and generation (including observed manual website generation); stationary rings mean idle/sleeping or incomplete mappings. Hover text distinguishes the states. Errors and reduced-motion preferences stop rotation.
 The production window contains no preview host, fake provider registry, extension manifest, or iframe provider implementation. `tests/fixtures/` contains explicitly isolated test doubles; `dist/` does not.
 
 ## Executed checks
 
 | Check | Result |
 |---|---|
-| Actual Svelte compilation | 22 application modules; zero component warnings |
-| Compiled UI interaction tests | 13 passed |
-| Actual browser-agent tests | 22 passed, including a 22-turn conversation sequence |
-| Node/helper/HTTP/static tests | 17 passed |
-| Static Zag import/symbol/arity audit | 30 modules, 2,988 qualified calls; no mismatches |
+| Actual Svelte compilation | 24 application modules; zero component warnings |
+| Compiled UI interaction tests | 15 passed |
+| Actual browser-agent tests | 23 passed, including a 22-turn conversation sequence |
+| Node/helper/HTTP/static tests | 20 passed |
+| Static Zag import/symbol/arity audit | 32 modules, 3,300 qualified calls; no mismatches |
+| Synthetic file permission tests | 26 passed with real local OS I/O in a test-only Python reference client |
 | Native Zag build attempt | Exit 77: compiler absent |
 | Rust/Tauri native build | Not run: toolchain absent |
 
-Tests above do not establish live provider compatibility, native WebKitGTK profile isolation, or real coding-harness interoperability. Screenshots show the compiled UI with a labelled deterministic provider fixture—not a live account or a native Tauri run. See `EXECUTION_REPORT.md` and `PROTOCOL.md` for exact scope and limitations.
+A live Z.ai GLM-5.3-Flash browser probe returned the requested tool-shaped JSON. A manually relayed follow-up in a **new** web session failed because it lacked the prior tool-call context. This is not a native end-to-end pass.
+
+Tests above do not establish native live provider compatibility, native WebKitGTK profile isolation, or real coding-harness interoperability. Screenshots show the compiled UI with a labelled deterministic provider fixture—not a live account or a native Tauri run. See `EXECUTION_REPORT.md` and `PROTOCOL.md` for exact scope and limitations.
 
 ## Package contents
 

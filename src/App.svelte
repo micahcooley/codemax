@@ -1,7 +1,7 @@
 <script lang="ts">
  import {onMount} from 'svelte';import * as bridge from './lib/api/bridge';import {app} from './lib/state/app.svelte';
  import {routes,type Route} from './lib/types/bridge';import {initials,errorText} from './lib/format';
- import Icon from './lib/components/Icon.svelte';import Dialog from './lib/components/Dialog.svelte';import Sidebar from './lib/components/chrome/Sidebar.svelte';
+ import TabActivity from './lib/components/TabActivity.svelte';import Icon from './lib/components/Icon.svelte';import Dialog from './lib/components/Dialog.svelte';import Sidebar from './lib/components/chrome/Sidebar.svelte';
  import Home from './screens/Home.svelte';import ProviderBrowser from './screens/ProviderBrowser.svelte';import Models from './screens/Models.svelte';import Harness from './screens/Harness.svelte';import Sessions from './screens/Sessions.svelte';import Detector from './screens/Detector.svelte';import Settings from './screens/Settings.svelte';
  let address=$state(''),addressEditing=$state(false),addressInput:HTMLInputElement;
  let addUrl=$state(''),addLabel=$state(''),query=$state(''),commandIndex=$state(0),findQuery=$state('');
@@ -27,10 +27,10 @@
   let disposed=false;let unsubscribe=()=>{};
   void bridge.observe({
    snapshot:state=>{app.snapshot=state;if(app.selectedProvider!==null&&!state.providers.some(p=>p.id===app.selectedProvider))app.selectedProvider=null;},
-   host:state=>{app.host=state;if(state.state!=='READY'){app.snapshot=null;void bridge.hideProviders().catch(()=>{});}},
+   host:state=>{app.host=state;if(state.state!=='READY'){app.snapshot=null;app.loading={};void bridge.hideProviders().catch(()=>{});}},
    error:message=>app.error=message,notice:message=>app.notification=message,
    shortcut:key=>{if(key==='address')app.focusAddress++;else void app.showPopup('commands');},
-   browser:(id,origin)=>{app.liveOrigins={...app.liveOrigins,[id]:origin};}
+   browser:(id,origin,loading)=>{app.liveOrigins={...app.liveOrigins,[id]:origin};app.loading={...app.loading,[id]:loading};}
   }).then(stop=>{if(disposed)stop();else unsubscribe=stop;}).catch(error=>app.error=String(error));
   return()=>{disposed=true;unsubscribe();media.removeEventListener('change',changed);app.secret='';};
  });
@@ -71,7 +71,7 @@
   <div class="title-brand" onpointerdown={event=>{if(event.button===0&&!((event.target as HTMLElement).closest('button')))void windowAction('drag');}} role="presentation"><span class="brand-glyph"><Icon name="layers" size={22}/></span>{#if app.sidebarVisible}<span class="brand-name">BRIDGE</span><span class="spacer"></span><span class="label" style="font-size:8px;letter-spacing:1px">WORKSPACE</span>{/if}</div>
   <div class="title-tabs" aria-label="Website tabs" role="tablist">
    {#each app.tabs as tab(tab.id)}<div class="browser-tab" class:active={app.selectedProvider===tab.id&&app.route==='browser'} draggable="true" ondragstart={event=>{dragTab=tab.id;event.dataTransfer?.setData('text/plain',String(tab.id));}} ondragover={event=>event.preventDefault()} ondrop={event=>reorder(event,tab.id)} role="presentation">
-    <button class="tab-open" role="tab" aria-selected={app.selectedProvider===tab.id&&app.route==='browser'} title={tab.origin} onclick={()=>app.openProvider(tab.id)}><span class="tab-initial">{initials(tab.label).slice(0,1)}</span><span class="truncate">{tab.label}</span>{#if tab.active}<span class="dot busy"></span>{/if}</button><button class="tab-close" aria-label={`Close ${tab.label} tab`} onclick={()=>app.closeProvider(tab.id)}><Icon name="close" size={11}/></button>
+    <button class="tab-open" role="tab" aria-selected={app.selectedProvider===tab.id&&app.route==='browser'} title={tab.origin} onclick={()=>app.openProvider(tab.id)}><span class="tab-initial">{initials(tab.label).slice(0,1)}</span><span class="truncate">{tab.label}</span><TabActivity provider={tab} loading={app.loading[tab.id]===true} online={app.ready}/></button><button class="tab-close" aria-label={`Close ${tab.label} tab`} onclick={()=>app.closeProvider(tab.id)}><Icon name="close" size={11}/></button>
    </div>{/each}
    {#if app.selectedProvider===null&&app.route==='browser'}<div class="browser-tab active"><span class="tab-initial"><Icon name="globe" size={13}/></span><span>New tab</span></div>{:else if app.route!=='browser'}<div class="browser-tab active"><span class="tab-initial"><Icon name={routes.find(r=>r.id===app.route)?.icon||'grid'} size={13}/></span><span class="truncate">{routes.find(r=>r.id===app.route)?.title}</span><button class="tab-close" style="margin-left:auto" aria-label="Return to browser" onclick={()=>app.navigate('browser')}><Icon name="close" size={11}/></button></div>{/if}
    <button class="icon-button new-tab" aria-label="New tab" title="New tab · Ctrl T" onclick={()=>app.newTab()}><Icon name="plus" size={15}/></button>

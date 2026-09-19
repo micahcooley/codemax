@@ -1,3 +1,17 @@
+# Revision 3 — website-first setup and bounded built-in file client
+
+No provider API endpoint/key is used for website authentication. External local clients still use the loopback provider protocol and local authentication below. The setup UI now keeps those optional external-harness settings in an advanced disclosure.
+
+New trusted private operations: `filesystem.prepare {provider_id, model}`, `filesystem.allow {test_id, confirmed:true}`, and `filesystem.revoke {test_id}`. None are public HTTP endpoints or provider-webview commands. `state.get` snapshots include `file_probe`: ID, state, provider/model, synthetic path, read/deny counts, grant, exact-proof status, cleanup status and error. They never include the random file value. States are IDLE, PERMISSION_REQUIRED, WAITING_FOR_TOOL, WAITING_FOR_REPLY, PASSED, FAILED and REVOKED.
+
+The built-in client uses a private socketpair and ordinary authenticated Chat requests with a fixed one-file `read_file` schema and a random X-Bridge-Session. It appends the parsed assistant tool request and actual permitted result to the same history; only the verified suffix is forwarded. No fallback/model switch or conversation replacement is admitted. Its file broker executes only that single synthetic read, not arbitrary tools requested by external harnesses. Native execution remains unverified.
+
+Provider snapshots add `browser_busy` for bounded visible stop/busy observations. Native page-load events carry `loading`. These are presentation/activity signals, not permission grants. Idle discovery that needs a mapping is not an active workload.
+
+The older revision-2/alpha material follows as history. Where it says the app never executes any tool, the bounded synthetic-file client above is the only new exception; general file/shell execution remains delegated to each external harness.
+
+---
+
 # Protocol contract — implementation revision 2
 
 The implementation remains a bounded compatibility subset, not a claim of complete wire parity with every hosted API or coding client. Unsupported controls are rejected rather than silently ignored.

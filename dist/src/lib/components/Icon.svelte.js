@@ -7,6 +7,7 @@ export default function Icon($$anchor, $$props) {
 	let size = $.prop($$props, 'size', 3, 18);
 
 	const paths = {
+		circle: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
 		activity: 'M3 12h4l3-8 4 16 3-8h4',
 		minimize: 'M5 12h14',
 		maximize: 'M5 5h14v14H5z',

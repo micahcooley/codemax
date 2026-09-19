@@ -70,6 +70,17 @@ try:
         record('login_form_sensitive_fields_excluded',privacy)
         page.click('#login button'); snapshot()
         record('generic_controls_observed',lambda: (lambda a: all(a[k]>0 for k in ['prompt_node','send_node','response_node','stop_node','model_control']) or (_ for _ in ()).throw(AssertionError(a)))(action('check')))
+        def manual_busy():
+            page.select_option('#mode','slow')
+            page.fill('#prompt','Manual website typing')
+            page.click('#send')
+            page.wait_for_function("__events.filter(e=>e.type==='observation').at(-1)?.controls.some(c=>c.busy===true || (c.label==='Stop generating'&&c.visible&&!c.disabled))")
+            page.click('#stop')
+            page.wait_for_function("!__events.filter(e=>e.type==='observation').at(-1)?.controls.some(c=>c.busy===true || (c.label==='Stop generating'&&c.visible&&!c.disabled))")
+            # Start a fresh fixture conversation so the existing 22-turn assertions remain independent.
+            page.click('#newchat')
+            page.select_option('#mode','normal')
+        record('manual_website_generation_emits_busy_then_idle_observations',manual_busy)
         def normal():
             execute(action('normal','[[unicode]]',new=True)); events=finish('normal')
             text=''.join(e['text'] for e in events if e['type']=='generation_delta')

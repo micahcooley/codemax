@@ -1,6 +1,7 @@
 <script lang="ts">
   let {name, size = 18}: {name: string; size?: number} = $props();
   const paths: Record<string,string> = {
+    circle:'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
     activity:'M3 12h4l3-8 4 16 3-8h4',
     minimize:'M5 12h14', maximize:'M5 5h14v14H5z', chevron:'m8 10 4 4 4-4', more:'M5 12h.01M12 12h.01M19 12h.01',
     external:'M14 3h7v7m0-7-11 11M10 3H3v18h18v-7', lock:'M6 10h12v11H6zM8 10V7a4 4 0 0 1 8 0v3',

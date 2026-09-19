@@ -12,7 +12,7 @@ const root=path.resolve(path.dirname(new URL(import.meta.url).pathname),'..');
 const runtime=process.env.SVELTE_RUNTIME_DIR;
 if(!runtime||!fs.existsSync(path.join(runtime,'svelte_compiler.js')))throw new Error('Set SVELTE_RUNTIME_DIR to a trusted, local Svelte ESM distribution.');
 const compiler=await import(pathToFileURL(path.join(runtime,'svelte_compiler.js')).href);
-let ts;try{ts=require('typescript');}catch{ts=require('/usr/local/lib/node_modules/typescript/lib/typescript.js');}
+let ts;try{ts=require('typescript');}catch{const {execFileSync}=require('node:child_process');ts=require(path.join(execFileSync('npm',['root','-g'],{encoding:'utf8'}).trim(),'typescript/lib/typescript.js'));}
 const out=path.join(root,'dist');fs.mkdirSync(out,{recursive:true});
 const warnings=[],modules=[];let css=fs.readFileSync(path.join(root,'src/lib/design/app.css'),'utf8');
 const all=[];function walk(dir){for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const p=path.join(dir,entry.name);if(entry.isDirectory())walk(p);else all.push(p);}}

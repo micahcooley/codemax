@@ -9,7 +9,7 @@ export interface Model {
 }
 export interface Provider {
   id:number; label:string; origin:string; url:string; current_url:string; state:ProviderState;
-  open_tab:boolean; pinned:boolean; active:boolean; last_seen:number; mapping_version:number;
+  open_tab:boolean; pinned:boolean; active:boolean; browser_busy?:boolean; last_seen:number; mapping_version:number;
   last_error:string; models:Model[]; mappings:Record<Mapping,number>;
   context_hint:number; reasoning_value:string;
 }
@@ -25,7 +25,13 @@ export interface Preferences {
   raw_capture:false;developer_mode:boolean;
 }
 export interface LogEntry {id:number;time:number;provider_id:number;level:string;kind:string;detail:string}
+export interface FileProbe {
+  id:string;state:'IDLE'|'PERMISSION_REQUIRED'|'WAITING_FOR_TOOL'|'WAITING_FOR_REPLY'|'PASSED'|'FAILED'|'REVOKED';
+  provider_id:number;model:string;path:string;scope:'one_synthetic_file_read_only';granted:boolean;
+  read_count:number;denied_count:number;error:string;proof_verified:boolean;file_removed:boolean;writes:false;shell:false;remote_filesystem:false;
+}
 export interface Snapshot {
+  file_probe?:FileProbe;
   protocol:1;backend:'zag';version:string;
   api:{host:'127.0.0.1';port:number;running:boolean;desired_port:number;key_present:boolean};
   providers:Provider[];sessions:Session[];settings:Preferences;developer_mode:boolean;events:LogEntry[];
@@ -43,7 +49,7 @@ export const routes:Array<{id:Route;title:string;icon:string;description:string}
   {id:'browser',title:'Browser',icon:'globe',description:'Your provider websites'},
   {id:'models',title:'Models',icon:'layers',description:'Discovered models and capabilities'},
   {id:'sessions',title:'Sessions',icon:'history',description:'Conversations and request continuity'},
-  {id:'harness',title:'Connect a client',icon:'terminal',description:'Endpoint, local key and configuration'},
+  {id:'harness',title:'Connect a client',icon:'terminal',description:'Website access, local file permissions and client connections'},
   {id:'detector',title:'Detector',icon:'scan',description:'Inspect and record website controls'},
   {id:'home',title:'Activity',icon:'activity',description:'Gateway health and recent events'},
   {id:'settings',title:'Settings',icon:'settings',description:'Appearance, profiles and privacy'},

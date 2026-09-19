@@ -1,5 +1,5 @@
 <script lang="ts">
-  import {app} from '../../state/app.svelte';import {routes} from '../../types/bridge';
+  import TabActivity from '../TabActivity.svelte';import {app} from '../../state/app.svelte';import {routes} from '../../types/bridge';
   import {initials,providerText} from '../../format';import Icon from '../Icon.svelte';
   const navigation=$derived(routes.filter(r=>!['browser','settings'].includes(r.id)));
   function context(event:MouseEvent,id:number){event.preventDefault();app.contextMenu={id,y:Math.max(92,Math.min(event.clientY,window.innerHeight-265))};}
@@ -11,7 +11,7 @@
     {#each [...app.providers].sort((a,b)=>Number(b.pinned)-Number(a.pinned)||a.id-b.id) as provider(provider.id)}
       <button class="site-row" class:selected={app.selectedProvider===provider.id&&app.route==='browser'} title={`${provider.label} · ${providerText(provider)}`} onclick={()=>app.openProvider(provider.id)} oncontextmenu={event=>context(event,provider.id)}>
         <span class="site-letter">{initials(provider.label)}</span><span class="site-details"><strong>{provider.label}</strong><small>{provider.active?'Generating a response':providerText(provider)}</small></span>
-        <span class="dot" class:online={provider.state==='READY'} class:busy={provider.active} class:warn={['LOGIN_REQUIRED','RATE_LIMITED','BROKEN_MAPPING'].includes(provider.state)}></span>
+        <TabActivity {provider} loading={app.loading[provider.id]===true} online={app.ready}/>
         {#if provider.pinned&&app.sidebarVisible}<Icon name="pin" size={11}/>{/if}
       </button>
     {/each}

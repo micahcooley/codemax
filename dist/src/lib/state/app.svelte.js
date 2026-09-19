@@ -197,6 +197,16 @@ class Application {
 		$.set(this.#liveOrigins, value, true);
 	}
 
+	#loading = $.state($.proxy({}));
+
+	get loading() {
+		return $.get(this.#loading);
+	}
+
+	set loading(value) {
+		$.set(this.#loading, value, true);
+	}
+
 	#contextMenu = $.state(null);
 
 	get contextMenu() {
@@ -374,6 +384,7 @@ class Application {
 		const next = this.tabs.find((p) => p.id !== id);
 
 		if (await this.perform('provider.close', { provider_id: id }) !== undefined) {
+			this.loading = { ...this.loading, [id]: false };
 			this.popup = null;
 
 			if (this.selectedProvider === id) {

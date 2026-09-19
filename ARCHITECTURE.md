@@ -38,3 +38,10 @@ TNN prediction parsing and safety authority remain separate; the symbolic engine
 ## Build and evidence
 
 `build-linux.sh` uses native Zag and Tauri, with no Rust/JavaScript substitution for the gateway. `dist/` is the compiled frontend; it cannot perform native operations when opened as an ordinary webpage. `tests/fixtures/` is separate test infrastructure. See `EXECUTION_REPORT.md` for executed versus native-unverified checks.
+
+
+## Revision 3 built-in client
+
+`backend/security/file_probe.zag` owns the synthetic-file test state machine and volatile one-read grant. `backend/app.zag` connects its private socketpair to the existing HTTP connection slots. UI operations stay in the main Tauri webview; Rust forwards them and does not implement filesystem business policy. The broker is not a public endpoint and does not give provider pages OS commands. A separate Python test-only reference client exercises real adversarial filesystem fixtures, clearly separated from native evidence.
+
+Tab status combines native page-load events, authoritative gateway activity, and sanitized semantic busy controls. Model discovery status is not automatically ongoing work. No network heartbeat or repeated UI polling is used to manufacture busy state.
