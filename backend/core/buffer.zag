@@ -1,0 +1,68 @@
+@import("runtime.zag")
+// Fixed-capacity owned buffer. Never copied as an owner. Views expire at clear
+// or free. Callers check .ok before emitting a complete protocol frame.
+struct Buffer { data: *u8, len: i32, cap: i32, ok: i32, }
+fn make(cap: i32) Buffer {
+    return Buffer{.data = _zag_malloc(cap) as *u8, .len = 0, .cap = cap, .ok = 1};
+}
+fn view(b: *Buffer) []u8 { return b.*.data[0..b.*.len]; }
+fn clear(b: *Buffer) void { b.*.len = 0; b.*.ok = 1; }
+fn free(b: *Buffer) void {
+    // Best-effort overwrite of live bytes; no compiler-guaranteed secure-erasure claim.
+    let i: i32 = 0; while (i < b.*.len) { b.*.data[i] = 0; i = i + 1; }
+    _zag_free(b.*.data as *i8); b.*.len = 0; b.*.cap = 0;
+}
+fn byte(b: *Buffer, c: u8) void {
+    if (b.*.len >= b.*.cap || b.*.ok == 0) { b.*.ok = 0; return; }
+    b.*.data[b.*.len] = c; b.*.len = b.*.len + 1;
+}
+fn add(b: *Buffer, s: []u8) void {
+    let n: i32 = _zag_strlen(s);
+    if (n < 0 || n > b.*.cap - b.*.len || b.*.ok == 0) { b.*.ok = 0; return; }
+    let i: i32 = 0;
+    while (i < n) { byte(b, s[i]); i = i + 1; }
+}
+fn copy(b: *Buffer, s: []u8) void { clear(b); add(b, s); }
+fn eq(a: []u8, b: []u8) bool { return _zag_strcmp(a, b) == 1; }
+fn prefix(a: []u8, b: []u8) bool {
+    let n: i32 = _zag_strlen(b); if (_zag_strlen(a) < n) { return false; }
+    let i: i32 = 0; while (i < n) { if (a[i] != b[i]) { return false; } i = i + 1; }
+    return true;
+}
+fn find(a: []u8, needle: []u8, from: i32) i32 {
+    let n: i32 = _zag_strlen(a); let m: i32 = _zag_strlen(needle);
+    let i: i32 = from; if (i < 0) { return 0 - 1; }
+    while (i + m <= n) {
+        if (prefix(a[i..n], needle)) { return i; }
+        i = i + 1;
+    }
+    return 0 - 1;
+}
+fn integer(b: *Buffer, n: i64) void {
+    // The application only serializes nonnegative counters and bounded errors.
+    let x: i64 = n;
+    if (x < 0) { byte(b, 45); x = 0 - x; }
+    let digits: Buffer = make(32);
+    if (x == 0) { byte(&digits, 48); }
+    while (x > 0) { byte(&digits, (48 + x % 10) as u8); x = x / 10; }
+    let i: i32 = digits.len;
+    while (i > 0) { i = i - 1; byte(b, digits.data[i]); }
+    free(&digits);
+}
+fn json(b: *Buffer, s: []u8) void {
+    byte(b, 34); let i: i32 = 0; let hex: []u8 = "0123456789abcdef";
+    while (i < _zag_strlen(s)) {
+        let c: u8 = s[i];
+        if (c == 34 || c == 92) { byte(b, 92); byte(b, c); }
+        else if (c < 32) { add(b, "\\u00"); byte(b, hex[(c / 16) as i32]); byte(b, hex[(c % 16) as i32]); }
+        else { byte(b, c); }
+        i = i + 1;
+    }
+    byte(b, 34);
+}
+fn drop_prefix(b: *Buffer, count: i32) void {
+    if (count < 0 || count > b.*.len) { b.*.ok = 0; return; }
+    let i: i32 = 0;
+    while (i < b.*.len - count) { b.*.data[i] = b.*.data[i + count]; i = i + 1; }
+    b.*.len = b.*.len - count;
+}

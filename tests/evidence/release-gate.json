@@ -1,0 +1,17 @@
+{
+  "release": "BLOCKED",
+  "unverified_gates": [
+    "zag_native_unit",
+    "zag_gateway",
+    "svelte_build",
+    "rust_host",
+    "tauri_ui",
+    "webkit_profiles",
+    "live_provider",
+    "real_harness",
+    "restart_restore",
+    "native_security",
+    "linux_package"
+  ],
+  "note": "No source-only or fixture-only release override."
+}

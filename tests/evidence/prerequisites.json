@@ -1,0 +1,19 @@
+{
+  "status": "BLOCKED",
+  "checks": {
+    "node": "/opt/nvm/versions/node/v22.16.0/bin/node",
+    "npm": "/opt/nvm/versions/node/v22.16.0/bin/npm",
+    "git": "/usr/bin/git",
+    "cargo": null,
+    "rustc": null,
+    "pkg-config": "/usr/bin/pkg-config",
+    "python3": "/opt/pyvenv/bin/python3",
+    "znc": null,
+    "svelte": false,
+    "vite": false,
+    "svelte_check": false,
+    "linux_x86_64": true,
+    "webkit2gtk-4.1": false
+  },
+  "note": "A successful prerequisite check is not a compile, runtime or release qualification."
+}

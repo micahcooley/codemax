@@ -1,0 +1,245 @@
+@import("runtime.zag")
+@import("buffer.zag") as buf
+// Bounded, strict JSON parser. Tokens borrow the input. The caller owns both.
+// Containers store a preorder token range; no recursive heap allocations.
+struct Token { kind: i32, start: i32, stop: i32, next: i32, size: i32, }
+struct Document { source: []u8, tokens: *Token, count: i32, cap: i32, pos: i32, ok: i32, }
+fn whitespace(d: *Document) void {
+    let n: i32 = _zag_strlen(d.*.source);
+    while (d.*.pos < n) {
+        let c: u8 = d.*.source[d.*.pos];
+        if (c != 32 && c != 9 && c != 10 && c != 13) { return; }
+        d.*.pos = d.*.pos + 1;
+    }
+}
+fn hex(c: u8) i32 {
+    if (c >= 48 && c <= 57) { return (c - 48) as i32; }
+    if (c >= 65 && c <= 70) { return (c - 55) as i32; }
+    if (c >= 97 && c <= 102) { return (c - 87) as i32; }
+    return 0 - 1;
+}
+fn unicode4(s: []u8, p: i32) i32 {
+    if (p < 0 || p + 4 > _zag_strlen(s)) { return 0 - 1; }
+    let v: i32 = 0; let i: i32 = 0;
+    while (i < 4) { let h: i32 = hex(s[p + i]); if (h < 0) { return 0 - 1; } v = v * 16 + h; i = i + 1; }
+    return v;
+}
+fn utf8_valid(s: []u8) bool {
+    let i: i32 = 0; let n: i32 = _zag_strlen(s);
+    while (i < n) {
+        let a: i32 = s[i] as i32; let count: i32 = 0; let cp: i32 = 0; let min: i32 = 0;
+        if (a < 128) { i = i + 1; }
+        else {
+            if (a >= 194 && a <= 223) { count = 1; cp = a - 192; min = 128; }
+            else if (a >= 224 && a <= 239) { count = 2; cp = a - 224; min = 2048; }
+            else if (a >= 240 && a <= 244) { count = 3; cp = a - 240; min = 65536; }
+            else { return false; }
+            if (i + count >= n) { return false; }
+            let j: i32 = 1;
+            while (j <= count) {
+                let b: i32 = s[i + j] as i32; if (b < 128 || b > 191) { return false; }
+                cp = cp * 64 + b - 128; j = j + 1;
+            }
+            if (cp < min || cp > 1114111 || (cp >= 55296 && cp <= 57343)) { return false; }
+            i = i + count + 1;
+        }
+    }
+    return true;
+}
+fn string_end(d: *Document) void {
+    let n: i32 = _zag_strlen(d.*.source); d.*.pos = d.*.pos + 1;
+    while (d.*.pos < n && d.*.ok != 0) {
+        let c: u8 = d.*.source[d.*.pos]; d.*.pos = d.*.pos + 1;
+        if (c == 34) { return; }
+        if (c < 32) { d.*.ok = 0; return; }
+        if (c == 92) {
+            if (d.*.pos >= n) { d.*.ok = 0; return; }
+            let e: u8 = d.*.source[d.*.pos]; d.*.pos = d.*.pos + 1;
+            if (e == 117) {
+                let cp: i32 = unicode4(d.*.source, d.*.pos); if (cp < 0) { d.*.ok = 0; return; }
+                d.*.pos = d.*.pos + 4;
+                if (cp >= 55296 && cp <= 56319) {
+                    if (d.*.pos + 6 > n) { d.*.ok = 0; return; }
+                    if (d.*.source[d.*.pos] != 92 || d.*.source[d.*.pos + 1] != 117) { d.*.ok = 0; return; }
+                    let lo: i32 = unicode4(d.*.source, d.*.pos + 2);
+                    if (lo < 56320 || lo > 57343) { d.*.ok = 0; return; }
+                    d.*.pos = d.*.pos + 6;
+                } else if (cp >= 56320 && cp <= 57343) { d.*.ok = 0; return; }
+            } else if (e != 34 && e != 92 && e != 47 && e != 98 && e != 102 && e != 110 && e != 114 && e != 116) {
+                d.*.ok = 0; return;
+            }
+        }
+    }
+    d.*.ok = 0;
+}
+fn emit_cp(out: *buf.Buffer, cp: i32) void {
+    if (cp < 128) { buf.byte(out, cp as u8); }
+    else if (cp < 2048) { buf.byte(out, (192 + cp / 64) as u8); buf.byte(out, (128 + cp % 64) as u8); }
+    else if (cp < 65536) {
+        buf.byte(out, (224 + cp / 4096) as u8); buf.byte(out, (128 + (cp / 64) % 64) as u8); buf.byte(out, (128 + cp % 64) as u8);
+    } else {
+        buf.byte(out, (240 + cp / 262144) as u8); buf.byte(out, (128 + (cp / 4096) % 64) as u8);
+        buf.byte(out, (128 + (cp / 64) % 64) as u8); buf.byte(out, (128 + cp % 64) as u8);
+    }
+}
+fn text(d: *Document, token: i32, out: *buf.Buffer) void {
+    buf.clear(out);
+    if (token < 0 || token >= d.*.count || d.*.tokens[token].kind != 3) { out.*.ok = 0; return; }
+    let p: i32 = d.*.tokens[token].start + 1; let end: i32 = d.*.tokens[token].stop - 1;
+    while (p < end) {
+        let c: u8 = d.*.source[p]; p = p + 1;
+        if (c != 92) { buf.byte(out, c); }
+        else {
+            let e: u8 = d.*.source[p]; p = p + 1;
+            if (e == 117) {
+                let cp: i32 = unicode4(d.*.source, p); p = p + 4;
+                if (cp >= 55296 && cp <= 56319) { cp = 65536 + (cp - 55296) * 1024 + unicode4(d.*.source, p + 2) - 56320; p = p + 6; }
+                emit_cp(out, cp);
+            } else if (e == 98) { buf.byte(out, 8); }
+            else if (e == 102) { buf.byte(out, 12); }
+            else if (e == 110) { buf.byte(out, 10); }
+            else if (e == 114) { buf.byte(out, 13); }
+            else if (e == 116) { buf.byte(out, 9); }
+            else { buf.byte(out, e); }
+        }
+    }
+}
+fn digit(c: u8) bool { return c >= 48 && c <= 57; }
+fn parse_value(d: *Document, depth: i32) i32 {
+    whitespace(d);
+    let n: i32 = _zag_strlen(d.*.source);
+    if (d.*.ok == 0 || depth > 32 || d.*.count >= d.*.cap || d.*.pos >= n) { d.*.ok = 0; return 0 - 1; }
+    let index: i32 = d.*.count; d.*.count = d.*.count + 1;
+    let start: i32 = d.*.pos; let c: u8 = d.*.source[start]; let kind: i32 = 0; let size: i32 = 0;
+    d.*.tokens[index] = Token{.kind = 0, .start = start, .stop = start, .next = index + 1, .size = 0};
+    if (c == 34) { kind = 3; string_end(d); }
+    else if (c == 123 || c == 91) {
+        kind = 2; let closer: u8 = 93;
+        if (c == 123) { kind = 1; closer = 125; }
+        d.*.pos = d.*.pos + 1; whitespace(d);
+        if (d.*.pos < n && d.*.source[d.*.pos] == closer) { d.*.pos = d.*.pos + 1; }
+        else {
+            let finished: i32 = 0;
+            while (finished == 0 && d.*.ok != 0) {
+                if (kind == 1) {
+                    whitespace(d);
+                    if (d.*.pos >= n || d.*.source[d.*.pos] != 34) { d.*.ok = 0; break; }
+                    let key: i32 = parse_value(d, depth + 1);
+                    if (key < 0) { break; }
+                    whitespace(d);
+                    if (d.*.pos >= n || d.*.source[d.*.pos] != 58) { d.*.ok = 0; break; }
+                    d.*.pos = d.*.pos + 1;
+                    // Reject duplicate decoded keys, including escaped aliases.
+                    let current: buf.Buffer = buf.make(256); let earlier: buf.Buffer = buf.make(256);
+                    text(d, key, &current); let prev: i32 = index + 1;
+                    while (prev < key && d.*.ok != 0) {
+                        text(d, prev, &earlier);
+                        if (buf.eq(buf.view(&current), buf.view(&earlier))) { d.*.ok = 0; }
+                        prev = d.*.tokens[prev + 1].next;
+                    }
+                    if (current.ok == 0) { d.*.ok = 0; }
+                    buf.free(&current); buf.free(&earlier);
+                }
+                let child: i32 = parse_value(d, depth + 1);
+                if (child < 0) { break; }
+                size = size + 1; whitespace(d);
+                if (d.*.pos >= n) { d.*.ok = 0; break; }
+                let sep: u8 = d.*.source[d.*.pos]; d.*.pos = d.*.pos + 1;
+                if (sep == closer) { finished = 1; }
+                else if (sep != 44) { d.*.ok = 0; }
+            }
+        }
+    } else if (c == 116 && buf.prefix(d.*.source[start..n], "true")) { kind = 5; d.*.pos = start + 4; }
+    else if (c == 102 && buf.prefix(d.*.source[start..n], "false")) { kind = 6; d.*.pos = start + 5; }
+    else if (c == 110 && buf.prefix(d.*.source[start..n], "null")) { kind = 7; d.*.pos = start + 4; }
+    else if (c == 45 || digit(c)) {
+        kind = 4; if (c == 45) { d.*.pos = d.*.pos + 1; }
+        if (d.*.pos >= n) { d.*.ok = 0; }
+        else if (d.*.source[d.*.pos] == 48) { d.*.pos = d.*.pos + 1; }
+        else if (digit(d.*.source[d.*.pos])) { while (d.*.pos < n && digit(d.*.source[d.*.pos])) { d.*.pos = d.*.pos + 1; } }
+        else { d.*.ok = 0; }
+        if (d.*.pos < n && d.*.source[d.*.pos] == 46) {
+            d.*.pos = d.*.pos + 1; let before: i32 = d.*.pos;
+            while (d.*.pos < n && digit(d.*.source[d.*.pos])) { d.*.pos = d.*.pos + 1; }
+            if (before == d.*.pos) { d.*.ok = 0; }
+        }
+        if (d.*.pos < n && (d.*.source[d.*.pos] == 101 || d.*.source[d.*.pos] == 69)) {
+            d.*.pos = d.*.pos + 1;
+            if (d.*.pos < n && (d.*.source[d.*.pos] == 43 || d.*.source[d.*.pos] == 45)) { d.*.pos = d.*.pos + 1; }
+            let before: i32 = d.*.pos;
+            while (d.*.pos < n && digit(d.*.source[d.*.pos])) { d.*.pos = d.*.pos + 1; }
+            if (before == d.*.pos) { d.*.ok = 0; }
+        }
+    } else { d.*.ok = 0; }
+    d.*.tokens[index] = Token{.kind = kind, .start = start, .stop = d.*.pos, .next = d.*.count, .size = size};
+    return index;
+}
+fn parse(source: []u8) Document {
+    let d: Document = Document{.source = source, .tokens = _zag_malloc(8192 * @sizeOf[Token]()) as *Token,
+        .count = 0, .cap = 8192, .pos = 0, .ok = 1};
+    if (_zag_strlen(source) > 1048576 || !utf8_valid(source)) { d.ok = 0; return d; }
+    let root: i32 = parse_value(&d, 0); whitespace(&d);
+    if (root < 0 || d.pos != _zag_strlen(source)) { d.ok = 0; }
+    return d;
+}
+fn free(d: *Document) void { _zag_free(d.*.tokens as *i8); d.*.ok = 0; }
+fn get(d: *Document, object: i32, key: []u8) i32 {
+    if (object < 0 || object >= d.*.count || d.*.tokens[object].kind != 1) { return 0 - 1; }
+    let scratch: buf.Buffer = buf.make(256); let i: i32 = object + 1; let result: i32 = 0 - 1;
+    while (i < d.*.tokens[object].next) {
+        text(d, i, &scratch);
+        if (scratch.ok != 0 && buf.eq(buf.view(&scratch), key)) { result = i + 1; break; }
+        i = d.*.tokens[i + 1].next;
+    }
+    buf.free(&scratch); return result;
+}
+fn raw(d: *Document, i: i32) []u8 {
+    if (i < 0 || i >= d.*.count) { return "null"; }
+    return d.*.source[d.*.tokens[i].start..d.*.tokens[i].stop];
+}
+fn kind(d: *Document, i: i32) i32 { if (i < 0 || i >= d.*.count) { return 0; } return d.*.tokens[i].kind; }
+fn number(d: *Document, i: i32, fallback: i64) i64 {
+    if (kind(d, i) != 4) { return fallback; }
+    let s: []u8 = raw(d, i); let p: i32 = 0; let n: i64 = 0;
+    if (_zag_strlen(s) > 15) { return fallback; }
+    while (p < _zag_strlen(s)) { if (!digit(s[p])) { return fallback; } n = n * 10 + (s[p] - 48) as i64; p = p + 1; }
+    return n;
+}
+fn is_text(d: *Document, i: i32, expected: []u8) bool {
+    let s: buf.Buffer = buf.make(1024); text(d, i, &s);
+    let matches: bool = s.ok != 0 && buf.eq(buf.view(&s), expected); buf.free(&s); return matches;
+}
+fn field_text(d: *Document, object: i32, key: []u8, out: *buf.Buffer) void { text(d, get(d, object, key), out); }
+// Deterministic JSON spelling for transcript comparisons. Object keys are
+// sorted; strings are decoded and re-escaped. Number spellings are preserved.
+fn canonical(d: *Document, token: i32, out: *buf.Buffer) void {
+    let k: i32 = kind(d, token);
+    if (k == 0) { out.*.ok = 0; return; }
+    if (k == 3) {
+        let scratch: buf.Buffer = buf.make(d.*.tokens[token].stop - d.*.tokens[token].start);
+        text(d, token, &scratch); if (scratch.ok == 0) { out.*.ok = 0; } else { buf.json(out, buf.view(&scratch)); }
+        buf.free(&scratch); return;
+    }
+    if (k == 2) {
+        buf.byte(out, 91); let i: i32 = token + 1; let first: bool = true;
+        while (i < d.*.tokens[token].next) { if (!first) { buf.byte(out, 44); } first = false; canonical(d, i, out); i = d.*.tokens[i].next; }
+        buf.byte(out, 93); return;
+    }
+    if (k == 1) {
+        let n: i32 = d.*.tokens[token].size;
+        if (n > 256) { out.*.ok = 0; return; }
+        let keys: *i32 = _zag_malloc((n + 1) * 4) as *i32;
+        let a: buf.Buffer = buf.make(256); let b: buf.Buffer = buf.make(256); let i: i32 = token + 1; let count: i32 = 0;
+        while (i < d.*.tokens[token].next) { keys[count] = i; count = count + 1; i = d.*.tokens[i + 1].next; }
+        i = 1;
+        while (i < count) {
+            let key: i32 = keys[i]; let j: i32 = i; text(d, key, &a);
+            while (j > 0) { text(d, keys[j - 1], &b); if (_zag_strcmp_ord(buf.view(&a), buf.view(&b)) >= 0) { break; } keys[j] = keys[j - 1]; j = j - 1; }
+            keys[j] = key; i = i + 1;
+        }
+        buf.byte(out, 123); i = 0;
+        while (i < count) { if (i > 0) { buf.byte(out, 44); } canonical(d, keys[i], out); buf.byte(out, 58); canonical(d, keys[i] + 1, out); i = i + 1; }
+        buf.byte(out, 125); _zag_free(keys as *i8); buf.free(&a); buf.free(&b); return;
+    }
+    buf.add(out, raw(d, token));
+}

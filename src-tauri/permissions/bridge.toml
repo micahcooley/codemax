@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "main-bridge"
+description = "Trusted UI transport and webview geometry; no process or filesystem API."
+commands.allow = ["bridge_request", "browser_bounds", "browser_control", "backend_restart", "host_status"]
+
+[[permission]]
+identifier = "provider-observation"
+description = "Bounded untrusted structural observations; caller identity is derived in Rust."
+commands.allow = ["provider_observe"]

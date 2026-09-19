@@ -1,0 +1,12 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("validation.zag") as validation
+// Only metadata labels use this redactor. Inference content intentionally
+// travels to the authenticated client but never enters default logs or disk.
+fn label(value: []u8, out: *buf.Buffer) void {
+    let lower: buf.Buffer = buf.make(256); validation.ascii_lower(value, &lower);
+    if (_zag_strlen(value) > 240 || validation.contains(buf.view(&lower), "bearer ") || validation.contains(value, "sk-") || validation.contains(value, "eyJ") || validation.sensitive_label(buf.view(&lower))) {
+        buf.copy(out, "[redacted]");
+    } else { buf.copy(out, value); }
+    buf.free(&lower);
+}

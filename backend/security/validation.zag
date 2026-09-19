@@ -1,0 +1,43 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+fn safe_id(s: []u8) bool {
+    let n: i32 = _zag_strlen(s); if (n < 1 || n > 96) { return false; }
+    let i: i32 = 0;
+    while (i < n) {
+        let c: u8 = s[i];
+        if (!((c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c == 45 || c == 95 || c == 46)) { return false; }
+        i = i + 1;
+    }
+    return !buf.eq(s, ".") && !buf.eq(s, "..");
+}
+fn provider_origin(url: []u8, dev: bool, out: *buf.Buffer) bool {
+    buf.clear(out); let n: i32 = _zag_strlen(url);
+    if (n < 9 || n > 2048) { return false; }
+    let offset: i32 = 8;
+    if (!buf.prefix(url, "https://")) {
+        if (!dev || !buf.prefix(url, "http://127.0.0.1:")) { return false; }
+        offset = 7;
+    }
+    let end: i32 = offset;
+    while (end < n && url[end] != 47) { end = end + 1; }
+    if (end == offset) { return false; }
+    let i: i32 = 0;
+    while (i < n) {
+        let c: u8 = url[i];
+        if (c < 33 || c == 127 || c == 92 || c == 35 || c == 63) { return false; }
+        if (i >= offset && i < end && !((c >= 97 && c <= 122) || (c >= 48 && c <= 57) || c == 45 || c == 46 || c == 58)) { return false; }
+        i = i + 1;
+    }
+    if (offset == 7 && !buf.eq(url[0..end], "http://127.0.0.1:7340")) { return false; }
+    buf.add(out, url[0..end]); return out.*.ok != 0;
+}
+fn ascii_lower(s: []u8, out: *buf.Buffer) void {
+    buf.clear(out); let i: i32 = 0;
+    while (i < _zag_strlen(s)) { let c: u8 = s[i]; if (c >= 65 && c <= 90) { c = c + 32; } buf.byte(out, c); i = i + 1; }
+}
+fn contains(s: []u8, needle: []u8) bool { return buf.find(s, needle, 0) >= 0; }
+fn sensitive_label(lower: []u8) bool {
+    return contains(lower, "password") || contains(lower, "credit card") || contains(lower, "billing") ||
+        contains(lower, "delete account") || contains(lower, "security code") || contains(lower, "verification code") ||
+        contains(lower, "one-time") || contains(lower, "payment") || contains(lower, "sign out");
+}

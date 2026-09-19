@@ -1,0 +1,8 @@
+{
+  "scope": "Actual supplied Zag ELF + private-IPC synthetic browser. NOT Tauri, a live website, or a coding-harness qualification.",
+  "status": "BLOCKED",
+  "tests": [],
+  "passed": 0,
+  "failed": 0,
+  "reason": "Native binary is missing; no Python fallback gateway is provided."
+}

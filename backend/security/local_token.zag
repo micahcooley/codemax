@@ -1,0 +1,35 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../storage/files.zag") as files
+fn generate(out: *buf.Buffer) bool {
+    let random: buf.Buffer = buf.make(32); let n: i32 = 0; let calls: i32 = 0;
+    while (n < 32 && calls < 16) {
+        let rc: i64 = _zag_raw_syscall(318, (random.data as i64) + n as i64, (32 - n) as i64, 0, 0, 0, 0);
+        calls = calls + 1;
+        if (rc == 0 - 4) { continue; }
+        if (rc <= 0) { buf.free(&random); return false; }
+        n = n + rc as i32;
+    }
+    if (n != 32) { buf.free(&random); return false; }
+    buf.clear(out); buf.add(out, "sk-local-"); let hex: []u8 = "0123456789abcdef"; let i: i32 = 0;
+    while (i < 32) { buf.byte(out, hex[(random.data[i] / 16) as i32]); buf.byte(out, hex[(random.data[i] % 16) as i32]); random.data[i] = 0; i = i + 1; }
+    buf.free(&random); return out.*.ok != 0;
+}
+fn valid(s: []u8) bool {
+    if (_zag_strlen(s) != 73 || !buf.prefix(s, "sk-local-")) { return false; }
+    let i: i32 = 9;
+    while (i < 73) { let c: u8 = s[i]; if (!((c >= 48 && c <= 57) || (c >= 97 && c <= 102))) { return false; } i = i + 1; }
+    return true;
+}
+fn equal(expected: []u8, offered: []u8) bool {
+    if (_zag_strlen(expected) != 73 || _zag_strlen(offered) != 73) { return false; }
+    let diff: i32 = 0; let i: i32 = 0;
+    while (i < 73) { diff = diff | ((expected[i] as i32) ^ (offered[i] as i32)); i = i + 1; }
+    return diff == 0;
+}
+fn load_or_create(root: []u8, out: *buf.Buffer) bool {
+    let state: i32 = files.load(root, "local-token", out);
+    if (state < 0) { return false; }
+    if (state == 1) { return valid(buf.view(out)); }
+    return generate(out) && files.save(root, "local-token", buf.view(out));
+}

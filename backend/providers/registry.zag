@@ -1,0 +1,102 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../core/json.zag") as json
+// Fixed limits are part of PROTOCOL.md: 16 providers, 32 models each.
+struct Model { id: buf.Buffer, label: buf.Buffer, value: buf.Buffer, option_node: i32, supplied: bool, }
+struct Provider {
+    id: i32, origin: buf.Buffer, url: buf.Buffer, label: buf.Buffer, document: buf.Buffer,
+    state: i32, models: *Model, model_count: i32, prompt: i32, send: i32, response: i32,
+    stop: i32, new_chat: i32, model_control: i32, reasoning_control: i32,
+    last_seen: i64, version: i32, quota: i32, active_request: i32, session: i32,
+    last_error: buf.Buffer, evidence: buf.Buffer, recipes: buf.Buffer, manual_model: buf.Buffer,
+}
+struct Registry { items: *Provider, count: i32, next_id: i32, }
+fn make() Registry { return Registry{.items = _zag_malloc(16 * @sizeOf[Provider]()) as *Provider, .count = 0, .next_id = 1}; }
+fn state_name(state: i32) []u8 {
+    if (state == 1) { return "LOADING"; } if (state == 2) { return "LOGIN_REQUIRED"; }
+    if (state == 3) { return "DISCOVERING"; } if (state == 4) { return "READY"; }
+    if (state == 5) { return "RATE_LIMITED"; } if (state == 6) { return "BROKEN_MAPPING"; }
+    if (state == 7) { return "REDISCOVERING"; } return "UNCONFIGURED";
+}
+fn add(r: *Registry, origin: []u8, url: []u8, label: []u8) i32 {
+    if (r.*.count >= 16) { return 0 - 1; }
+    let i: i32 = r.*.count; let p: Provider = Provider{
+        .id = r.*.next_id, .origin = buf.make(512), .url = buf.make(2048), .label = buf.make(256), .document = buf.make(96),
+        .state = 1, .models = _zag_malloc(32 * @sizeOf[Model]()) as *Model, .model_count = 0,
+        .prompt = 0, .send = 0, .response = 0, .stop = 0, .new_chat = 0, .model_control = 0, .reasoning_control = 0,
+        .last_seen = 0, .version = 0, .quota = 0, .active_request = 0 - 1, .session = 0 - 1,
+        .last_error = buf.make(256), .evidence = buf.make(32768), .recipes = buf.make(8192), .manual_model = buf.make(256)};
+    buf.copy(&p.recipes, "[]"); buf.copy(&p.origin, origin); buf.copy(&p.url, url); buf.copy(&p.label, label);
+    let m: i32 = 0;
+    while (m < 32) { p.models[m] = Model{.id = buf.make(256), .label = buf.make(256), .value = buf.make(192), .option_node = 0, .supplied = false}; m = m + 1; }
+    r.*.items[i] = p; r.*.count = i + 1; r.*.next_id = r.*.next_id + 1; return i;
+}
+fn index(r: *Registry, id: i32) i32 {
+    let i: i32 = 0; while (i < r.*.count) { if (r.*.items[i].id == id) { return i; } i = i + 1; } return 0 - 1;
+}
+fn model(p: *Provider, value: []u8, label: []u8, option_node: i32) void {
+    if (p.*.model_count >= 32 || _zag_strlen(value) < 1 || _zag_strlen(value) > 180 || _zag_strlen(label) > 240) { return; }
+    let i: i32 = 0;
+    while (i < p.*.model_count) { if (buf.eq(buf.view(&p.*.models[i].value), value)) { return; } i = i + 1; }
+    let m: *Model = &p.*.models[p.*.model_count]; buf.clear(&m.*.id);
+    buf.add(&m.*.id, "p"); buf.integer(&m.*.id, p.*.id as i64); buf.add(&m.*.id, "/"); buf.add(&m.*.id, value);
+    buf.copy(&m.*.value, value); buf.copy(&m.*.label, label); m.*.option_node = option_node; m.*.supplied = false;
+    p.*.model_count = p.*.model_count + 1;
+}
+fn find_model(r: *Registry, id: []u8) i32 {
+    let i: i32 = 0;
+    while (i < r.*.count) {
+        let j: i32 = 0;
+        while (j < r.*.items[i].model_count) { if (buf.eq(buf.view(&r.*.items[i].models[j].id), id)) { return i * 32 + j; } j = j + 1; }
+        i = i + 1;
+    }
+    return 0 - 1;
+}
+fn public_models(r: *Registry, out: *buf.Buffer) void {
+    buf.clear(out); buf.add(out, "{\"object\":\"list\",\"data\":["); let first: bool = true; let i: i32 = 0;
+    while (i < r.*.count) {
+        let p: *Provider = &r.*.items[i]; let m: i32 = 0;
+        if (p.*.state == 4) {
+            while (m < p.*.model_count) {
+                if (!first) { buf.byte(out, 44); } first = false;
+                buf.add(out, "{\"id\":"); buf.json(out, buf.view(&p.*.models[m].id));
+                buf.add(out, ",\"object\":\"model\",\"created\":0,\"owned_by\":\"p"); buf.integer(out, p.*.id as i64); buf.add(out, "\"}"); m = m + 1;
+            }
+        }
+        i = i + 1;
+    }
+    buf.add(out, "]}");
+}
+fn snapshot(r: *Registry, out: *buf.Buffer) void {
+    buf.add(out, "["); let i: i32 = 0;
+    while (i < r.*.count) {
+        let p: *Provider = &r.*.items[i]; if (i != 0) { buf.byte(out, 44); }
+        buf.add(out, "{\"id\":"); buf.integer(out, p.*.id as i64); buf.add(out, ",\"label\":"); buf.json(out, buf.view(&p.*.label));
+        buf.add(out, ",\"origin\":"); buf.json(out, buf.view(&p.*.origin)); buf.add(out, ",\"url\":"); buf.json(out, buf.view(&p.*.url));
+        buf.add(out, ",\"state\":"); buf.json(out, state_name(p.*.state)); buf.add(out, ",\"mapping_version\":"); buf.integer(out, p.*.version as i64);
+        buf.add(out, ",\"last_error\":"); buf.json(out, buf.view(&p.*.last_error));
+        buf.add(out, ",\"mappings\":{\"prompt\":"); buf.integer(out, p.*.prompt as i64);
+        buf.add(out, ",\"send\":"); buf.integer(out, p.*.send as i64); buf.add(out, ",\"response\":"); buf.integer(out, p.*.response as i64);
+        buf.add(out, ",\"stop\":"); buf.integer(out, p.*.stop as i64); buf.add(out, ",\"new_chat\":"); buf.integer(out, p.*.new_chat as i64);
+        buf.add(out, ",\"model\":"); buf.integer(out, p.*.model_control as i64); buf.add(out, ",\"reasoning\":"); buf.integer(out, p.*.reasoning_control as i64);
+        buf.add(out, "},\"models\":["); let m: i32 = 0;
+        while (m < p.*.model_count) {
+            if (m != 0) { buf.byte(out, 44); }
+            buf.add(out, "{\"id\":"); buf.json(out, buf.view(&p.*.models[m].id)); buf.add(out, ",\"display_name\":"); buf.json(out, buf.view(&p.*.models[m].label));
+            buf.add(out, ",\"context\":{\"nominal\":null,\"effective\":null,\"source\":\"UNKNOWN\"},\"tokenizer\":{\"mode\":\"estimated\",\"name\":null},\"vision\":null,\"tools\":\"emulated\",\"reasoning\":");
+            if (p.*.reasoning_control != 0) { buf.add(out, "{\"supported\":null,\"control_observed\":true}"); } else { buf.add(out, "null"); }
+            buf.add(out, ",\"confidence\":"); if (p.*.models[m].supplied) { buf.json(out, "USER_SUPPLIED"); } else { buf.json(out, "OBSERVED"); } buf.byte(out, 125); m = m + 1;
+        }
+        buf.add(out, "]}"); i = i + 1;
+    }
+    buf.add(out, "]");
+}
+fn free(r: *Registry) void {
+    let i: i32 = 0;
+    while (i < r.*.count) {
+        let p: *Provider = &r.*.items[i]; let j: i32 = 0;
+        while (j < 32) { buf.free(&p.*.models[j].id); buf.free(&p.*.models[j].label); buf.free(&p.*.models[j].value); j = j + 1; }
+        _zag_free(p.*.models as *i8); buf.free(&p.*.origin); buf.free(&p.*.url); buf.free(&p.*.label); buf.free(&p.*.document); buf.free(&p.*.last_error); buf.free(&p.*.evidence); buf.free(&p.*.recipes); buf.free(&p.*.manual_model); i = i + 1;
+    }
+    _zag_free(r.*.items as *i8); r.*.count = 0;
+}

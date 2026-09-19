@@ -1,0 +1,92 @@
+{
+  "scope": "Actual browser/agent.js in Chromium with IN-MEMORY DOM/network/storage fixtures. Administrator URLBlocklist blocks HTTP browser navigation. HTTP streaming tested separately with Node. NOT Tauri, WebKitGTK, actual persistent browser profiles, Zag, or live harness verification.",
+  "tests": [
+    {
+      "name": "login_form_sensitive_fields_excluded",
+      "status": "PASS",
+      "seconds": 0.07
+    },
+    {
+      "name": "generic_controls_observed",
+      "status": "PASS",
+      "seconds": 0.011
+    },
+    {
+      "name": "real_dom_incremental_unicode_stream",
+      "status": "PASS",
+      "seconds": 0.291
+    },
+    {
+      "name": "model_selection_precedes_submission",
+      "status": "PASS",
+      "seconds": 0.265
+    },
+    {
+      "name": "22_turn_browser_conversation_continuity",
+      "status": "PASS",
+      "seconds": 5.931
+    },
+    {
+      "name": "cancellation_stops_provider_generation",
+      "status": "PASS",
+      "seconds": 0.221
+    },
+    {
+      "name": "provider_quota_stops_without_retry",
+      "status": "PASS",
+      "seconds": 0.112
+    },
+    {
+      "name": "login_expiration_surfaces_auth_error",
+      "status": "PASS",
+      "seconds": 0.099
+    },
+    {
+      "name": "broken_stream_never_reports_success",
+      "status": "PASS",
+      "seconds": 0.15
+    },
+    {
+      "name": "response_rewrite_never_duplicates_text",
+      "status": "PASS",
+      "seconds": 0.29
+    },
+    {
+      "name": "websocket_metadata_and_dom_stream",
+      "status": "PASS",
+      "seconds": 0.274
+    },
+    {
+      "name": "eventsource_metadata_and_dom_stream",
+      "status": "PASS",
+      "seconds": 0.284
+    },
+    {
+      "name": "all_observations_remain_bounded_and_redacted",
+      "status": "PASS",
+      "seconds": 0.007
+    },
+    {
+      "name": "fixture_state_rehydration_rejects_stale_document_actions",
+      "status": "PASS",
+      "seconds": 0.571
+    },
+    {
+      "name": "sensitive_target_rechecked_at_execution",
+      "status": "PASS",
+      "seconds": 0.064
+    },
+    {
+      "name": "semantic_mapping_survives_fixture_redesign",
+      "status": "PASS",
+      "seconds": 0.84
+    },
+    {
+      "name": "fixture_state_containers_are_independent",
+      "status": "PASS",
+      "seconds": 0.356
+    }
+  ],
+  "passed": 17,
+  "failed": 0
+}

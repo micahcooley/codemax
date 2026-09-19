@@ -1,0 +1,98 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+// All filenames are application constants, beneath a host-created 0700 directory.
+fn path(root: []u8, name: []u8, out: *buf.Buffer) void {
+    buf.clear(out); buf.add(out, root); buf.add(out, "/"); buf.add(out, name); buf.byte(out, 0);
+}
+fn fd_write(fd: i64, bytes: []u8) bool {
+    let offset: i32 = 0; let calls: i32 = 0; let n: i32 = _zag_strlen(bytes);
+    while (offset < n && calls < 4096) {
+        let rc: i64 = _zag_raw_syscall(1, fd, _zag_slice_ptr(bytes[offset..n]) as i64, (n - offset) as i64, 0, 0, 0);
+        calls = calls + 1;
+        if (rc == 0 - 4) { continue; }
+        if (rc <= 0) { return false; }
+        offset = offset + rc as i32;
+    }
+    return offset == n;
+}
+fn close(fd: i64) void { let rc: i64 = _zag_raw_syscall(3, fd, 0, 0, 0, 0, 0); }
+fn load(root: []u8, name: []u8, out: *buf.Buffer) i32 {
+    let p: buf.Buffer = buf.make(4096); path(root, name, &p);
+    let fd: i64 = _zag_raw_syscall(2, p.data as i64, 524288 | 131072, 0, 0, 0, 0); buf.free(&p);
+    buf.clear(out);
+    if (fd == 0 - 2) { return 0; }
+    if (fd < 0) { return 0 - 1; }
+    let stat: *u32 = _zag_malloc(144) as *u32;
+    let rc: i64 = _zag_raw_syscall(5, fd, stat as i64, 0, 0, 0, 0);
+    let uid: i64 = _zag_raw_syscall(107, 0, 0, 0, 0, 0, 0);
+    let secure: bool = rc == 0 && (stat[6] & 61440) == 32768 && (stat[6] & 63) == 0 && stat[7] as i64 == uid;
+    _zag_free(stat as *i8);
+    if (!secure) { close(fd); return 0 - 1; }
+    let calls: i32 = 0;
+    while (out.*.len < out.*.cap && calls < 4096) {
+        let got: i64 = _zag_raw_syscall(0, fd, (out.*.data as i64) + out.*.len as i64, (out.*.cap - out.*.len) as i64, 0, 0, 0);
+        calls = calls + 1;
+        if (got == 0 - 4) { continue; }
+        if (got == 0) { close(fd); return 1; }
+        if (got < 0) { close(fd); return 0 - 1; }
+        out.*.len = out.*.len + got as i32;
+    }
+    close(fd); out.*.ok = 0; return 0 - 1;
+}
+fn save(root: []u8, name: []u8, bytes: []u8) bool {
+    let dest: buf.Buffer = buf.make(4096); let tmp: buf.Buffer = buf.make(4096);
+    path(root, name, &dest); buf.add(&tmp, root); buf.add(&tmp, "/.write-"); buf.add(&tmp, name); buf.byte(&tmp, 45);
+    let random: buf.Buffer = buf.make(16);
+    let got: i64 = _zag_raw_syscall(318, random.data as i64, 16, 0, 0, 0, 0);
+    if (got != 16) { buf.free(&random); buf.free(&dest); buf.free(&tmp); return false; }
+    let hex: []u8 = "0123456789abcdef"; let n: i32 = 0;
+    while (n < 16) { buf.byte(&tmp, hex[(random.data[n] / 16) as i32]); buf.byte(&tmp, hex[(random.data[n] % 16) as i32]); n = n + 1; }
+    buf.free(&random); buf.byte(&tmp, 0);
+    if (tmp.ok == 0 || dest.ok == 0) { buf.free(&dest); buf.free(&tmp); return false; }
+    // Exclusive random temporary file; stale crash files cannot block subsequent writes.
+    let fd: i64 = _zag_raw_syscall(2, tmp.data as i64, 1 | 64 | 128 | 131072 | 524288, 384, 0, 0, 0);
+    let ok: bool = fd >= 0;
+    if (ok) {
+        ok = fd_write(fd, bytes);
+        if (_zag_raw_syscall(74, fd, 0, 0, 0, 0, 0) != 0) { ok = false; }
+        close(fd);
+        if (ok) { ok = _zag_raw_syscall(82, tmp.data as i64, dest.data as i64, 0, 0, 0, 0) == 0; }
+        if (!ok) { let removed: i64 = _zag_raw_syscall(87, tmp.data as i64, 0, 0, 0, 0, 0); }
+    }
+    // Persist the rename itself, not just the file's contents.
+    if (ok) {
+        let dir: buf.Buffer = buf.make(4096); buf.add(&dir, root); buf.byte(&dir, 0);
+        let dfd: i64 = _zag_raw_syscall(2, dir.data as i64, 65536 | 131072 | 524288, 0, 0, 0, 0);
+        if (dfd < 0) { ok = false; } else { if (_zag_raw_syscall(74, dfd, 0, 0, 0, 0, 0) != 0) { ok = false; } close(dfd); }
+        buf.free(&dir);
+    }
+    buf.free(&dest); buf.free(&tmp); return ok;
+}
+
+// Linux x86-64 stat offsets; root must already exist and be private to this UID.
+fn secure_root(root: []u8) bool {
+    if (_zag_strlen(root) < 2 || _zag_strlen(root) > 3800 || root[0] != 47) { return false; }
+    let p: buf.Buffer = buf.make(4096); buf.add(&p, root); buf.byte(&p, 0);
+    let fd: i64 = _zag_raw_syscall(2, p.data as i64, 65536 | 131072 | 524288, 0, 0, 0, 0); buf.free(&p);
+    if (fd < 0) { return false; }
+    let stat: *u32 = _zag_malloc(144) as *u32;
+    let rc: i64 = _zag_raw_syscall(5, fd, stat as i64, 0, 0, 0, 0);
+    let uid: i64 = _zag_raw_syscall(107, 0, 0, 0, 0, 0, 0);
+    let ok: bool = rc == 0 && (stat[6] & 61440) == 16384 && (stat[6] & 511) == 448 && stat[7] as i64 == uid;
+    _zag_free(stat as *i8); close(fd); return ok;
+}
+
+fn lock_state(root: []u8) i64 {
+    let p: buf.Buffer = buf.make(4096); path(root, "instance.lock", &p);
+    if (p.ok == 0) { buf.free(&p); return 0 - 1; }
+    let fd: i64 = _zag_raw_syscall(2, p.data as i64, 524288 | 131072 | 64 | 2, 384, 0, 0, 0); buf.free(&p);
+    if (fd < 0) { return 0 - 1; }
+    let stat: *u32 = _zag_malloc(144) as *u32;
+    let rc: i64 = _zag_raw_syscall(5, fd, stat as i64, 0, 0, 0, 0);
+    let uid: i64 = _zag_raw_syscall(107, 0, 0, 0, 0, 0, 0);
+    let secure: bool = rc == 0 && (stat[6] & 61440) == 32768 && (stat[6] & 63) == 0 && stat[7] as i64 == uid;
+    _zag_free(stat as *i8);
+    if (!secure) { close(fd); return 0 - 1; }
+    let locked: i64 = _zag_raw_syscall(73, fd, 2 | 4, 0, 0, 0, 0);
+    if (locked != 0) { close(fd); return 0 - 1; } return fd;
+}

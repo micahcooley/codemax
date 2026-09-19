@@ -1,0 +1,46 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Local test provider</title>
+<style>
+:root{font-family:system-ui,sans-serif;color-scheme:dark;background:#15181d;color:#d9dfe8;font-size:14px}*{box-sizing:border-box}body{margin:0}header{height:60px;border-bottom:1px solid #30343c;display:flex;align-items:center;gap:16px;padding:0 24px}h1{font-size:15px;margin:0}small{color:#9ba7b6}main{max-width:900px;margin:auto;padding:24px}label{display:block;margin:12px 0 6px}input,textarea,select,button{font:inherit;border:1px solid #404854;border-radius:5px;padding:9px;background:#20262f;color:inherit}button{cursor:pointer}button:disabled{opacity:.45;cursor:default}button.primary{background:#41567f;border-color:#607fb8}#login{max-width:420px;margin:48px auto}#login input{width:100%}#chat[hidden],#login[hidden],[hidden]{display:none!important}.toolbar{display:flex;align-items:center;gap:12px;margin-bottom:20px}.toolbar label{display:inline;margin:0}#messages{height:420px;overflow:auto;border:1px solid #303844;background:#191e26;border-radius:7px;padding:16px}.message{padding:12px;white-space:pre-wrap;line-height:1.6;border-bottom:1px solid #29323e}.user{color:#aebdda}.assistant{color:#dce5f1}textarea{width:100%;resize:vertical;min-height:90px;margin-top:14px}.actions{display:flex;justify-content:space-between;margin-top:10px;gap:12px}#status{color:#c9a979}.badge{margin-left:auto;border:1px solid #4a5461;padding:4px 7px;border-radius:4px;font-size:11px;letter-spacing:.06em}body.redesign .toolbar{flex-direction:row-reverse}body.redesign #messages{border-radius:0}body.redesign .primary{border-radius:0}
+</style></head><body>
+<header><h1>Local test provider</h1><small>Deterministic browser fixture</small><span class="badge">NOT A REAL MODEL</span></header>
+<main><form id="login"><h2>Fixture login</h2><p>No real account is used. This form exists to test instrumentation privacy.</p><label for="email">Email</label><input id="email" type="email" autocomplete="email" value="private@example.test"><label for="password">Password</label><input id="password" type="password" value="must-not-be-captured-78325"><label for="cc">Card number (privacy canary)</label><input id="cc" autocomplete="cc-number" value="4111111111111111"><button class="primary" type="submit" style="margin-top:18px">Sign in to fixture</button></form>
+<section id="chat" hidden><div class="toolbar"><button id="newchat" aria-label="New chat">New chat</button><label for="model">Model</label><select id="model"><option value="mock-small">Mock Small</option><option value="mock-reasoner">Mock Reasoner</option><option value="mock-disabled" disabled>Unavailable Mock</option></select><label for="reasoning">Reasoning</label><select id="reasoning"><option value="normal">Normal</option><option value="thinking">Thinking</option></select></div>
+<div id="messages" role="log" aria-label="Assistant responses" aria-live="polite" aria-busy="false"></div><textarea id="prompt" aria-label="Message" placeholder="Send a test message"></textarea>
+<div class="actions"><div><label for="mode" style="display:inline">Scenario</label> <select id="mode" aria-label="Test scenario"><option>normal</option><option>slow</option><option>broken</option><option>quota</option><option>expired</option><option>websocket</option><option>eventsource</option><option>rewrite</option></select></div><div><button id="stop" aria-label="Stop generating" hidden>Stop</button> <button id="send" class="primary" aria-label="Send message" disabled>Send</button></div></div><p id="status" role="status"></p></section></main>
+<script>
+const $ = id => document.getElementById(id); let controller=null, connection=null, turn=0;
+let history; try { history=JSON.parse(localStorage.getItem('mock-history')||'[]'); } catch { history=[]; }
+function show(){ $('login').hidden=localStorage.getItem('mock-login')==='true'; $('chat').hidden=!$('login').hidden; }
+function add(role,text){ const e=document.createElement('div');e.className='message '+role;if(role==='assistant')e.setAttribute('data-bridge-assistant','');e.textContent=text;$('messages').append(e);return e; }
+for(const message of history.slice(-40)) add(message.role,message.text);
+$('login').onsubmit=e=>{e.preventDefault();localStorage.setItem('mock-login','true');show();};
+$('prompt').oninput=()=>{$('send').disabled=!$('prompt').value.trim()||$('messages').getAttribute('aria-busy')==='true';};
+$('newchat').onclick=()=>{if(controller||connection)return;$('messages').replaceChildren();history=[];turn=0;localStorage.removeItem('mock-history');};
+function busy(value){$('messages').setAttribute('aria-busy',String(value));$('stop').hidden=!value;$('send').disabled=value||!$('prompt').value.trim();}
+$('stop').onclick=()=>{controller?.abort();connection?.close();controller=null;connection=null;busy(false);$('status').textContent='Cancelled by user';};
+$('send').onclick=async()=>{
+ const prompt=$('prompt').value;if(!prompt.trim()||controller||connection)return;
+ $('status').textContent='';add('user',prompt);history.push({role:'user',text:prompt});$('prompt').value='';busy(true);turn++;
+ const output=add('assistant',''); const mode=$('mode').value;
+ const append=text=>{output.textContent+=text;$('messages').scrollTop=$('messages').scrollHeight;};
+ const done=()=>{history.push({role:'assistant',text:output.textContent});localStorage.setItem('mock-history',JSON.stringify(history.slice(-40)));controller=null;connection=null;busy(false);};
+ if(mode==='websocket'||mode==='eventsource'){
+  connection=mode==='websocket'?new WebSocket('ws://'+location.host+'/ws?turn='+turn):new EventSource('/stream?turn='+turn);
+  connection.onmessage=event=>{if(event.data==='[DONE]'){connection.close();done();}else append(JSON.parse(event.data).text);};
+  connection.onerror=()=>{$('status').textContent='Stream error';connection?.close();done();};return;
+ }
+ controller=new AbortController();
+ try{
+  const response=await fetch('/stream',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer must-not-be-captured-98276'},body:JSON.stringify({prompt,turn,mode,model:$('model').value,stream:true,access_token:'must-not-be-captured-111'}),signal:controller.signal});
+  if(!response.ok){$('status').textContent=response.status===429?'Rate limit reached':response.status===401?'Sign in required':'Error';return;}
+  const reader=response.body.getReader(),decoder=new TextDecoder();let pending='';
+  for(;;){const{done,value}=await reader.read();if(done)break;pending+=decoder.decode(value,{stream:true});let end;
+   while((end=pending.indexOf('\n\n'))!==-1){const event=pending.slice(0,end);pending=pending.slice(end+2);if(event.startsWith('data: ')&&event!=='data: [DONE]'){append(JSON.parse(event.slice(6)).text);}}
+  }
+  if(mode==='rewrite'){output.textContent='Replacement, not append';await new Promise(r=>setTimeout(r,80));}
+ }catch(error){$('status').textContent=error.name==='AbortError'?'Cancelled by user':'Stream error';}
+ finally{done();}
+};
+if(new URL(location.href).searchParams.get('redesign')){document.body.classList.add('redesign');$('prompt').placeholder='Type a message';$('send').textContent='Submit';}
+show();
+</script></body></html>

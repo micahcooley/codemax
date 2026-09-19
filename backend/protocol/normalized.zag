@@ -1,0 +1,247 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../core/json.zag") as json
+@import("../security/validation.zag") as validation
+struct Request {
+    id: buf.Buffer, model: buf.Buffer, session_hint: buf.Buffer, previous: buf.Buffer,
+    canonical: buf.Buffer, prompt: buf.Buffer, tools: buf.Buffer, tool_names: buf.Buffer,
+    error: buf.Buffer, nonce: buf.Buffer, message_count: i32, protocol: i32,
+    stream: bool, max_output: i32, has_tools: bool, require_tool: bool, explicit_session: bool,
+}
+fn make() Request {
+    return Request{.id = buf.make(96), .model = buf.make(256), .session_hint = buf.make(96), .previous = buf.make(96),
+        .canonical = buf.make(262144), .prompt = buf.make(131072), .tools = buf.make(65536), .tool_names = buf.make(8192),
+        .error = buf.make(128), .nonce = buf.make(96), .message_count = 0, .protocol = 1,
+        .stream = false, .max_output = 65536, .has_tools = false, .require_tool = false, .explicit_session = false};
+}
+fn fail(r: *Request, error: []u8) void { if (r.*.error.len == 0) { buf.copy(&r.*.error, error); } }
+fn message(role: []u8, content: []u8, calls: []u8, tool_id: []u8, out: *buf.Buffer) void {
+    buf.add(out, "{\"role\":"); buf.json(out, role); buf.add(out, ",\"content\":"); buf.json(out, content);
+    buf.add(out, ",\"tool_calls\":"); buf.add(out, calls); buf.add(out, ",\"tool_call_id\":"); buf.json(out, tool_id); buf.add(out, "}\n");
+}
+fn add_message(r: *Request, role: []u8, content: []u8, calls: []u8, tool_id: []u8) void {
+    if (r.*.message_count >= 256) { fail(r, "MESSAGE_LIMIT"); return; }
+    message(role, content, calls, tool_id, &r.*.canonical); r.*.message_count = r.*.message_count + 1;
+    if (r.*.canonical.ok == 0) { fail(r, "CONTEXT_LIMIT"); }
+}
+fn content_text(d: *json.Document, content: i32, out: *buf.Buffer) bool {
+    buf.clear(out);
+    if (content < 0 || json.kind(d, content) == 7) { return true; }
+    if (json.kind(d, content) == 3) { json.text(d, content, out); return out.*.ok != 0; }
+    if (json.kind(d, content) != 2) { return false; }
+    let item: i32 = content + 1; let text: buf.Buffer = buf.make(131072); let ok: bool = true;
+    while (item < d.*.tokens[content].next) {
+        let t: i32 = json.get(d, item, "type");
+        if (!json.is_text(d, t, "text") && !json.is_text(d, t, "input_text") && !json.is_text(d, t, "output_text")) { ok = false; break; }
+        json.field_text(d, item, "text", &text);
+        if (text.ok == 0) { ok = false; break; }
+        buf.add(out, buf.view(&text)); item = d.*.tokens[item].next;
+    }
+    buf.free(&text); return ok && out.*.ok != 0;
+}
+fn normalized_call(d: *json.Document, call: i32, protocol: i32, out: *buf.Buffer) bool {
+    let id: buf.Buffer = buf.make(96); let name: buf.Buffer = buf.make(96); let arguments: buf.Buffer = buf.make(65536);
+    let fnobj: i32 = call; let input: i32 = 0 - 1;
+    if (protocol == 1) {
+        fnobj = json.get(d, call, "function"); input = json.get(d, fnobj, "arguments"); json.field_text(d, call, "id", &id);
+    } else if (protocol == 2) { input = json.get(d, call, "input"); json.field_text(d, call, "id", &id); }
+    else { input = json.get(d, call, "arguments"); json.field_text(d, call, "call_id", &id); }
+    json.field_text(d, fnobj, "name", &name); let ok: bool = id.ok != 0 && name.ok != 0 && validation.safe_id(buf.view(&id)) && validation.safe_id(buf.view(&name));
+    if (json.kind(d, input) == 3) {
+        let encoded: buf.Buffer = buf.make(65536); json.text(d, input, &encoded); let inner: json.Document = json.parse(buf.view(&encoded));
+        if (encoded.ok == 0 || inner.ok == 0 || json.kind(&inner, 0) != 1) { ok = false; } else { json.canonical(&inner, 0, &arguments); }
+        json.free(&inner); buf.free(&encoded);
+    } else if (json.kind(d, input) == 1) { json.canonical(d, input, &arguments); }
+    else { ok = false; }
+    if (ok && arguments.ok != 0) {
+        buf.add(out, "{\"id\":"); buf.json(out, buf.view(&id)); buf.add(out, ",\"name\":"); buf.json(out, buf.view(&name));
+        buf.add(out, ",\"arguments\":"); buf.add(out, buf.view(&arguments)); buf.byte(out, 125);
+    } else { ok = false; }
+    buf.free(&id); buf.free(&name); buf.free(&arguments); return ok;
+}
+fn normalize_message(r: *Request, d: *json.Document, item: i32) void {
+    let role: buf.Buffer = buf.make(32); let text: buf.Buffer = buf.make(131072); let calls: buf.Buffer = buf.make(65536); let tool_id: buf.Buffer = buf.make(96);
+    json.field_text(d, item, "role", &role);
+    if (role.ok == 0 || (!buf.eq(buf.view(&role), "system") && !buf.eq(buf.view(&role), "developer") && !buf.eq(buf.view(&role), "user") && !buf.eq(buf.view(&role), "assistant") && !buf.eq(buf.view(&role), "tool"))) {
+        fail(r, "INVALID_ROLE");
+    } else {
+        let content: i32 = json.get(d, item, "content"); let count: i32 = 0; buf.byte(&calls, 91);
+        if (r.*.protocol == 2 && json.kind(d, content) == 2) {
+            let block: i32 = content + 1; let part: buf.Buffer = buf.make(131072);
+            while (block < d.*.tokens[content].next) {
+                let type: i32 = json.get(d, block, "type");
+                if (json.is_text(d, type, "text")) {
+                    json.field_text(d, block, "text", &part); if (part.ok == 0) { fail(r, "INVALID_CONTENT"); }
+                    buf.add(&text, buf.view(&part));
+                } else if (json.is_text(d, type, "tool_use") && buf.eq(buf.view(&role), "assistant")) {
+                    if (count > 0) { buf.byte(&calls, 44); }
+                    if (!normalized_call(d, block, 2, &calls)) { fail(r, "INVALID_TOOL_CALL"); } count = count + 1;
+                } else if (json.is_text(d, type, "tool_result") && buf.eq(buf.view(&role), "user")) {
+                    json.field_text(d, block, "tool_use_id", &tool_id);
+                    if (!content_text(d, json.get(d, block, "content"), &part) || tool_id.ok == 0 || !validation.safe_id(buf.view(&tool_id))) { fail(r, "INVALID_TOOL_RESULT"); }
+                    // Tool result messages are their own normalized records.
+                    add_message(r, "tool", buf.view(&part), "[]", buf.view(&tool_id)); buf.clear(&tool_id);
+                } else { fail(r, "UNSUPPORTED_CONTENT"); }
+                block = d.*.tokens[block].next;
+            }
+            buf.free(&part);
+        } else if (!content_text(d, content, &text)) { fail(r, "UNSUPPORTED_CONTENT"); }
+        let requested_calls: i32 = json.get(d, item, "tool_calls");
+        if (requested_calls >= 0 && r.*.protocol == 1) {
+            if (json.kind(d, requested_calls) != 2 || d.*.tokens[requested_calls].size > 16 || !buf.eq(buf.view(&role), "assistant")) { fail(r, "INVALID_TOOL_CALLS"); }
+            else {
+                let call: i32 = requested_calls + 1;
+                while (call < d.*.tokens[requested_calls].next) {
+                    if (count > 0) { buf.byte(&calls, 44); } if (!normalized_call(d, call, 1, &calls)) { fail(r, "INVALID_TOOL_CALL"); }
+                    count = count + 1; call = d.*.tokens[call].next;
+                }
+            }
+        }
+        buf.byte(&calls, 93);
+        if (buf.eq(buf.view(&role), "tool")) {
+            json.field_text(d, item, "tool_call_id", &tool_id);
+            if (tool_id.ok == 0 || !validation.safe_id(buf.view(&tool_id))) { fail(r, "INVALID_TOOL_RESULT"); }
+        }
+        if (text.ok == 0 || calls.ok == 0) { fail(r, "CONTEXT_LIMIT"); }
+        if (text.len > 0 || count > 0 || r.*.protocol != 2) { add_message(r, buf.view(&role), buf.view(&text), buf.view(&calls), buf.view(&tool_id)); }
+    }
+    buf.free(&role); buf.free(&text); buf.free(&calls); buf.free(&tool_id);
+}
+fn decode_tools(r: *Request, d: *json.Document) void {
+    let array: i32 = json.get(d, 0, "tools"); buf.copy(&r.*.tool_names, "|"); buf.clear(&r.*.tools); buf.byte(&r.*.tools, 91);
+    if (array >= 0) {
+        if (json.kind(d, array) != 2 || d.*.tokens[array].size > 32) { fail(r, "TOOL_LIMIT"); }
+        else {
+            let i: i32 = array + 1; let count: i32 = 0;
+            let name: buf.Buffer = buf.make(96); let key: buf.Buffer = buf.make(100);
+            while (i < d.*.tokens[array].next) {
+                let object: i32 = i; let schema_key: []u8 = "input_schema";
+                if (r.*.protocol == 1) {
+                    if (!json.is_text(d, json.get(d, i, "type"), "function")) { fail(r, "UNSUPPORTED_TOOL"); }
+                    object = json.get(d, i, "function"); schema_key = "parameters";
+                } else if (r.*.protocol == 3) {
+                    if (!json.is_text(d, json.get(d, i, "type"), "function")) { fail(r, "UNSUPPORTED_TOOL"); }
+                    schema_key = "parameters";
+                }
+                json.field_text(d, object, "name", &name); let schema: i32 = json.get(d, object, schema_key);
+                buf.copy(&key, "|"); buf.add(&key, buf.view(&name)); buf.add(&key, "|");
+                if (name.ok == 0 || !validation.safe_id(buf.view(&name)) || json.kind(d, schema) != 1 || buf.find(buf.view(&r.*.tool_names), buf.view(&key), 0) >= 0) { fail(r, "INVALID_TOOL"); }
+                else {
+                    if (count > 0) { buf.byte(&r.*.tools, 44); }
+                    buf.add(&r.*.tools, "{\"name\":"); buf.json(&r.*.tools, buf.view(&name));
+                    buf.add(&r.*.tools, ",\"description\":"); let desc: i32 = json.get(d, object, "description");
+                    if (desc < 0) { buf.add(&r.*.tools, "\"\""); } else if (json.kind(d, desc) != 3) { fail(r, "INVALID_TOOL"); } else { json.canonical(d, desc, &r.*.tools); }
+                    buf.add(&r.*.tools, ",\"input_schema\":"); json.canonical(d, schema, &r.*.tools); buf.byte(&r.*.tools, 125);
+                    buf.add(&r.*.tool_names, buf.view(&name)); buf.byte(&r.*.tool_names, 124); count = count + 1;
+                }
+                i = d.*.tokens[i].next;
+            }
+            r.*.has_tools = count > 0; buf.free(&name); buf.free(&key);
+        }
+    }
+    buf.byte(&r.*.tools, 93);
+    let choice: i32 = json.get(d, 0, "tool_choice");
+    if (choice >= 0) {
+        if (json.is_text(d, choice, "none")) { r.*.has_tools = false; }
+        else if (json.is_text(d, choice, "required")) { r.*.require_tool = true; }
+        else if (json.is_text(d, choice, "auto")) { r.*.require_tool = false; }
+        else if (json.kind(d, choice) == 1 && r.*.protocol == 2 && json.is_text(d, json.get(d, choice, "type"), "auto")) { r.*.require_tool = false; }
+        else if (json.kind(d, choice) == 1 && r.*.protocol == 2 && json.is_text(d, json.get(d, choice, "type"), "any")) { r.*.require_tool = true; }
+        else { fail(r, "UNSUPPORTED_TOOL_CHOICE"); }
+    }
+    if (r.*.require_tool && !r.*.has_tools) { fail(r, "TOOLS_REQUIRED"); }
+    if (r.*.tools.ok == 0 || r.*.tool_names.ok == 0) { fail(r, "TOOL_LIMIT"); }
+}
+fn allowed_keys(d: *json.Document, protocol: i32) bool {
+    let key: buf.Buffer = buf.make(128); let i: i32 = 1; let valid: bool = true;
+    while (i < d.*.tokens[0].next && valid) {
+        json.text(d, i, &key); let name: []u8 = buf.view(&key);
+        let common: bool = buf.eq(name, "model") || buf.eq(name, "stream") || buf.eq(name, "tools") || buf.eq(name, "tool_choice") || buf.eq(name, "metadata");
+        let protocol_key: bool = false;
+        if (protocol == 1) { protocol_key = buf.eq(name, "messages") || buf.eq(name, "max_tokens") || buf.eq(name, "max_completion_tokens") || buf.eq(name, "n"); }
+        if (protocol == 2) { protocol_key = buf.eq(name, "messages") || buf.eq(name, "system") || buf.eq(name, "max_tokens"); }
+        if (protocol == 3) { protocol_key = buf.eq(name, "input") || buf.eq(name, "instructions") || buf.eq(name, "previous_response_id") || buf.eq(name, "max_output_tokens"); }
+        valid = key.ok != 0 && (common || protocol_key); i = d.*.tokens[i + 1].next;
+    }
+    buf.free(&key); return valid;
+}
+
+fn decode(r: *Request, body: []u8, protocol: i32, request_id: []u8, session_header: []u8) void {
+    r.*.protocol = protocol; buf.copy(&r.*.id, request_id); buf.clear(&r.*.canonical); buf.clear(&r.*.error); r.*.message_count = 0;
+    let d: json.Document = json.parse(body);
+    if (d.ok == 0 || json.kind(&d, 0) != 1) { fail(r, "INVALID_JSON"); json.free(&d); return; }
+    if (!allowed_keys(&d, protocol)) { fail(r, "UNSUPPORTED_PARAMETER"); json.free(&d); return; }
+    json.field_text(&d, 0, "model", &r.*.model);
+    if (r.*.model.ok == 0 || r.*.model.len == 0) { fail(r, "MODEL_REQUIRED"); }
+    let stream: i32 = json.get(&d, 0, "stream"); r.*.stream = json.kind(&d, stream) == 5;
+    if (stream >= 0 && json.kind(&d, stream) != 5 && json.kind(&d, stream) != 6) { fail(r, "INVALID_STREAM"); }
+    let maximum: i32 = json.get(&d, 0, "max_tokens");
+    if (protocol == 3) { maximum = json.get(&d, 0, "max_output_tokens"); }
+    if (protocol == 1 && maximum < 0) { maximum = json.get(&d, 0, "max_completion_tokens"); }
+    let amount: i64 = 16384; if (maximum >= 0) { amount = json.number(&d, maximum, 0); }
+    if (protocol == 2 && maximum < 0) { fail(r, "MAX_TOKENS_REQUIRED"); }
+    if (protocol == 1 && json.get(&d, 0, "max_tokens") >= 0 && json.get(&d, 0, "max_completion_tokens") >= 0) { fail(r, "CONFLICTING_OUTPUT_BUDGET"); }
+    if (amount < 1 || amount > 65536) { fail(r, "INVALID_OUTPUT_BUDGET"); } else { r.*.max_output = amount as i32; }
+    // These controls cannot be truthfully enforced on an arbitrary website.
+    if (json.get(&d, 0, "temperature") >= 0 || json.get(&d, 0, "top_p") >= 0 || json.get(&d, 0, "reasoning") >= 0 ||
+        json.get(&d, 0, "thinking") >= 0 || json.get(&d, 0, "response_format") >= 0 || json.get(&d, 0, "stop") >= 0 ||
+        json.get(&d, 0, "logprobs") >= 0 || json.get(&d, 0, "seed") >= 0 || json.get(&d, 0, "attachments") >= 0) { fail(r, "UNSUPPORTED_PARAMETER"); }
+    let variants: i32 = json.get(&d, 0, "n"); if (variants >= 0 && json.number(&d, variants, 0) != 1) { fail(r, "UNSUPPORTED_VARIANTS"); }
+    buf.copy(&r.*.session_hint, session_header);
+    if (r.*.session_hint.len == 0) {
+        let meta: i32 = json.get(&d, 0, "metadata"); let hint: i32 = json.get(&d, meta, "bridge_session");
+        if (hint >= 0) { json.text(&d, hint, &r.*.session_hint); }
+    }
+    r.*.explicit_session = r.*.session_hint.len > 0;
+    if (r.*.session_hint.ok == 0 || (r.*.explicit_session && !validation.safe_id(buf.view(&r.*.session_hint)))) { fail(r, "INVALID_SESSION"); }
+    if (protocol == 2 || protocol == 3) {
+        let system: i32 = json.get(&d, 0, "system"); if (protocol == 3) { system = json.get(&d, 0, "instructions"); }
+        if (system >= 0) { let text: buf.Buffer = buf.make(131072); if (!content_text(&d, system, &text)) { fail(r, "UNSUPPORTED_SYSTEM"); } else { add_message(r, "system", buf.view(&text), "[]", ""); } buf.free(&text); }
+    }
+    let messages: i32 = json.get(&d, 0, "messages");
+    if (protocol == 3) {
+        messages = json.get(&d, 0, "input"); let previous: i32 = json.get(&d, 0, "previous_response_id");
+        if (previous >= 0 && json.kind(&d, previous) != 7) { json.text(&d, previous, &r.*.previous); if (r.*.previous.ok == 0 || !validation.safe_id(buf.view(&r.*.previous))) { fail(r, "INVALID_PREVIOUS_RESPONSE"); } }
+    }
+    if (protocol == 3 && json.kind(&d, messages) == 3) {
+        let text: buf.Buffer = buf.make(131072); json.text(&d, messages, &text);
+        if (text.ok == 0) { fail(r, "CONTEXT_LIMIT"); } else { add_message(r, "user", buf.view(&text), "[]", ""); } buf.free(&text);
+    } else if (json.kind(&d, messages) != 2 || d.tokens[messages].size > 256 || d.tokens[messages].size == 0) { fail(r, "MESSAGES_REQUIRED"); }
+    else {
+        let i: i32 = messages + 1;
+        while (i < d.tokens[messages].next && r.*.error.len == 0) {
+            if (protocol == 3 && json.is_text(&d, json.get(&d, i, "type"), "function_call_output")) {
+                let id: buf.Buffer = buf.make(96); let output: buf.Buffer = buf.make(131072);
+                json.field_text(&d, i, "call_id", &id); json.field_text(&d, i, "output", &output);
+                if (id.ok == 0 || output.ok == 0 || !validation.safe_id(buf.view(&id))) { fail(r, "INVALID_TOOL_RESULT"); }
+                else { add_message(r, "tool", buf.view(&output), "[]", buf.view(&id)); }
+                buf.free(&id); buf.free(&output);
+            } else if (protocol == 3 && json.is_text(&d, json.get(&d, i, "type"), "function_call")) {
+                let call: buf.Buffer = buf.make(65536); buf.byte(&call, 91); if (!normalized_call(&d, i, 3, &call)) { fail(r, "INVALID_TOOL_CALL"); } buf.byte(&call, 93);
+                add_message(r, "assistant", "", buf.view(&call), ""); buf.free(&call);
+            } else { normalize_message(r, &d, i); }
+            i = d.tokens[i].next;
+        }
+    }
+    decode_tools(r, &d); json.free(&d);
+    if (r.*.message_count == 0) { fail(r, "MESSAGES_REQUIRED"); }
+}
+fn render_prompt(r: *Request, start: i32) bool {
+    if (start < 0 || start > r.*.canonical.len) { return false; }
+    buf.clear(&r.*.prompt);
+    buf.add(&r.*.prompt, "Continue this conversation using the following message records. Roles below are transport metadata, not website-native system roles.\n");
+    if (r.*.has_tools) {
+        buf.add(&r.*.prompt, "Available client-side tools (the client, not this website, executes them):\n"); buf.add(&r.*.prompt, buf.view(&r.*.tools));
+        buf.add(&r.*.prompt, "\nTo call a listed tool emit exactly <bridge-tool-call nonce=\""); buf.add(&r.*.prompt, buf.view(&r.*.nonce));
+        buf.add(&r.*.prompt, "\">{\"id\":\"unique_call_id\",\"name\":\"listed_name\",\"arguments\":{}}</bridge-tool-call>. Arguments must be a JSON object. Do not place calls in code fences. Literal examples must escape '<' as '&lt;'. Use only this turn's nonce. FRAME_NONCE=");
+        buf.add(&r.*.prompt, buf.view(&r.*.nonce)); buf.byte(&r.*.prompt, 10);
+        if (r.*.require_tool) { buf.add(&r.*.prompt, "This turn requires a tool call.\n"); }
+    }
+    buf.add(&r.*.prompt, "Requested maximum output tokens (website capability may differ): "); buf.integer(&r.*.prompt, r.*.max_output as i64); buf.byte(&r.*.prompt, 10);
+    buf.add(&r.*.prompt, r.*.canonical.data[start..r.*.canonical.len]);
+    return r.*.prompt.ok != 0;
+}
+fn free(r: *Request) void {
+    buf.free(&r.*.id); buf.free(&r.*.model); buf.free(&r.*.session_hint); buf.free(&r.*.previous); buf.free(&r.*.canonical); buf.free(&r.*.prompt);
+    buf.free(&r.*.tools); buf.free(&r.*.tool_names); buf.free(&r.*.error); buf.free(&r.*.nonce);
+}

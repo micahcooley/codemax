@@ -1,0 +1,192 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../core/json.zag") as json
+@import("../server/sse.zag") as sse
+@import("normalized.zag") as normalized
+struct Writer { sequence: i64, next_block: i32, text_block: i32, text_open: bool, next_item: i32, message_item: i32, calls: i32, created: i64, }
+fn make(created: i64) Writer { return Writer{.sequence = 0, .next_block = 0, .text_block = 0 - 1, .text_open = false, .next_item = 0, .message_item = 0 - 1, .calls = 0, .created = created}; }
+fn event(w: *Writer, name: []u8, out: *buf.Buffer) void {
+    buf.clear(out); buf.add(out, "{\"type\":"); buf.json(out, name); buf.add(out, ",\"sequence_number\":"); buf.integer(out, w.*.sequence); w.*.sequence = w.*.sequence + 1;
+}
+fn message_id(r: *normalized.Request, out: *buf.Buffer) void { buf.add(out, "msg_"); buf.add(out, buf.view(&r.*.id)); }
+fn call_item_id(r: *normalized.Request, index: i32, out: *buf.Buffer) void { buf.add(out, "fc_"); buf.add(out, buf.view(&r.*.id)); buf.byte(out, 95); buf.integer(out, index as i64); }
+fn chat_prefix(r: *normalized.Request, created: i64, out: *buf.Buffer) void {
+    buf.add(out, "{\"id\":"); buf.json(out, buf.view(&r.*.id)); buf.add(out, ",\"object\":\"chat.completion.chunk\",\"created\":"); buf.integer(out, created);
+    buf.add(out, ",\"model\":"); buf.json(out, buf.view(&r.*.model)); buf.add(out, ",\"choices\":[{\"index\":0,\"delta\":");
+}
+fn response_object(r: *normalized.Request, created: i64, status: []u8, output: []u8, out: *buf.Buffer) void {
+    buf.add(out, "{\"id\":"); buf.json(out, buf.view(&r.*.id)); buf.add(out, ",\"object\":\"response\",\"created_at\":"); buf.integer(out, created);
+    buf.add(out, ",\"status\":"); buf.json(out, status); buf.add(out, ",\"model\":"); buf.json(out, buf.view(&r.*.model));
+    buf.add(out, ",\"output\":"); buf.add(out, output); buf.add(out, ",\"error\":null,\"incomplete_details\":null,\"usage\":null,\"store\":false,\"parallel_tool_calls\":false,\"metadata\":{\"bridge_session\":");
+    buf.json(out, buf.view(&r.*.session_hint)); buf.add(out, "}}");
+}
+fn text_item(r: *normalized.Request, text: []u8, status: []u8, out: *buf.Buffer) void {
+    let id: buf.Buffer = buf.make(128); message_id(r, &id);
+    buf.add(out, "{\"type\":\"message\",\"id\":"); buf.json(out, buf.view(&id)); buf.add(out, ",\"status\":"); buf.json(out, status);
+    buf.add(out, ",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"annotations\":[],\"text\":"); buf.json(out, text); buf.add(out, "}]}"); buf.free(&id);
+}
+fn begin(w: *Writer, r: *normalized.Request, out: *buf.Buffer) void {
+    let b: buf.Buffer = buf.make(65536);
+    if (r.*.protocol == 1) {
+        chat_prefix(r, w.*.created, &b); buf.add(&b, "{\"role\":\"assistant\"},\"finish_reason\":null}]}"); sse.emit(out, "", buf.view(&b));
+    } else if (r.*.protocol == 2) {
+        buf.add(&b, "{\"type\":\"message_start\",\"message\":{\"id\":"); buf.json(&b, buf.view(&r.*.id));
+        buf.add(&b, ",\"type\":\"message\",\"role\":\"assistant\",\"model\":"); buf.json(&b, buf.view(&r.*.model));
+        buf.add(&b, ",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":"); buf.integer(&b, r.*.prompt.len as i64); buf.add(&b, ",\"output_tokens\":0}}}");
+        sse.emit(out, "message_start", buf.view(&b));
+    } else {
+        event(w, "response.created", &b); buf.add(&b, ",\"response\":"); response_object(r, w.*.created, "in_progress", "[]", &b); buf.byte(&b, 125); sse.emit(out, "response.created", buf.view(&b));
+        event(w, "response.in_progress", &b); buf.add(&b, ",\"response\":"); response_object(r, w.*.created, "in_progress", "[]", &b); buf.byte(&b, 125); sse.emit(out, "response.in_progress", buf.view(&b));
+    }
+    if (b.ok == 0) { out.*.ok = 0; } buf.free(&b);
+}
+fn close_anthropic_text(w: *Writer, out: *buf.Buffer) void {
+    if (!w.*.text_open) { return; }
+    let b: buf.Buffer = buf.make(256); buf.add(&b, "{\"type\":\"content_block_stop\",\"index\":"); buf.integer(&b, w.*.text_block as i64); buf.byte(&b, 125);
+    sse.emit(out, "content_block_stop", buf.view(&b)); buf.free(&b); w.*.text_open = false;
+}
+fn text(w: *Writer, r: *normalized.Request, delta: []u8, out: *buf.Buffer) void {
+    let b: buf.Buffer = buf.make(65536);
+    if (r.*.protocol == 1) {
+        chat_prefix(r, w.*.created, &b); buf.add(&b, "{\"content\":"); buf.json(&b, delta); buf.add(&b, "},\"finish_reason\":null}]}"); sse.emit(out, "", buf.view(&b));
+    } else if (r.*.protocol == 2) {
+        if (!w.*.text_open) {
+            w.*.text_block = w.*.next_block; w.*.next_block = w.*.next_block + 1; w.*.text_open = true;
+            buf.add(&b, "{\"type\":\"content_block_start\",\"index\":"); buf.integer(&b, w.*.text_block as i64); buf.add(&b, ",\"content_block\":{\"type\":\"text\",\"text\":\"\"}}");
+            sse.emit(out, "content_block_start", buf.view(&b)); buf.clear(&b);
+        }
+        buf.add(&b, "{\"type\":\"content_block_delta\",\"index\":"); buf.integer(&b, w.*.text_block as i64); buf.add(&b, ",\"delta\":{\"type\":\"text_delta\",\"text\":"); buf.json(&b, delta); buf.add(&b, "}}"); sse.emit(out, "content_block_delta", buf.view(&b));
+    } else {
+        let id: buf.Buffer = buf.make(128); message_id(r, &id);
+        if (w.*.message_item < 0) {
+            w.*.message_item = w.*.next_item; w.*.next_item = w.*.next_item + 1;
+            event(w, "response.output_item.added", &b); buf.add(&b, ",\"output_index\":"); buf.integer(&b, w.*.message_item as i64);
+            buf.add(&b, ",\"item\":{\"id\":"); buf.json(&b, buf.view(&id)); buf.add(&b, ",\"type\":\"message\",\"status\":\"in_progress\",\"role\":\"assistant\",\"content\":[]}}");
+            sse.emit(out, "response.output_item.added", buf.view(&b));
+            event(w, "response.content_part.added", &b); buf.add(&b, ",\"item_id\":"); buf.json(&b, buf.view(&id)); buf.add(&b, ",\"output_index\":"); buf.integer(&b, w.*.message_item as i64);
+            buf.add(&b, ",\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\",\"annotations\":[]}}"); sse.emit(out, "response.content_part.added", buf.view(&b));
+        }
+        event(w, "response.output_text.delta", &b); buf.add(&b, ",\"item_id\":"); buf.json(&b, buf.view(&id)); buf.add(&b, ",\"output_index\":"); buf.integer(&b, w.*.message_item as i64);
+        buf.add(&b, ",\"content_index\":0,\"delta\":"); buf.json(&b, delta); buf.byte(&b, 125); sse.emit(out, "response.output_text.delta", buf.view(&b)); buf.free(&id);
+    }
+    if (b.ok == 0) { out.*.ok = 0; } buf.free(&b);
+}
+fn call(w: *Writer, r: *normalized.Request, payload: []u8, out: *buf.Buffer) void {
+    let d: json.Document = json.parse(payload); let id: buf.Buffer = buf.make(96); let name: buf.Buffer = buf.make(96); let b: buf.Buffer = buf.make(524288);
+    json.field_text(&d, 0, "id", &id); json.field_text(&d, 0, "name", &name); let args: []u8 = json.raw(&d, json.get(&d, 0, "arguments"));
+    if (r.*.protocol == 1) {
+        chat_prefix(r, w.*.created, &b); buf.add(&b, "{\"tool_calls\":[{\"index\":"); buf.integer(&b, w.*.calls as i64);
+        buf.add(&b, ",\"id\":"); buf.json(&b, buf.view(&id)); buf.add(&b, ",\"type\":\"function\",\"function\":{\"name\":"); buf.json(&b, buf.view(&name));
+        buf.add(&b, ",\"arguments\":"); buf.json(&b, args); buf.add(&b, "}}]},\"finish_reason\":null}]}"); sse.emit(out, "", buf.view(&b));
+    } else if (r.*.protocol == 2) {
+        close_anthropic_text(w, out); let index: i32 = w.*.next_block; w.*.next_block = index + 1;
+        buf.add(&b, "{\"type\":\"content_block_start\",\"index\":"); buf.integer(&b, index as i64); buf.add(&b, ",\"content_block\":{\"type\":\"tool_use\",\"id\":"); buf.json(&b, buf.view(&id));
+        buf.add(&b, ",\"name\":"); buf.json(&b, buf.view(&name)); buf.add(&b, ",\"input\":{}}}"); sse.emit(out, "content_block_start", buf.view(&b));
+        buf.clear(&b); buf.add(&b, "{\"type\":\"content_block_delta\",\"index\":"); buf.integer(&b, index as i64);
+        buf.add(&b, ",\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":"); buf.json(&b, args); buf.add(&b, "}}"); sse.emit(out, "content_block_delta", buf.view(&b));
+        buf.clear(&b); buf.add(&b, "{\"type\":\"content_block_stop\",\"index\":"); buf.integer(&b, index as i64); buf.byte(&b, 125); sse.emit(out, "content_block_stop", buf.view(&b));
+    } else {
+        let index: i32 = w.*.next_item; w.*.next_item = index + 1; let item_id: buf.Buffer = buf.make(128); call_item_id(r, w.*.calls, &item_id);
+        event(w, "response.output_item.added", &b); buf.add(&b, ",\"output_index\":"); buf.integer(&b, index as i64);
+        buf.add(&b, ",\"item\":{\"id\":"); buf.json(&b, buf.view(&item_id)); buf.add(&b, ",\"type\":\"function_call\",\"status\":\"in_progress\",\"call_id\":"); buf.json(&b, buf.view(&id));
+        buf.add(&b, ",\"name\":"); buf.json(&b, buf.view(&name)); buf.add(&b, ",\"arguments\":\"\"}}"); sse.emit(out, "response.output_item.added", buf.view(&b));
+        event(w, "response.function_call_arguments.delta", &b); buf.add(&b, ",\"item_id\":"); buf.json(&b, buf.view(&item_id)); buf.add(&b, ",\"output_index\":"); buf.integer(&b, index as i64);
+        buf.add(&b, ",\"delta\":"); buf.json(&b, args); buf.byte(&b, 125); sse.emit(out, "response.function_call_arguments.delta", buf.view(&b));
+        event(w, "response.function_call_arguments.done", &b); buf.add(&b, ",\"item_id\":"); buf.json(&b, buf.view(&item_id)); buf.add(&b, ",\"output_index\":"); buf.integer(&b, index as i64);
+        buf.add(&b, ",\"arguments\":"); buf.json(&b, args); buf.byte(&b, 125); sse.emit(out, "response.function_call_arguments.done", buf.view(&b));
+        event(w, "response.output_item.done", &b); buf.add(&b, ",\"output_index\":"); buf.integer(&b, index as i64);
+        buf.add(&b, ",\"item\":{\"id\":"); buf.json(&b, buf.view(&item_id)); buf.add(&b, ",\"type\":\"function_call\",\"status\":\"completed\",\"call_id\":"); buf.json(&b, buf.view(&id));
+        buf.add(&b, ",\"name\":"); buf.json(&b, buf.view(&name)); buf.add(&b, ",\"arguments\":"); buf.json(&b, args); buf.add(&b, "}}"); sse.emit(out, "response.output_item.done", buf.view(&b)); buf.free(&item_id);
+    }
+    w.*.calls = w.*.calls + 1; if (b.ok == 0 || d.ok == 0 || id.ok == 0 || name.ok == 0) { out.*.ok = 0; }
+    buf.free(&id); buf.free(&name); buf.free(&b); json.free(&d);
+}
+// Render output arrays from ordered text/call segments. Chat canonical text
+// coalesces text across segments, while Anthropic retains content-block order.
+fn output_array(r: *normalized.Request, all_text: []u8, segments: []u8, out: *buf.Buffer) void {
+    let d: json.Document = json.parse(segments); buf.byte(out, 91); let first: bool = true; let saw_text: bool = false; let index: i32 = 1; let call_index: i32 = 0;
+    let text_value: buf.Buffer = buf.make(262144); let name: buf.Buffer = buf.make(96); let id: buf.Buffer = buf.make(128);
+    if (d.ok == 0 || json.kind(&d, 0) != 2) { out.*.ok = 0; }
+    else {
+        while (index < d.tokens[0].next) {
+            let data: i32 = json.get(&d, index, "data"); let is_text: bool = json.is_text(&d, json.get(&d, index, "type"), "text");
+            let include: bool = r.*.protocol == 2 || !is_text || !saw_text;
+            if (include) {
+                if (!first) { buf.byte(out, 44); } first = false;
+                if (is_text) {
+                    if (r.*.protocol == 2) { json.text(&d, data, &text_value); buf.add(out, "{\"type\":\"text\",\"text\":"); buf.json(out, buf.view(&text_value)); buf.byte(out, 125); }
+                    else { text_item(r, all_text, "completed", out); } saw_text = true;
+                } else {
+                    json.field_text(&d, data, "id", &id); json.field_text(&d, data, "name", &name); let args: []u8 = json.raw(&d, json.get(&d, data, "arguments"));
+                    if (r.*.protocol == 2) {
+                        buf.add(out, "{\"type\":\"tool_use\",\"id\":"); buf.json(out, buf.view(&id)); buf.add(out, ",\"name\":"); buf.json(out, buf.view(&name)); buf.add(out, ",\"input\":"); buf.add(out, args); buf.byte(out, 125);
+                    } else {
+                        buf.add(out, "{\"type\":\"function_call\",\"call_id\":"); buf.json(out, buf.view(&id)); buf.clear(&id); call_item_id(r, call_index, &id);
+                        buf.add(out, ",\"id\":"); buf.json(out, buf.view(&id)); buf.add(out, ",\"status\":\"completed\",\"name\":"); buf.json(out, buf.view(&name)); buf.add(out, ",\"arguments\":"); buf.json(out, args); buf.byte(out, 125);
+                    }
+                    call_index = call_index + 1;
+                }
+            }
+            index = d.tokens[index].next;
+        }
+    }
+    buf.byte(out, 93); buf.free(&text_value); buf.free(&name); buf.free(&id); json.free(&d);
+}
+fn body(w: *Writer, r: *normalized.Request, all_text: []u8, segments: []u8, calls: []u8, out: *buf.Buffer) void {
+    let array: buf.Buffer = buf.make(1048576);
+    if (r.*.protocol == 1) {
+        buf.add(out, "{\"id\":"); buf.json(out, buf.view(&r.*.id)); buf.add(out, ",\"object\":\"chat.completion\",\"created\":"); buf.integer(out, w.*.created);
+        buf.add(out, ",\"model\":"); buf.json(out, buf.view(&r.*.model)); buf.add(out, ",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":"); buf.json(out, all_text);
+        let d: json.Document = json.parse(calls);
+        if (w.*.calls > 0) {
+            buf.add(out, ",\"tool_calls\":["); let i: i32 = 1; let count: i32 = 0;
+            let id: buf.Buffer = buf.make(96); let name: buf.Buffer = buf.make(96);
+            while (d.ok != 0 && i < d.tokens[0].next) {
+                if (count > 0) { buf.byte(out, 44); }
+                json.field_text(&d, i, "id", &id); json.field_text(&d, i, "name", &name);
+                buf.add(out, "{\"id\":"); buf.json(out, buf.view(&id)); buf.add(out, ",\"type\":\"function\",\"function\":{\"name\":"); buf.json(out, buf.view(&name));
+                buf.add(out, ",\"arguments\":"); buf.json(out, json.raw(&d, json.get(&d, i, "arguments"))); buf.add(out, "}}"); i = d.tokens[i].next; count = count + 1;
+            }
+            buf.byte(out, 93); buf.free(&id); buf.free(&name);
+        }
+        json.free(&d); buf.add(out, "},\"finish_reason\":"); if (w.*.calls > 0) { buf.json(out, "tool_calls"); } else { buf.json(out, "stop"); } buf.add(out, "}]}");
+    } else {
+        output_array(r, all_text, segments, &array);
+        if (r.*.protocol == 2) {
+            buf.add(out, "{\"id\":"); buf.json(out, buf.view(&r.*.id)); buf.add(out, ",\"type\":\"message\",\"role\":\"assistant\",\"model\":"); buf.json(out, buf.view(&r.*.model));
+            buf.add(out, ",\"content\":"); buf.add(out, buf.view(&array)); buf.add(out, ",\"stop_reason\":"); if (w.*.calls > 0) { buf.json(out, "tool_use"); } else { buf.json(out, "end_turn"); }
+            buf.add(out, ",\"stop_sequence\":null,\"usage\":{\"input_tokens\":"); buf.integer(out, r.*.prompt.len as i64); buf.add(out, ",\"output_tokens\":"); buf.integer(out, (_zag_strlen(all_text) + _zag_strlen(calls)) as i64); buf.add(out, "}}");
+        } else { response_object(r, w.*.created, "completed", buf.view(&array), out); }
+        if (array.ok == 0) { out.*.ok = 0; }
+    }
+    buf.free(&array);
+}
+fn complete(w: *Writer, r: *normalized.Request, all_text: []u8, segments: []u8, calls: []u8, out: *buf.Buffer) void {
+    let b: buf.Buffer = buf.make(2097152);
+    if (r.*.protocol == 1) {
+        chat_prefix(r, w.*.created, &b); buf.add(&b, "{},\"finish_reason\":"); if (w.*.calls > 0) { buf.json(&b, "tool_calls"); } else { buf.json(&b, "stop"); } buf.add(&b, "}]}"); sse.emit(out, "", buf.view(&b)); sse.emit(out, "", "[DONE]");
+    } else if (r.*.protocol == 2) {
+        close_anthropic_text(w, out); buf.add(&b, "{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":"); if (w.*.calls > 0) { buf.json(&b, "tool_use"); } else { buf.json(&b, "end_turn"); }
+        buf.add(&b, ",\"stop_sequence\":null},\"usage\":{\"output_tokens\":"); buf.integer(&b, (_zag_strlen(all_text) + _zag_strlen(calls)) as i64); buf.add(&b, "}}"); sse.emit(out, "message_delta", buf.view(&b));
+        sse.emit(out, "message_stop", "{\"type\":\"message_stop\"}");
+    } else {
+        let id: buf.Buffer = buf.make(128); message_id(r, &id);
+        if (w.*.message_item >= 0) {
+            event(w, "response.output_text.done", &b); buf.add(&b, ",\"item_id\":"); buf.json(&b, buf.view(&id)); buf.add(&b, ",\"output_index\":"); buf.integer(&b, w.*.message_item as i64);
+            buf.add(&b, ",\"content_index\":0,\"text\":"); buf.json(&b, all_text); buf.byte(&b, 125); sse.emit(out, "response.output_text.done", buf.view(&b));
+            event(w, "response.content_part.done", &b); buf.add(&b, ",\"item_id\":"); buf.json(&b, buf.view(&id)); buf.add(&b, ",\"output_index\":"); buf.integer(&b, w.*.message_item as i64);
+            buf.add(&b, ",\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":"); buf.json(&b, all_text); buf.add(&b, ",\"annotations\":[]}}"); sse.emit(out, "response.content_part.done", buf.view(&b));
+            event(w, "response.output_item.done", &b); buf.add(&b, ",\"output_index\":"); buf.integer(&b, w.*.message_item as i64); buf.add(&b, ",\"item\":"); text_item(r, all_text, "completed", &b); buf.byte(&b, 125); sse.emit(out, "response.output_item.done", buf.view(&b));
+        }
+        let array: buf.Buffer = buf.make(1048576); output_array(r, all_text, segments, &array);
+        event(w, "response.completed", &b); buf.add(&b, ",\"response\":"); response_object(r, w.*.created, "completed", buf.view(&array), &b); buf.byte(&b, 125); sse.emit(out, "response.completed", buf.view(&b));
+        if (array.ok == 0) { out.*.ok = 0; } buf.free(&array); buf.free(&id);
+    }
+    if (b.ok == 0) { out.*.ok = 0; } buf.free(&b);
+}
+fn error(w: *Writer, r: *normalized.Request, code: []u8, out: *buf.Buffer) void {
+    let b: buf.Buffer = buf.make(1024);
+    if (r.*.protocol == 3) { event(w, "error", &b); buf.add(&b, ",\"code\":"); buf.json(&b, code); buf.add(&b, ",\"message\":"); buf.json(&b, code); buf.add(&b, ",\"param\":null}"); }
+    else { buf.add(&b, "{\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"code\":"); buf.json(&b, code); buf.add(&b, ",\"message\":"); buf.json(&b, code); buf.add(&b, "}}"); }
+    sse.emit(out, "error", buf.view(&b)); buf.free(&b);
+}

@@ -1,0 +1,23 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../providers/registry.zag") as registry
+// This validator is on the authoritative side of the IPC trust boundary.
+fn allowed(p: *registry.Provider) bool {
+    return p.*.state == 4 && p.*.quota == 0 && p.*.prompt > 0 && p.*.send > 0 && p.*.response > 0 && p.*.document.len > 0;
+}
+fn generate(p: *registry.Provider, model_index: i32, request_id: []u8, prompt: []u8, new_chat: bool, out: *buf.Buffer) bool {
+    if (!allowed(p) || model_index < 0 || model_index >= p.*.model_count || _zag_strlen(prompt) > 131072) { return false; }
+    buf.add(out, "{\"type\":\"action\",\"provider_id\":"); buf.integer(out, p.*.id as i64);
+    buf.add(out, ",\"action\":{\"type\":\"generate\",\"document_id\":"); buf.json(out, buf.view(&p.*.document));
+    buf.add(out, ",\"request_id\":"); buf.json(out, request_id); buf.add(out, ",\"prompt\":"); buf.json(out, prompt);
+    buf.add(out, ",\"prompt_node\":"); buf.integer(out, p.*.prompt as i64); buf.add(out, ",\"send_node\":"); buf.integer(out, p.*.send as i64);
+    buf.add(out, ",\"response_node\":"); buf.integer(out, p.*.response as i64); buf.add(out, ",\"stop_node\":"); buf.integer(out, p.*.stop as i64);
+    buf.add(out, ",\"model_control\":"); buf.integer(out, p.*.model_control as i64); buf.add(out, ",\"model_value\":"); buf.json(out, buf.view(&p.*.models[model_index].value));
+    buf.add(out, ",\"new_chat\":"); if (new_chat) { buf.integer(out, p.*.new_chat as i64); } else { buf.add(out, "0"); }
+    buf.add(out, "}}\n"); return out.*.ok != 0;
+}
+fn stop(p: *registry.Provider, request_id: []u8, out: *buf.Buffer) void {
+    buf.add(out, "{\"type\":\"action\",\"provider_id\":"); buf.integer(out, p.*.id as i64);
+    buf.add(out, ",\"action\":{\"type\":\"stop\",\"document_id\":"); buf.json(out, buf.view(&p.*.document));
+    buf.add(out, ",\"request_id\":"); buf.json(out, request_id); buf.add(out, ",\"stop_node\":"); buf.integer(out, p.*.stop as i64); buf.add(out, "}}\n");
+}

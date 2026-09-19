@@ -1,0 +1,27 @@
+{
+  "name": "Desktop AI Bridge",
+  "version": "0.1.0-alpha.1",
+  "kind": "source-alpha",
+  "native_installer_included": false,
+  "full_masterplan_complete": false,
+  "release_qualified": false,
+  "file_count_excluding_packaging_metadata": 117,
+  "node_tests": {
+    "passed": 17,
+    "failed": 0
+  },
+  "browser_tests": {
+    "passed": 17,
+    "failed": 0,
+    "scope": "actual agent + in-memory Chromium fixture"
+  },
+  "native_build": "BLOCKED",
+  "frontend_component_build": "BLOCKED",
+  "real_harness": "NOT_RUN",
+  "manifest_sha256": "859ad7c2e33d655a863625074513de5329bc1edf7abf49e822bb73a24c126ff2",
+  "manifest_excludes": [
+    "MANIFEST.sha256",
+    "PACKAGE_METADATA.json"
+  ],
+  "compiler_pin": "abed8aa170ef1bc33e5aca68b99fcdd905a4545f"
+}

@@ -1,0 +1,471 @@
+@import("core/runtime.zag")
+@import("core/buffer.zag") as buf
+@import("core/json.zag") as json
+@import("server/net.zag") as net
+@import("server/http.zag") as http
+@import("server/sse.zag") as sse
+@import("server/connection.zag") as connection
+@import("protocol/normalized.zag") as normalized
+@import("protocol/wire.zag") as wire
+@import("providers/registry.zag") as registry
+@import("sessions/manager.zag") as sessions
+@import("tools/parser.zag") as tools
+@import("browser/actions.zag") as actions
+@import("browser/evidence.zag") as evidence
+@import("detector/symbolic.zag") as symbolic
+@import("detector/recorder.zag") as recorder
+@import("detector/tnn_bridge.zag") as tnn
+@import("security/local_token.zag") as token
+@import("security/validation.zag") as validation
+@import("security/redaction.zag") as redaction
+@import("storage/files.zag") as files
+@import("storage/state.zag") as storage
+
+// All business decisions remain in this Zag process. The host is a bounded
+// pipe and webview adapter. This module has not yet passed the native build gate.
+struct App {
+    providers: registry.Registry, sessions: sessions.Sessions, clients: *connection.Client,
+    root: buf.Buffer, key: buf.Buffer, ipc_in: buf.Buffer, ipc_out: buf.Buffer,
+    listener: i64, lock_fd: i64, port: i32, desired_port: i32, dev: bool, running: bool,
+    dirty: bool, snapshot_pending: bool, last_snapshot: i64, last_ipc_write: i64,
+    failed_requests: i64, completed_requests: i64, persistence_failed: bool,
+}
+fn make(root: []u8, dev: bool) App {
+    let a: App = App{.providers = registry.make(), .sessions = sessions.make(), .clients = _zag_malloc(32 * @sizeOf[connection.Client]()) as *connection.Client,
+        .root = buf.make(4096), .key = buf.make(128), .ipc_in = buf.make(1048576), .ipc_out = buf.make(2097152),
+        .listener = 0 - 1, .lock_fd = 0 - 1, .port = 7331, .desired_port = 7331, .dev = dev, .running = true, .dirty = false,
+        .snapshot_pending = false, .last_snapshot = 0, .last_ipc_write = _zag_clock_monotonic_ms(),
+        .failed_requests = 0, .completed_requests = 0, .persistence_failed = false};
+    buf.copy(&a.root, root); let i: i32 = 0; while (i < 32) { a.clients[i].fd = 0 - 1; i = i + 1; } return a;
+}
+fn snapshot(a: *App, out: *buf.Buffer) void {
+    buf.clear(out); buf.add(out, "{\"protocol\":1,\"backend\":\"zag\",\"version\":\"0.1.0-alpha.1\",\"api\":{\"host\":\"127.0.0.1\",\"port\":"); buf.integer(out, a.*.port as i64);
+    buf.add(out, ",\"running\":"); if (a.*.listener >= 0) { buf.add(out, "true"); } else { buf.add(out, "false"); }
+    buf.add(out, ",\"desired_port\":"); buf.integer(out, a.*.desired_port as i64); buf.add(out, ",\"key_present\":true},\"providers\":"); registry.snapshot(&a.*.providers, out);
+    buf.add(out, ",\"sessions\":"); sessions.snapshot(&a.*.sessions, out); buf.add(out, ",\"detector\":"); tnn.status(out);
+    buf.add(out, ",\"settings\":{\"fallback\":\"disabled\",\"logging\":\"ERROR\",\"raw_capture\":false,\"developer_mode\":"); if (a.*.dev) { buf.add(out, "true"); } else { buf.add(out, "false"); }
+    buf.add(out, "},\"metrics\":{\"completed_requests\":"); buf.integer(out, a.*.completed_requests); buf.add(out, ",\"failed_requests\":"); buf.integer(out, a.*.failed_requests);
+    buf.add(out, "},\"qualification\":{\"release\":false,\"live_provider_verified\":false,\"harness_verified\":false,\"native_build_evidence\":\"external release gate required\"}}");
+}
+fn reply(a: *App, id: i64, ok: bool, payload: []u8) void {
+    if (id <= 0) { return; }
+    buf.add(&a.*.ipc_out, "{\"type\":\"reply\",\"id\":"); buf.integer(&a.*.ipc_out, id);
+    if (ok) { buf.add(&a.*.ipc_out, ",\"ok\":true,\"data\":"); buf.add(&a.*.ipc_out, payload); }
+    else { buf.add(&a.*.ipc_out, ",\"ok\":false,\"error\":"); buf.json(&a.*.ipc_out, payload); }
+    buf.add(&a.*.ipc_out, "}\n");
+}
+fn host_event(a: *App, name: []u8, p: *registry.Provider) void {
+    buf.add(&a.*.ipc_out, "{\"type\":\"host\",\"name\":"); buf.json(&a.*.ipc_out, name); buf.add(&a.*.ipc_out, ",\"provider_id\":"); buf.integer(&a.*.ipc_out, p.*.id as i64);
+    buf.add(&a.*.ipc_out, ",\"origin\":"); buf.json(&a.*.ipc_out, buf.view(&p.*.origin)); buf.add(&a.*.ipc_out, ",\"url\":"); buf.json(&a.*.ipc_out, buf.view(&p.*.url)); buf.add(&a.*.ipc_out, "}\n");
+}
+fn http_error(c: *connection.Client, status: i32, code: []u8) void {
+    let body: buf.Buffer = buf.make(1024); http.error_json(code, &body); http.response(&c.*.output, status, buf.view(&body), ""); buf.free(&body);
+    c.*.phase = 3; c.*.deadline = _zag_clock_monotonic_ms() + 5000;
+}
+fn cancel(a: *App, index: i32, code: []u8, status: i32) void {
+    let c: *connection.Client = &a.*.clients[index]; if (c.*.fd < 0 || c.*.phase == 3) { return; }
+    if (c.*.provider >= 0) {
+        let p: *registry.Provider = &a.*.providers.items[c.*.provider];
+        if (p.*.active_request == index) {
+            actions.stop(p, buf.view(&c.*.request.id), &a.*.ipc_out); p.*.active_request = 0 - 1;
+            if (buf.eq(code, "PROVIDER_RATE_LIMITED")) { p.*.quota = 1; p.*.state = 5; }
+            else if (buf.eq(code, "AUTH_REQUIRED")) { p.*.state = 2; }
+            else if (!buf.eq(code, "CANCELLED") && !buf.eq(code, "CLIENT_DISCONNECTED") && !buf.eq(code, "KEY_REGENERATED")) { p.*.state = 6; }
+            buf.copy(&p.*.last_error, code);
+        }
+    }
+    if (c.*.session >= 0) { a.*.sessions.items[c.*.session].status = 2; a.*.dirty = true; }
+    if (c.*.stream_open) { wire.error(&c.*.writer, &c.*.request, code, &c.*.output); c.*.phase = 3; c.*.deadline = _zag_clock_monotonic_ms() + 5000; }
+    else { http_error(c, status, code); }
+    a.*.failed_requests = a.*.failed_requests + 1; a.*.snapshot_pending = true;
+}
+fn release(a: *App, i: i32) void {
+    if (a.*.clients[i].fd < 0) { return; }
+    if (a.*.clients[i].phase == 2) { cancel(a, i, "CLIENT_DISCONNECTED", 499); }
+    connection.free(&a.*.clients[i]);
+}
+fn random_id(prefix: []u8, out: *buf.Buffer) bool {
+    let random: buf.Buffer = buf.make(128); let ok: bool = token.generate(&random);
+    if (ok) { buf.copy(out, prefix); buf.add(out, random.data[9..41]); ok = out.*.ok != 0; }
+    buf.free(&random); return ok;
+}
+fn begin_generation(a: *App, index: i32, protocol: i32) void {
+    let c: *connection.Client = &a.*.clients[index]; let id: buf.Buffer = buf.make(96);
+    if (!random_id("req_", &id)) { buf.free(&id); http_error(c, 503, "ENTROPY_UNAVAILABLE"); return; }
+    normalized.decode(&c.*.request, c.*.input.data[c.*.headers.header_length..c.*.input.len], protocol, buf.view(&id), buf.view(&c.*.headers.session)); buf.free(&id);
+    let r: *normalized.Request = &c.*.request;
+    if (r.*.error.len > 0) { http_error(c, 400, buf.view(&r.*.error)); return; }
+    let model: i32 = registry.find_model(&a.*.providers, buf.view(&r.*.model));
+    if (model < 0) { http_error(c, 404, "MODEL_UNAVAILABLE"); return; }
+    let provider_index: i32 = model / 32; let p: *registry.Provider = &a.*.providers.items[provider_index];
+    if (p.*.quota != 0) { http_error(c, 429, "PROVIDER_RATE_LIMITED"); return; }
+    if (p.*.state == 2) { http_error(c, 401, "AUTH_REQUIRED"); return; }
+    if (!actions.allowed(p)) { http_error(c, 409, "MAPPING_BROKEN"); return; }
+    if (p.*.active_request >= 0) { http_error(c, 409, "PROVIDER_BUSY"); return; }
+    let concurrent: i32 = 0; let n: i32 = 0;
+    while (n < 32) { if (a.*.clients[n].fd >= 0 && a.*.clients[n].phase == 2) { concurrent = concurrent + 1; } n = n + 1; }
+    if (concurrent >= 4) { http_error(c, 503, "CONCURRENCY_LIMIT"); return; }
+    let session: i32 = 0 - 1;
+    if (r.*.previous.len > 0) {
+        session = sessions.find_response(&a.*.sessions, buf.view(&r.*.previous));
+        if (session < 0) { http_error(c, 409, "PREVIOUS_RESPONSE_LOST"); return; }
+        if (r.*.session_hint.len > 0 && !buf.eq(buf.view(&r.*.session_hint), buf.view(&a.*.sessions.items[session].id))) { http_error(c, 409, "SESSION_CONFLICT"); return; }
+    } else if (r.*.session_hint.len > 0) { session = sessions.find(&a.*.sessions, buf.view(&r.*.session_hint)); }
+    else { session = p.*.session; }
+    let is_new: bool = session < 0;
+    if (is_new) {
+        if (p.*.session >= 0) { http_error(c, 409, "END_CURRENT_SESSION_FIRST"); return; }
+        if (p.*.new_chat <= 0) { http_error(c, 409, "NEW_CHAT_MAPPING_REQUIRED"); return; }
+        if (r.*.session_hint.len == 0 && !random_id("s_", &r.*.session_hint)) { http_error(c, 503, "ENTROPY_UNAVAILABLE"); return; }
+        session = sessions.add(&a.*.sessions, buf.view(&r.*.session_hint), p.*.id, buf.view(&r.*.model));
+        if (session < 0) { http_error(c, 503, "SESSION_LIMIT"); return; }
+    }
+    let item: *sessions.Session = &a.*.sessions.items[session];
+    if (item.*.provider_id != p.*.id || (!is_new && p.*.session != session)) { http_error(c, 409, "PROVIDER_CONVERSATION_LOST"); return; }
+    let offset: i32 = sessions.prepare(item, r);
+    if (offset < 0) { http_error(c, 409, "SESSION_HISTORY_CONFLICT"); return; }
+    buf.copy(&r.*.session_hint, buf.view(&item.*.id));
+    if (!random_id("", &r.*.nonce) || !normalized.render_prompt(r, offset)) { http_error(c, 413, "CONTEXT_LIMIT"); return; }
+    c.*.provider = provider_index; c.*.model = model % 32; c.*.session = session;
+    tools.free(&c.*.parser); c.*.parser = tools.make(buf.view(&r.*.nonce), buf.view(&r.*.tool_names), r.*.has_tools);
+    buf.copy(&c.*.calls, "["); buf.copy(&c.*.segments, "["); c.*.phase = 2; c.*.deadline = _zag_clock_monotonic_ms() + 120000;
+    if (!actions.generate(p, c.*.model, buf.view(&r.*.id), buf.view(&r.*.prompt), is_new, &a.*.ipc_out)) { cancel(a, index, "ACTION_DENIED", 409); return; }
+    p.*.active_request = index; p.*.session = session; item.*.status = 1;
+    if (r.*.stream) { http.stream_headers(&c.*.output, buf.view(&r.*.session_hint)); wire.begin(&c.*.writer, r, &c.*.output); c.*.stream_open = true; }
+    a.*.snapshot_pending = true;
+}
+fn route_http(a: *App, index: i32) void {
+    let c: *connection.Client = &a.*.clients[index]; let path: []u8 = buf.view(&c.*.headers.path); let method: []u8 = buf.view(&c.*.headers.method);
+    if (buf.eq(path, "/health") && buf.eq(method, "GET")) {
+        http.response(&c.*.output, 200, "{\"status\":\"ok\",\"protocol\":1,\"backend\":\"zag\",\"version\":\"0.1.0-alpha.1\"}", ""); c.*.phase = 3; return;
+    }
+    if (!c.*.headers.authenticated) { http_error(c, 401, "LOCAL_API_KEY_REQUIRED"); return; }
+    if (buf.eq(path, "/v1/models") && buf.eq(method, "GET")) {
+        let body: buf.Buffer = buf.make(524288); registry.public_models(&a.*.providers, &body);
+        if (body.ok != 0) { http.response(&c.*.output, 200, buf.view(&body), ""); c.*.phase = 3; }
+        else { http_error(c, 503, "REGISTRY_LIMIT"); } buf.free(&body); return;
+    }
+    if (!buf.eq(method, "POST")) { http_error(c, 404, "NOT_FOUND"); return; }
+    if (buf.eq(path, "/v1/chat/completions")) { begin_generation(a, index, 1); }
+    else if (buf.eq(path, "/v1/messages")) { begin_generation(a, index, 2); }
+    else if (buf.eq(path, "/v1/responses")) { begin_generation(a, index, 3); }
+    else { http_error(c, 404, "NOT_FOUND"); }
+}
+fn consume_parser(c: *connection.Client) bool {
+    if (c.*.output.len == 0) { c.*.last_write = _zag_clock_monotonic_ms(); }
+    let all: []u8 = buf.view(&c.*.parser.events); let cursor: i32 = 0; let value: buf.Buffer = buf.make(131072);
+    while (cursor < _zag_strlen(all)) {
+        let end: i32 = buf.find(all, "\n", cursor); if (end < 0) { buf.free(&value); return false; }
+        let d: json.Document = json.parse(all[cursor..end]); let data: i32 = json.get(&d, 0, "data");
+        if (d.ok == 0) { json.free(&d); buf.free(&value); return false; }
+        if (json.is_text(&d, json.get(&d, 0, "type"), "text")) {
+            json.text(&d, data, &value); buf.add(&c.*.text, buf.view(&value)); buf.add(&c.*.current_text, buf.view(&value));
+            if (c.*.stream_open) { wire.text(&c.*.writer, &c.*.request, buf.view(&value), &c.*.output); }
+        } else if (json.is_text(&d, json.get(&d, 0, "type"), "call")) {
+            connection.flush_text(c); if (c.*.writer.calls > 0) { buf.byte(&c.*.calls, 44); } buf.add(&c.*.calls, json.raw(&d, data));
+            if (c.*.segment_count > 0) { buf.byte(&c.*.segments, 44); } buf.add(&c.*.segments, json.raw(&d, 0)); c.*.segment_count = c.*.segment_count + 1;
+            if (c.*.stream_open) { wire.call(&c.*.writer, &c.*.request, json.raw(&d, data), &c.*.output); }
+            else { c.*.writer.calls = c.*.writer.calls + 1; }
+        } else { json.free(&d); buf.free(&value); return false; }
+        json.free(&d); cursor = end + 1;
+    }
+    let ok: bool = value.ok != 0 && c.*.text.ok != 0 && c.*.current_text.ok != 0 && c.*.calls.ok != 0 && c.*.segments.ok != 0 && c.*.output.ok != 0 && c.*.output.len <= 524288 && !c.*.parser.failed;
+    buf.free(&value); return ok;
+}
+fn generation_done(a: *App, index: i32) void {
+    let c: *connection.Client = &a.*.clients[index]; tools.finish(&c.*.parser);
+    if (!consume_parser(c)) { cancel(a, index, "STREAM_LIMIT", 502); return; }
+    if (c.*.request.require_tool && c.*.writer.calls == 0) { cancel(a, index, "REQUIRED_TOOL_NOT_PRODUCED", 422); return; }
+    connection.flush_text(c); buf.byte(&c.*.calls, 93); buf.byte(&c.*.segments, 93);
+    if (c.*.segments.ok == 0 || c.*.calls.ok == 0 || !sessions.complete(&a.*.sessions.items[c.*.session], &c.*.request, buf.view(&c.*.text), buf.view(&c.*.calls), c.*.writer.calls > 0)) { cancel(a, index, "CONTEXT_LIMIT", 413); return; }
+    let rendered: buf.Buffer = buf.make(2097152);
+    if (c.*.stream_open) { wire.complete(&c.*.writer, &c.*.request, buf.view(&c.*.text), buf.view(&c.*.segments), buf.view(&c.*.calls), &rendered); }
+    else {
+        let body: buf.Buffer = buf.make(1048576); wire.body(&c.*.writer, &c.*.request, buf.view(&c.*.text), buf.view(&c.*.segments), buf.view(&c.*.calls), &body);
+        if (body.ok != 0) { http.response(&rendered, 200, buf.view(&body), buf.view(&c.*.request.session_hint)); } else { rendered.ok = 0; } buf.free(&body);
+    }
+    if (rendered.ok == 0 || rendered.len > c.*.output.cap - c.*.output.len) { buf.free(&rendered); cancel(a, index, "OUTPUT_LIMIT", 502); return; }
+    buf.add(&c.*.output, buf.view(&rendered)); buf.free(&rendered); c.*.phase = 3; c.*.deadline = _zag_clock_monotonic_ms() + 15000;
+    a.*.providers.items[c.*.provider].active_request = 0 - 1; a.*.completed_requests = a.*.completed_requests + 1; a.*.dirty = true; a.*.snapshot_pending = true;
+}
+fn observed_error(d: *json.Document, event: i32) []u8 {
+    let code: i32 = json.get(d, event, "code");
+    if (json.is_text(d, code, "PROVIDER_RATE_LIMITED")) { return "PROVIDER_RATE_LIMITED"; }
+    if (json.is_text(d, code, "AUTH_REQUIRED")) { return "AUTH_REQUIRED"; }
+    if (json.is_text(d, code, "CANCELLED")) { return "CANCELLED"; }
+    if (json.is_text(d, code, "TIMEOUT")) { return "TIMEOUT"; }
+    if (json.is_text(d, code, "RESPONSE_REWRITTEN")) { return "RESPONSE_REWRITTEN"; }
+    if (json.is_text(d, code, "PROVIDER_STREAM_ERROR")) { return "PROVIDER_STREAM_ERROR"; }
+    if (json.is_text(d, code, "OUTPUT_LIMIT")) { return "OUTPUT_LIMIT"; }
+    return "BROWSER_ERROR";
+}
+fn observe(a: *App, provider_id: i32, d: *json.Document, event: i32) void {
+    let provider_index: i32 = registry.index(&a.*.providers, provider_id); if (provider_index < 0 || json.kind(d, event) != 1 || _zag_strlen(json.raw(d, event)) > 32768 || json.number(d, json.get(d, event, "v"), 0) != 1) { return; }
+    let p: *registry.Provider = &a.*.providers.items[provider_index]; let kind: i32 = json.get(d, event, "type");
+    if (json.is_text(d, kind, "observation")) {
+        let safe: buf.Buffer = buf.make(32768);
+        if (evidence.sanitize(d, event, buf.view(&p.*.origin), &safe)) {
+            let sd: json.Document = json.parse(buf.view(&safe));
+            if (symbolic.observe(p, &sd, 0)) { a.*.snapshot_pending = true; if (p.*.state == 2 && p.*.active_request >= 0) { cancel(a, p.*.active_request, "AUTH_REQUIRED", 401); } }
+            else if (p.*.active_request >= 0 && p.*.state == 6) { cancel(a, p.*.active_request, "SITE_CHANGED", 502); }
+            json.free(&sd);
+        }
+        buf.free(&safe); return;
+    }
+    if (!json.is_text(d, json.get(d, event, "document_id"), buf.view(&p.*.document))) { return; }
+    if (json.is_text(d, kind, "quota")) { p.*.state = 5; p.*.quota = 1; if (p.*.active_request >= 0) { cancel(a, p.*.active_request, "PROVIDER_RATE_LIMITED", 429); } a.*.snapshot_pending = true; return; }
+    if (json.is_text(d, kind, "login_required")) { p.*.state = 2; if (p.*.active_request >= 0) { cancel(a, p.*.active_request, "AUTH_REQUIRED", 401); } a.*.snapshot_pending = true; return; }
+    let index: i32 = p.*.active_request; if (index < 0 || index >= 32) { return; }
+    let c: *connection.Client = &a.*.clients[index];
+    if (c.*.fd < 0 || c.*.phase != 2 || !json.is_text(d, json.get(d, event, "request_id"), buf.view(&c.*.request.id))) { return; }
+    if (json.is_text(d, kind, "generation_delta")) {
+        let text: buf.Buffer = buf.make(4096); json.field_text(d, event, "text", &text); c.*.raw_bytes = c.*.raw_bytes + text.len;
+        if (text.ok == 0 || c.*.raw_bytes > 131072) { buf.free(&text); cancel(a, index, "OUTPUT_LIMIT", 502); return; }
+        tools.feed(&c.*.parser, buf.view(&text)); buf.free(&text);
+        if (!consume_parser(c)) { cancel(a, index, "STREAM_LIMIT", 502); }
+    } else if (json.is_text(d, kind, "generation_done")) { generation_done(a, index); }
+    else if (json.is_text(d, kind, "generation_error")) { cancel(a, index, observed_error(d, event), 502); }
+    // Network metadata and interaction events are non-authoritative. They are
+    // deliberately not retained until a bounded diagnostic schema is qualified.
+}
+fn ipc(a: *App, frame: []u8) void {
+    let d: json.Document = json.parse(frame); let id: i64 = json.number(&d, json.get(&d, 0, "id"), 0);
+    if (d.ok == 0 || json.number(&d, json.get(&d, 0, "v"), 0) != 1 || id < 0 || id > 9007199254740991) { json.free(&d); return; }
+    let op: i32 = json.get(&d, 0, "op"); let params: i32 = json.get(&d, 0, "params"); let result: buf.Buffer = buf.make(1048576);
+    let error: []u8 = ""; let changed: bool = false;
+    let provider_id: i64 = json.number(&d, json.get(&d, params, "provider_id"), 0); let pi: i32 = 0 - 1;
+    if (provider_id > 0 && provider_id < 1000000) { pi = registry.index(&a.*.providers, provider_id as i32); }
+    if (json.is_text(&d, op, "observation")) {
+        if (pi >= 0) { observe(a, provider_id as i32, &d, json.get(&d, params, "event")); }
+        buf.add(&result, "null");
+    } else if (json.is_text(&d, op, "state.get")) { snapshot(a, &result); }
+    else if (json.is_text(&d, op, "provider.add")) {
+        let url: buf.Buffer = buf.make(2048); let origin: buf.Buffer = buf.make(512); let name: buf.Buffer = buf.make(256); let safe: buf.Buffer = buf.make(256);
+        json.field_text(&d, params, "url", &url); json.field_text(&d, params, "label", &name); redaction.label(buf.view(&name), &safe);
+        if (url.ok == 0 || name.ok == 0 || name.len < 1 || !validation.provider_origin(buf.view(&url), a.*.dev, &origin)) { error = "INVALID_PROVIDER_URL_OR_LABEL"; }
+        else {
+            let existing: i32 = 0; let duplicate: bool = false;
+            while (existing < a.*.providers.count) { if (buf.eq(buf.view(&a.*.providers.items[existing].origin), buf.view(&origin))) { duplicate = true; } existing = existing + 1; }
+            if (duplicate) { error = "PROVIDER_ALREADY_EXISTS"; }
+            else {
+                let index: i32 = registry.add(&a.*.providers, buf.view(&origin), buf.view(&url), buf.view(&safe));
+                if (index < 0) { error = "PROVIDER_LIMIT"; }
+                else { changed = true; buf.add(&result, "{\"provider_id\":"); buf.integer(&result, a.*.providers.items[index].id as i64); buf.byte(&result, 125); host_event(a, "browser.open", &a.*.providers.items[index]); }
+            }
+        }
+        buf.free(&url); buf.free(&origin); buf.free(&name); buf.free(&safe);
+    } else if (json.is_text(&d, op, "provider.open") || json.is_text(&d, op, "provider.close") || json.is_text(&d, op, "provider.rescan") || json.is_text(&d, op, "provider.clear_profile")) {
+        if (pi < 0) { error = "PROVIDER_NOT_FOUND"; }
+        else {
+            let p: *registry.Provider = &a.*.providers.items[pi];
+            if (json.is_text(&d, op, "provider.open")) {
+                if (p.*.state == 0 || p.*.state == 6) { p.*.state = 1; } host_event(a, "browser.open", p);
+            } else if (json.is_text(&d, op, "provider.rescan")) {
+                // Explicit user rescan, never an automatic retry of a quota error.
+                if (p.*.active_request >= 0) { error = "PROVIDER_BUSY"; }
+                else { p.*.quota = 0; p.*.state = 7; host_event(a, "browser.scan", p); }
+            } else if (json.is_text(&d, op, "provider.clear_profile") && json.kind(&d, json.get(&d, params, "confirmed")) != 5) { error = "CONFIRMATION_REQUIRED"; }
+            else {
+                if (p.*.active_request >= 0) { cancel(a, p.*.active_request, "CANCELLED", 409); }
+                if (p.*.session >= 0) { a.*.sessions.items[p.*.session].status = 2; p.*.session = 0 - 1; }
+                p.*.state = 0; p.*.model_count = 0; buf.clear(&p.*.document); buf.clear(&p.*.evidence);
+                if (json.is_text(&d, op, "provider.clear_profile")) { host_event(a, "browser.clear_profile", p); } else { host_event(a, "browser.close", p); }
+            }
+            if (_zag_strlen(error) == 0) { buf.add(&result, "null"); a.*.snapshot_pending = true; changed = true; }
+        }
+    } else if (json.is_text(&d, op, "browser.failed")) {
+        if (pi >= 0) { let p: *registry.Provider = &a.*.providers.items[pi]; if (p.*.active_request >= 0) { cancel(a, p.*.active_request, "BROWSER_ERROR", 502); } p.*.state = 6; buf.copy(&p.*.last_error, "BROWSER_ERROR"); a.*.snapshot_pending = true; } buf.add(&result, "null");
+    } else if (json.is_text(&d, op, "detector.evidence")) {
+        if (pi < 0) { error = "PROVIDER_NOT_FOUND"; }
+        else { let p: *registry.Provider = &a.*.providers.items[pi]; if (p.*.evidence.len > 0) { buf.add(&result, buf.view(&p.*.evidence)); } else { buf.add(&result, "null"); } }
+    } else if (json.is_text(&d, op, "connector.record")) {
+        let role: buf.Buffer = buf.make(32); let doc: buf.Buffer = buf.make(96); json.field_text(&d, params, "mapping", &role); json.field_text(&d, params, "document_id", &doc);
+        let node: i64 = json.number(&d, json.get(&d, params, "node"), 0);
+        if (pi < 0 || role.ok == 0 || doc.ok == 0 || node < 1 || node >= 1000000) { error = "INVALID_MAPPING"; }
+        else if (!recorder.record(&a.*.providers.items[pi], buf.view(&role), buf.view(&doc), node as i32)) { error = "MAPPING_DENIED_OR_STALE"; }
+        else { changed = true; host_event(a, "browser.scan", &a.*.providers.items[pi]); buf.add(&result, "null"); }
+        buf.free(&role); buf.free(&doc);
+    } else if (json.is_text(&d, op, "connector.manual_model")) {
+        let label: buf.Buffer = buf.make(256); let safe: buf.Buffer = buf.make(256); json.field_text(&d, params, "label", &label); redaction.label(buf.view(&label), &safe);
+        if (pi < 0 || label.ok == 0 || label.len < 1 || label.len > 240 || buf.eq(buf.view(&safe), "[redacted]")) { error = "INVALID_MODEL_LABEL"; }
+        else if (a.*.providers.items[pi].active_request >= 0) { error = "PROVIDER_BUSY"; }
+        else { buf.copy(&a.*.providers.items[pi].manual_model, buf.view(&safe)); changed = true; host_event(a, "browser.scan", &a.*.providers.items[pi]); buf.add(&result, "null"); }
+        buf.free(&label); buf.free(&safe);
+    } else if (json.is_text(&d, op, "session.end") || json.is_text(&d, op, "session.cancel")) {
+        let sid: buf.Buffer = buf.make(96); json.field_text(&d, params, "session_id", &sid); let si: i32 = sessions.find(&a.*.sessions, buf.view(&sid));
+        if (sid.ok == 0 || si < 0) { error = "SESSION_NOT_FOUND"; }
+        else {
+            let pidx: i32 = registry.index(&a.*.providers, a.*.sessions.items[si].provider_id);
+            if (pidx >= 0 && a.*.providers.items[pidx].session == si) {
+                let p: *registry.Provider = &a.*.providers.items[pidx]; if (p.*.active_request >= 0) { cancel(a, p.*.active_request, "CANCELLED", 409); }
+                if (json.is_text(&d, op, "session.end")) { p.*.session = 0 - 1; }
+            }
+            if (json.is_text(&d, op, "session.end")) { a.*.sessions.items[si].status = 4; buf.clear(&a.*.sessions.items[si].history); buf.clear(&a.*.sessions.items[si].response); }
+            changed = true; buf.add(&result, "null");
+        }
+        buf.free(&sid);
+    } else if (json.is_text(&d, op, "key.reveal")) { buf.add(&result, "{\"token\":"); buf.json(&result, buf.view(&a.*.key)); buf.byte(&result, 125); }
+    else if (json.is_text(&d, op, "key.regenerate")) {
+        if (json.kind(&d, json.get(&d, params, "confirmed")) != 5) { error = "CONFIRMATION_REQUIRED"; }
+        else {
+            let next: buf.Buffer = buf.make(128);
+            if (!token.generate(&next) || !files.save(buf.view(&a.*.root), "local-token", buf.view(&next))) { error = "TOKEN_WRITE_FAILED"; a.*.persistence_failed = true; }
+            else {
+                buf.copy(&a.*.key, buf.view(&next)); let i: i32 = 0;
+                while (i < 32) { if (a.*.clients[i].fd >= 0) { if (a.*.clients[i].phase == 2) { cancel(a, i, "KEY_REGENERATED", 401); } release(a, i); } i = i + 1; }
+                buf.add(&result, "null"); changed = true;
+            }
+            buf.free(&next);
+        }
+    } else if (json.is_text(&d, op, "settings.update")) {
+        let port: i64 = json.number(&d, json.get(&d, params, "port"), 0);
+        if (port < 1024 || port > 65535) { error = "INVALID_PORT"; }
+        else { a.*.desired_port = port as i32; changed = true; buf.add(&result, "{\"restart_required\":true}"); }
+    } else if (json.is_text(&d, op, "shutdown")) { a.*.running = false; buf.add(&result, "null"); }
+    else { error = "UNSUPPORTED_OPERATION"; }
+    if (changed) { a.*.dirty = true; a.*.snapshot_pending = true; }
+    if (result.ok == 0) { error = "IPC_RESULT_LIMIT"; }
+    if (_zag_strlen(error) > 0) { reply(a, id, false, error); } else { reply(a, id, true, buf.view(&result)); }
+    buf.free(&result); json.free(&d);
+}
+fn read_client(a: *App, index: i32) void {
+    let c: *connection.Client = &a.*.clients[index];
+    if (c.*.phase >= 2) {
+        let byte: buf.Buffer = buf.make(1); let rc: i64 = net.recv(c.*.fd, byte.data, 1); buf.free(&byte);
+        if (rc == 0 || (rc < 0 && !net.would_block(rc))) { release(a, index); }
+        else if (rc > 0) { if (c.*.phase == 2) { cancel(a, index, "PIPELINING_DENIED", 400); } release(a, index); } return;
+    }
+    if (c.*.input.len >= c.*.input.cap) { http_error(c, 413, "REQUEST_LIMIT"); return; }
+    let amount: i32 = c.*.input.cap - c.*.input.len; if (amount > 32768) { amount = 32768; }
+    let rc: i64 = net.recv(c.*.fd, &c.*.input.data[c.*.input.len], amount);
+    if (rc == 0 || (rc < 0 && !net.would_block(rc))) { release(a, index); return; } if (rc < 0) { return; }
+    c.*.input.len = c.*.input.len + rc as i32;
+    if (c.*.phase == 0) {
+        if (!http.parse(&c.*.headers, buf.view(&c.*.input), a.*.port, buf.view(&a.*.key))) { if (c.*.input.len > 16384) { http_error(c, 431, "HEADER_LIMIT"); } return; }
+        if (c.*.headers.error != 0) { http_error(c, c.*.headers.error, "INVALID_HTTP_REQUEST"); return; }
+        c.*.phase = 1;
+    }
+    let complete: i32 = c.*.headers.header_length + c.*.headers.content_length;
+    if (c.*.input.len > complete) { http_error(c, 400, "PIPELINING_DENIED"); return; }
+    if (c.*.input.len == complete) { route_http(a, index); }
+}
+fn pump_ipc(a: *App) void {
+    let rounds: i32 = 0;
+    while (rounds < 32) {
+        let end: i32 = buf.find(buf.view(&a.*.ipc_in), "\n", 0); if (end < 0) { break; }
+        ipc(a, a.*.ipc_in.data[0..end]); buf.drop_prefix(&a.*.ipc_in, end + 1); rounds = rounds + 1;
+    }
+}
+fn flush_ipc(a: *App) void {
+    if (a.*.ipc_out.len == 0) { a.*.last_ipc_write = _zag_clock_monotonic_ms(); return; }
+    let n: i64 = _zag_raw_syscall(1, 1, a.*.ipc_out.data as i64, a.*.ipc_out.len as i64, 0, 0, 0);
+    if (n > 0) { buf.drop_prefix(&a.*.ipc_out, n as i32); a.*.last_ipc_write = _zag_clock_monotonic_ms(); }
+    else if (!net.would_block(n)) { a.*.running = false; }
+}
+fn start(a: *App) bool {
+    if (!files.secure_root(buf.view(&a.*.root))) { _zag_eprintln("STATE_DIRECTORY_NOT_PRIVATE"); return false; }
+    a.*.lock_fd = files.lock_state(buf.view(&a.*.root));
+    if (a.*.lock_fd < 0) { _zag_eprintln("STATE_LOCK_FAILED"); return false; }
+    if (!storage.load(buf.view(&a.*.root), a.*.dev, &a.*.port, &a.*.providers, &a.*.sessions)) { _zag_eprintln("STATE_READ_FAILED"); return false; }
+    a.*.desired_port = a.*.port;
+    if (!token.load_or_create(buf.view(&a.*.root), &a.*.key)) { _zag_eprintln("LOCAL_TOKEN_FAILED"); return false; }
+    a.*.listener = net.listen(a.*.port);
+    if (a.*.listener < 0) { _zag_eprintln("LOOPBACK_BIND_FAILED"); return false; }
+    if (!net.nonblocking(0) || !net.nonblocking(1)) { _zag_eprintln("IPC_NONBLOCKING_FAILED"); return false; }
+    buf.add(&a.*.ipc_out, "{\"type\":\"hello\",\"protocol\":1,\"backend\":\"zag\",\"version\":\"0.1.0-alpha.1\",\"capabilities\":[\"chat-subset\",\"messages-subset\",\"responses-subset\",\"browser-evidence\"]}\n");
+    a.*.snapshot_pending = true; return true;
+}
+fn run(a: *App) void {
+    let entries: *u64 = _zag_malloc(35 * 8) as *u64;
+    while (a.*.running) {
+        pump_ipc(a); let now: i64 = _zag_clock_monotonic_ms();
+        if (a.*.dirty) {
+            if (!storage.save(buf.view(&a.*.root), a.*.desired_port, &a.*.providers, &a.*.sessions)) { a.*.persistence_failed = true; }
+            a.*.dirty = false;
+        }
+        if (a.*.persistence_failed || a.*.ipc_out.ok == 0 || a.*.ipc_in.ok == 0) { _zag_eprintln("BOUNDED_STATE_OR_IPC_FAILURE"); a.*.running = false; break; }
+        if (a.*.snapshot_pending && now - a.*.last_snapshot >= 200) {
+            let state: buf.Buffer = buf.make(1048576); snapshot(a, &state);
+            if (state.ok != 0) { buf.add(&a.*.ipc_out, "{\"type\":\"event\",\"name\":\"snapshot\",\"data\":"); buf.add(&a.*.ipc_out, buf.view(&state)); buf.add(&a.*.ipc_out, "}\n"); }
+            else { a.*.running = false; }
+            buf.free(&state); a.*.snapshot_pending = false; a.*.last_snapshot = now;
+        }
+        flush_ipc(a);
+        if (a.*.ipc_out.len > 0 && now - a.*.last_ipc_write > 5000) { _zag_eprintln("HOST_BACKPRESSURE"); a.*.running = false; break; }
+        // No active work: block in poll indefinitely. Pending state and live
+        // requests add only bounded deadline/heartbeat wake-ups, not UI polling.
+        let timeout: i32 = 0 - 1;
+        if (a.*.snapshot_pending) { timeout = 200; }
+        if (buf.find(buf.view(&a.*.ipc_in), "\n", 0) >= 0) { timeout = 0; }
+        if (a.*.ipc_out.len > 0) { timeout = 1000; }
+        entries[0] = net.poll_entry(0, 1); entries[1] = net.poll_entry(a.*.listener, 1);
+        if (a.*.ipc_out.len > 0) { entries[2] = net.poll_entry(1, 4); } else { entries[2] = net.poll_entry(0 - 1, 0); }
+        let i: i32 = 0;
+        while (i < 32) {
+            let c: *connection.Client = &a.*.clients[i];
+            if (c.*.fd >= 0) {
+                if (timeout < 0 || timeout > 1000) { timeout = 1000; }
+                let events: u64 = 1; if (c.*.output.len > 0) { events = events | 4; }
+                entries[i + 3] = net.poll_entry(c.*.fd, events);
+            } else { entries[i + 3] = net.poll_entry(0 - 1, 0); }
+            i = i + 1;
+        }
+        let ready: i64 = net.poll(entries, 35, timeout);
+        if (ready < 0 && ready != 0 - 4) { a.*.running = false; break; }
+        let input_events: i32 = net.poll_revents(entries[0]);
+        if ((input_events & 1) != 0) {
+            let space: i32 = a.*.ipc_in.cap - a.*.ipc_in.len;
+            if (space <= 0) { a.*.running = false; break; }
+            if (space > 65536) { space = 65536; }
+            let got: i64 = _zag_raw_syscall(0, 0, (a.*.ipc_in.data as i64) + a.*.ipc_in.len as i64, space as i64, 0, 0, 0);
+            if (got > 0) { a.*.ipc_in.len = a.*.ipc_in.len + got as i32; }
+            else if (got == 0 || !net.would_block(got)) { a.*.running = false; }
+        } else if ((input_events & 24) != 0) { a.*.running = false; }
+        pump_ipc(a);
+        if ((net.poll_revents(entries[1]) & 1) != 0) {
+            let accepted: i32 = 0;
+            while (accepted < 8) {
+                let fd: i64 = net.accept(a.*.listener); if (fd < 0) { break; }
+                let slot: i32 = 0; while (slot < 32 && a.*.clients[slot].fd >= 0) { slot = slot + 1; }
+                if (slot == 32) { net.close(fd); } else { a.*.clients[slot] = connection.make(fd); }
+                accepted = accepted + 1;
+            }
+        }
+        i = 0; now = _zag_clock_monotonic_ms();
+        while (i < 32) {
+            let c: *connection.Client = &a.*.clients[i]; let flags: i32 = net.poll_revents(entries[i + 3]);
+            if ((entries[i + 3] & 4294967295) != ((c.*.fd as u64) & 4294967295)) { flags = 0; }
+            if (c.*.fd >= 0) {
+                if ((flags & 1) != 0) { read_client(a, i); }
+                if (c.*.fd >= 0 && (flags & 24) != 0) { release(a, i); }
+                if (c.*.fd >= 0 && c.*.output.len > 0) {
+                    let written: i64 = net.send(c.*.fd, c.*.output.data, c.*.output.len);
+                    if (written > 0) { buf.drop_prefix(&c.*.output, written as i32); c.*.last_write = now; }
+                    else if (!net.would_block(written)) { release(a, i); }
+                }
+                if (c.*.fd >= 0) {
+                    if (c.*.phase == 3 && c.*.output.len == 0) { release(a, i); }
+                    else if (now > c.*.deadline || (c.*.output.len > 0 && now - c.*.last_write > 5000)) {
+                        if (c.*.phase == 2) { cancel(a, i, "TIMEOUT", 504); } else { release(a, i); }
+                    } else if (c.*.phase == 2 && c.*.stream_open && now - c.*.last_ping >= 15000) {
+                        if (c.*.output.len == 0) { c.*.last_write = now; }
+                        sse.heartbeat(&c.*.output); c.*.last_ping = now;
+                    }
+                }
+            }
+            i = i + 1;
+        }
+    }
+    _zag_free(entries as *i8);
+}
+fn free(a: *App) void {
+    let i: i32 = 0;
+    while (i < 32) { if (a.*.clients[i].fd >= 0) { if (a.*.clients[i].phase == 2) { cancel(a, i, "CANCELLED", 503); } connection.free(&a.*.clients[i]); } i = i + 1; }
+    if (a.*.listener >= 0) { net.close(a.*.listener); }
+    // Try to deliver Stop actions once without blocking process termination.
+    if (a.*.ipc_out.len > 0) { let wrote: i64 = _zag_raw_syscall(1, 1, a.*.ipc_out.data as i64, a.*.ipc_out.len as i64, 0, 0, 0); }
+    if (!a.*.persistence_failed) { let saved: bool = storage.save(buf.view(&a.*.root), a.*.desired_port, &a.*.providers, &a.*.sessions); }
+    if (a.*.lock_fd >= 0) { files.close(a.*.lock_fd); a.*.lock_fd = 0 - 1; }
+    registry.free(&a.*.providers); sessions.free(&a.*.sessions); _zag_free(a.*.clients as *i8);
+    buf.free(&a.*.root); buf.free(&a.*.key); buf.free(&a.*.ipc_in); buf.free(&a.*.ipc_out);
+}

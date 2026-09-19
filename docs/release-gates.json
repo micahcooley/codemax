@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "release_qualified": false,
+  "gates": [
+    {
+      "id": "zag_native_unit",
+      "description": "Native Zag unit execution",
+      "status": "NOT_VERIFIED",
+      "evidence": null
+    },
+    {
+      "id": "zag_gateway",
+      "description": "Native Zag gateway/HTTP/session/tool test",
+      "status": "NOT_VERIFIED",
+      "evidence": null
+    },
+    {
+      "id": "svelte_build",
+      "description": "Svelte check and build",
+      "status": "NOT_VERIFIED",
+      "evidence": null
+    },
+    {
+      "id": "rust_host",
+      "description": "Rust host unit/build",
+      "status": "NOT_VERIFIED",
+      "evidence": null
+    },
+    {
+      "id": "tauri_ui",
+      "description": "Actual Tauri UI flow and component behavior",
+      "status": "NOT_VERIFIED",
+      "evidence": null
+    },
+    {
+      "id": "webkit_profiles",
+      "description": "WebKitGTK login persistence and profile isolation",
+      "status": "NOT_VERIFIED",
+      "evidence": null
+    },
+    {
+      "id": "live_provider",
+      "description": "One complete authorized live provider",
+      "status": "NOT_VERIFIED",
+      "evidence": null
+    },
+    {
+      "id": "real_harness",
+      "description": "Named coding harness repeated tool cycle and 20+ turns",
+      "status": "NOT_VERIFIED",
+      "evidence": null
+    },
+    {
+      "id": "restart_restore",
+      "description": "Live conversation restoration and 100 restart campaign",
+      "status": "NOT_VERIFIED",
+      "evidence": null
+    },
+    {
+      "id": "native_security",
+      "description": "Native remote IPC, fuzzing, storage and cancellation security",
+      "status": "NOT_VERIFIED",
+      "evidence": null
+    },
+    {
+      "id": "linux_package",
+      "description": "Install, launch and uninstall produced Linux package",
+      "status": "NOT_VERIFIED",
+      "evidence": null
+    }
+  ]
+}

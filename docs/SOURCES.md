@@ -1,0 +1,23 @@
+# Source provenance and primary references
+
+Retrieved during the execution ending September 19, 2026. URLs are development references, not runtime dependencies. Product requirements come from the user-uploaded MASTERPLAN.md, not from these external documents. External APIs were consulted for syntax/contracts; the application's runtime is not certified by those documents.
+
+- User artifact: `/mnt/data/Pasted markdown.md`, copied unchanged as MASTERPLAN.md.
+- Zag repository and pinned revision: https://github.com/Sylorlabs/zag/tree/abed8aa170ef1bc33e5aca68b99fcdd905a4545f
+- Zag runtime primitive declarations: https://github.com/Sylorlabs/zag/blob/abed8aa170ef1bc33e5aca68b99fcdd905a4545f/zag-poc/std/rt.zag
+- Zag native IPv4 reference: https://github.com/Sylorlabs/zag/blob/abed8aa170ef1bc33e5aca68b99fcdd905a4545f/zag-poc/std/net_ipv4.zag
+- Zag bootstrap entry: https://github.com/Sylorlabs/zag/blob/abed8aa170ef1bc33e5aca68b99fcdd905a4545f/zag-poc/bootstrap.sh
+- Svelte 5 overview/runes: https://svelte.dev/docs/svelte/overview
+- Tauri sidecars: https://v2.tauri.app/develop/sidecar/
+- Tauri capabilities and Linux caveat: https://v2.tauri.app/security/capabilities/
+- Tauri explicit application commands: https://docs.rs/tauri-build/latest/tauri_build/struct.AppManifest.html
+- Tauri WebviewBuilder, inspected version 2.11.5: https://docs.rs/tauri/latest/tauri/webview/struct.WebviewBuilder.html
+- Tauri WebviewWindowBuilder and clipboard option: https://docs.rs/tauri/latest/tauri/webview/struct.WebviewWindowBuilder.html
+- Tauri shell process Command conversion, inspected 2.3.6: https://docs.rs/tauri-plugin-shell/latest/tauri_plugin_shell/process/struct.Command.html
+- OpenAI Chat API primary reference: https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
+- OpenAI streaming reference: https://developers.openai.com/api/docs/guides/streaming-responses
+- Anthropic streaming reference: https://platform.claude.com/docs/en/build-with-claude/streaming
+
+The protocol implementation intentionally covers only the subset listed in PROTOCOL.md. No model identity/context size/provider capability has been taken from an illustrative masterplan example and passed off as discovered data. No actual provider login, model call, quota test or current provider terms review took place in this environment.
+
+GitHub read access succeeded. The attempted Actions job rerun returned HTTP 403, “Resource not accessible by integration.” Earlier write/branch attempts were also reported unavailable; no repository change, branch or workflow run is claimed in this delivery.

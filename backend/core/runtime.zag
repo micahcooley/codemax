@@ -1,0 +1,19 @@
+// Native Zag runtime interface, matching Sylorlabs/zag std/rt.zag at the
+// revision in scripts/toolchain.json. No foreign application runtime.
+extern fn _zag_malloc(n: i32) *i8 @alloc @panic;
+extern fn _zag_free(p: @consumes *i8) void @alloc;
+extern fn _zag_strlen(s: []u8) i32;
+extern fn _zag_strcmp(a: []u8, b: []u8) i32;
+extern fn _zag_slice_ptr(s: []u8) *i8;
+extern fn _zag_println(s: []u8) void @io;
+extern fn _zag_eprintln(s: []u8) void @io;
+extern fn _zag_flush() void @io;
+extern fn _zag_argc() i32 @io;
+extern fn _zag_arg(idx: i32) []u8 @io;
+extern fn _zag_getenv(name: []u8) []u8 @io;
+extern fn _zag_read_file(path: []u8) []u8 @io @alloc;
+extern fn _zag_clock_monotonic_ms() i64 @io;
+extern fn _zag_raw_syscall(num: i64, a1: i64, a2: i64, a3: i64,
+                         a4: i64, a5: i64, a6: i64) i64 @io;
+extern fn _zag_exit(code: i32) void @io;
+extern fn _zag_strcmp_ord(a: []u8, b: []u8) i32;

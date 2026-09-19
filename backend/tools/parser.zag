@@ -1,0 +1,112 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../core/json.zag") as json
+@import("../security/validation.zag") as validation
+// Incremental finite-state framing. All buffers are bounded. A valid nonce is
+// per request; fences and escaped openers are literals. Invalid/unfinished
+// frames recover as text and never become executable tool events.
+struct Parser {
+    pending: buf.Buffer, opener: buf.Buffer, names: buf.Buffer, ids: buf.Buffer,
+    events: buf.Buffer, inside: bool, scan: i32, depth: i32, quoted: bool,
+    escaped: bool, fence: bool, ticks: i32, slashes: i32, calls: i32,
+    malformed: i32, failed: bool, enabled: bool,
+}
+fn make(nonce: []u8, names: []u8, enabled: bool) Parser {
+    let p: Parser = Parser{.pending = buf.make(65536), .opener = buf.make(192), .names = buf.make(8192), .ids = buf.make(2048),
+        .events = buf.make(524288), .inside = false, .scan = 0, .depth = 0, .quoted = false, .escaped = false,
+        .fence = false, .ticks = 0, .slashes = 0, .calls = 0, .malformed = 0, .failed = false, .enabled = enabled};
+    buf.add(&p.opener, "<bridge-tool-call nonce=\""); buf.add(&p.opener, nonce); buf.add(&p.opener, "\">");
+    buf.copy(&p.names, names); buf.copy(&p.ids, "|"); return p;
+}
+fn text(p: *Parser, s: []u8) void {
+    if (_zag_strlen(s) == 0) { return; }
+    buf.add(&p.*.events, "{\"type\":\"text\",\"data\":"); buf.json(&p.*.events, s); buf.add(&p.*.events, "}\n");
+    let i: i32 = 0;
+    while (i < _zag_strlen(s)) {
+        let c: u8 = s[i];
+        if (c == 96) { p.*.ticks = p.*.ticks + 1; if (p.*.ticks == 3) { p.*.fence = !p.*.fence; p.*.ticks = 0; } }
+        else { p.*.ticks = 0; }
+        if (c == 92) { p.*.slashes = (p.*.slashes + 1) % 2; } else { p.*.slashes = 0; }
+        i = i + 1;
+    }
+}
+fn accept_frame(p: *Parser, payload: []u8) bool {
+    let d: json.Document = json.parse(payload); let ok: bool = d.ok != 0 && json.kind(&d, 0) == 1 && p.*.calls < 16;
+    let id: buf.Buffer = buf.make(96); let name: buf.Buffer = buf.make(96); let key: buf.Buffer = buf.make(100);
+    json.field_text(&d, 0, "id", &id); json.field_text(&d, 0, "name", &name); let args: i32 = json.get(&d, 0, "arguments");
+    if (id.ok == 0 || name.ok == 0 || !validation.safe_id(buf.view(&id)) || !validation.safe_id(buf.view(&name)) || json.kind(&d, args) != 1) { ok = false; }
+    buf.copy(&key, "|"); buf.add(&key, buf.view(&name)); buf.byte(&key, 124);
+    if (buf.find(buf.view(&p.*.names), buf.view(&key), 0) < 0) { ok = false; }
+    buf.copy(&key, "|"); buf.add(&key, buf.view(&id)); buf.byte(&key, 124);
+    if (buf.find(buf.view(&p.*.ids), buf.view(&key), 0) >= 0) { ok = false; }
+    if (ok) {
+        let event: buf.Buffer = buf.make(262144);
+        buf.add(&event, "{\"type\":\"call\",\"data\":{\"id\":"); buf.json(&event, buf.view(&id));
+        buf.add(&event, ",\"name\":"); buf.json(&event, buf.view(&name)); buf.add(&event, ",\"arguments\":"); json.canonical(&d, args, &event); buf.add(&event, "}}\n");
+        if (event.ok == 0) { ok = false; }
+        else { buf.add(&p.*.events, buf.view(&event)); buf.add(&p.*.ids, buf.view(&id)); buf.byte(&p.*.ids, 124); p.*.calls = p.*.calls + 1; }
+        buf.free(&event);
+    }
+    buf.free(&id); buf.free(&name); buf.free(&key); json.free(&d); return ok;
+}
+fn feed(p: *Parser, delta: []u8) void {
+    buf.clear(&p.*.events);
+    if (p.*.failed) { return; }
+    if (!p.*.enabled) { text(p, delta); return; }
+    buf.add(&p.*.pending, delta);
+    if (p.*.pending.ok == 0) { p.*.failed = true; return; }
+    let closer: []u8 = "</bridge-tool-call>"; let iterations: i32 = 0;
+    while (p.*.pending.len > 0 && iterations < 4096) {
+        iterations = iterations + 1;
+        if (!p.*.inside) {
+            let found: i32 = buf.find(buf.view(&p.*.pending), buf.view(&p.*.opener), 0);
+            if (found < 0) {
+                let held: i32 = p.*.opener.len - 1;
+                if (held > p.*.pending.len) { held = p.*.pending.len; }
+                while (held > 0 && !buf.eq(p.*.pending.data[p.*.pending.len - held..p.*.pending.len], p.*.opener.data[0..held])) { held = held - 1; }
+                let ready: i32 = p.*.pending.len - held; text(p, p.*.pending.data[0..ready]); buf.drop_prefix(&p.*.pending, ready); break;
+            }
+            text(p, p.*.pending.data[0..found]); buf.drop_prefix(&p.*.pending, found);
+            if (p.*.fence || p.*.slashes == 1) {
+                text(p, p.*.pending.data[0..p.*.opener.len]); buf.drop_prefix(&p.*.pending, p.*.opener.len);
+            } else {
+                buf.drop_prefix(&p.*.pending, p.*.opener.len); p.*.inside = true; p.*.scan = 0; p.*.depth = 0; p.*.quoted = false; p.*.escaped = false;
+            }
+        } else {
+            let closed: bool = false;
+            while (p.*.scan < p.*.pending.len) {
+                let c: u8 = p.*.pending.data[p.*.scan];
+                if (!p.*.quoted && p.*.depth <= 0 && c == 60) {
+                    let rest: []u8 = p.*.pending.data[p.*.scan..p.*.pending.len];
+                    if (_zag_strlen(rest) < _zag_strlen(closer) && buf.prefix(closer, rest)) { break; }
+                    if (buf.prefix(rest, closer)) {
+                        let valid: bool = accept_frame(p, p.*.pending.data[0..p.*.scan]);
+                        if (!valid) {
+                            p.*.malformed = p.*.malformed + 1; text(p, buf.view(&p.*.opener)); text(p, p.*.pending.data[0..p.*.scan]); text(p, closer);
+                        }
+                        buf.drop_prefix(&p.*.pending, p.*.scan + _zag_strlen(closer)); p.*.inside = false; p.*.scan = 0; closed = true; break;
+                    }
+                }
+                if (p.*.quoted) {
+                    if (p.*.escaped) { p.*.escaped = false; }
+                    else if (c == 92) { p.*.escaped = true; }
+                    else if (c == 34) { p.*.quoted = false; }
+                } else {
+                    if (c == 34) { p.*.quoted = true; }
+                    else if (c == 123 || c == 91) { p.*.depth = p.*.depth + 1; }
+                    else if (c == 125 || c == 93) { p.*.depth = p.*.depth - 1; }
+                }
+                p.*.scan = p.*.scan + 1;
+            }
+            if (!closed) { break; }
+        }
+    }
+    if (p.*.events.ok == 0 || p.*.ids.ok == 0 || iterations >= 4096) { p.*.failed = true; }
+}
+fn finish(p: *Parser) void {
+    buf.clear(&p.*.events);
+    if (p.*.inside) { p.*.malformed = p.*.malformed + 1; text(p, buf.view(&p.*.opener)); }
+    text(p, buf.view(&p.*.pending)); buf.clear(&p.*.pending); p.*.inside = false;
+    if (p.*.events.ok == 0) { p.*.failed = true; }
+}
+fn free(p: *Parser) void { buf.free(&p.*.pending); buf.free(&p.*.opener); buf.free(&p.*.names); buf.free(&p.*.ids); buf.free(&p.*.events); }

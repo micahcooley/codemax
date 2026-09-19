@@ -1,0 +1,56 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../core/json.zag") as json
+@import("../tools/parser.zag") as tools
+@import("../security/local_token.zag") as token
+@import("../security/validation.zag") as validation
+@import("../sessions/context.zag") as context
+@import("../protocol/normalized.zag") as normalized
+fn check(condition: bool, name: []u8) void {
+    if (!condition) { _zag_eprintln(name); _zag_exit(1); }
+}
+fn json_cases() void {
+    let a: json.Document = json.parse("{\"a\":1,\"\\u0061\":2}"); check(a.ok == 0, "duplicate decoded keys"); json.free(&a);
+    let b: json.Document = json.parse("{\"x\":\"\\ud83c\\udfaf\",\"n\":[1,true,null]}"); check(b.ok != 0, "surrogate pair");
+    let text: buf.Buffer = buf.make(64); json.field_text(&b, 0, "x", &text); check(buf.eq(buf.view(&text), "🎯"), "unicode decode"); buf.free(&text); json.free(&b);
+    let c: json.Document = json.parse("[1,]"); check(c.ok == 0, "trailing comma"); json.free(&c);
+    let d: json.Document = json.parse("01"); check(d.ok == 0, "leading zero"); json.free(&d);
+    let e: json.Document = json.parse("\"\\ud800\""); check(e.ok == 0, "unpaired surrogate"); json.free(&e);
+    let f: json.Document = json.parse("{\"z\":1,\"a\":2}"); let out: buf.Buffer = buf.make(100); json.canonical(&f, 0, &out);
+    check(buf.eq(buf.view(&out), "{\"a\":2,\"z\":1}"), "canonical order"); buf.free(&out); json.free(&f);
+}
+fn tool_cases() void {
+    let source: []u8 = "before<bridge-tool-call nonce=\"aabbccdd\">{\"id\":\"c1\",\"name\":\"read_file\",\"arguments\":{\"x\":\"</bridge-tool-call>\",\"nested\":[1,{\"y\":2}]}}</bridge-tool-call>after";
+    let split: i32 = 0;
+    while (split <= _zag_strlen(source)) {
+        let p: tools.Parser = tools.make("aabbccdd", "|read_file|", true);
+        tools.feed(&p, source[0..split]); tools.feed(&p, source[split.._zag_strlen(source)]); tools.finish(&p);
+        check(!p.failed && p.calls == 1 && p.malformed == 0, "every two-chunk tool split"); tools.free(&p); split = split + 1;
+    }
+    let q: tools.Parser = tools.make("aabbccdd", "|read_file|", true);
+    tools.feed(&q, "```\n<bridge-tool-call nonce=\"aabbccdd\">{\"id\":\"c1\",\"name\":\"read_file\",\"arguments\":{}}</bridge-tool-call>\n```");
+    check(q.calls == 0, "fenced examples are not calls"); tools.free(&q);
+    let r: tools.Parser = tools.make("fresh", "|read_file|", true);
+    tools.feed(&r, source); tools.finish(&r); check(r.calls == 0, "wrong nonce"); tools.free(&r);
+}
+fn normalized_cases() void {
+    let r: normalized.Request = normalized.make();
+    normalized.decode(&r, "{\"model\":\"p1/test\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true}", 1, "r1", "s1");
+    check(r.error.len == 0 && r.stream && r.message_count == 1, "OpenAI normalize"); normalized.free(&r);
+    let a: normalized.Request = normalized.make();
+    normalized.decode(&a, "{\"model\":\"p1/test\",\"max_tokens\":128,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"c1\",\"content\":\"result\"}]}]}", 2, "r2", "s2");
+    check(a.error.len == 0 && a.message_count == 1, "Anthropic tool result normalize"); normalized.free(&a);
+    let b: normalized.Request = normalized.make();
+    normalized.decode(&b, "{\"model\":\"p1/test\",\"input\":\"hello\",\"temperature\":0.2}", 3, "r3", "");
+    check(buf.eq(buf.view(&b.error), "UNSUPPORTED_PARAMETER"), "unsupported controls fail closed"); normalized.free(&b);
+}
+fn main() i32 {
+    json_cases(); tool_cases(); normalized_cases();
+    let origin: buf.Buffer = buf.make(512);
+    check(validation.provider_origin("https://chat.example.com/", false, &origin), "HTTPS provider");
+    check(!validation.provider_origin("https://user:secret@example.com/", false, &origin), "credential URL rejected");
+    check(!validation.provider_origin("http://127.0.0.1:7340/", false, &origin), "insecure production URL rejected");
+    check(validation.provider_origin("http://127.0.0.1:7340/", true, &origin), "explicit dev fixture");
+    check(!context.fits(900, 100, 10, 1000), "context reservation");
+    buf.free(&origin); _zag_println("native unit suite passed"); return 0;
+}

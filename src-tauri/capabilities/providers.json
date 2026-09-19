@@ -1,0 +1,17 @@
+{
+  "identifier": "providers",
+  "description": "Untrusted provider views get one bounded observation command only.",
+  "webviews": [
+    "provider-*"
+  ],
+  "local": false,
+  "remote": {
+    "urls": [
+      "https://*/*",
+      "http://127.0.0.1:*/*"
+    ]
+  },
+  "permissions": [
+    "provider-observation"
+  ]
+}

@@ -1,0 +1,36 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("http.zag") as http
+@import("net.zag") as net
+@import("../protocol/normalized.zag") as normalized
+@import("../protocol/wire.zag") as wire
+@import("../tools/parser.zag") as tools
+// Each live connection owns its buffers. Unused slots have fd == -1 and no
+// initialized owners. One request per connection; keep-alive/pipelining reject.
+struct Client {
+    fd: i64, phase: i32, input: buf.Buffer, output: buf.Buffer, headers: http.Headers,
+    request: normalized.Request, parser: tools.Parser, writer: wire.Writer,
+    parser_open: bool, stream_open: bool, provider: i32, model: i32, session: i32,
+    text: buf.Buffer, current_text: buf.Buffer, calls: buf.Buffer, segments: buf.Buffer,
+    segment_count: i32, raw_bytes: i32, deadline: i64, last_write: i64, last_ping: i64,
+}
+fn make(fd: i64) Client {
+    let now: i64 = _zag_clock_monotonic_ms();
+    return Client{.fd = fd, .phase = 0, .input = buf.make(1064960), .output = buf.make(2097152), .headers = http.make(),
+        .request = normalized.make(), .parser = tools.make("", "", false), .writer = wire.make(net.unix_seconds()),
+        .parser_open = true, .stream_open = false, .provider = 0 - 1, .model = 0 - 1, .session = 0 - 1,
+        .text = buf.make(131072), .current_text = buf.make(131072), .calls = buf.make(524288), .segments = buf.make(1048576),
+        .segment_count = 0, .raw_bytes = 0, .deadline = now + 10000, .last_write = now, .last_ping = now};
+}
+fn flush_text(c: *Client) void {
+    if (c.*.current_text.len == 0) { return; }
+    if (c.*.segment_count > 0) { buf.byte(&c.*.segments, 44); }
+    buf.add(&c.*.segments, "{\"type\":\"text\",\"data\":"); buf.json(&c.*.segments, buf.view(&c.*.current_text)); buf.byte(&c.*.segments, 125);
+    c.*.segment_count = c.*.segment_count + 1; buf.clear(&c.*.current_text);
+}
+fn free(c: *Client) void {
+    if (c.*.fd < 0) { return; }
+    net.close(c.*.fd); buf.free(&c.*.input); buf.free(&c.*.output); http.free(&c.*.headers); normalized.free(&c.*.request);
+    if (c.*.parser_open) { tools.free(&c.*.parser); }
+    buf.free(&c.*.text); buf.free(&c.*.current_text); buf.free(&c.*.calls); buf.free(&c.*.segments); c.*.fd = 0 - 1;
+}

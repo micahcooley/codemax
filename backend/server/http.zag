@@ -1,0 +1,103 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../security/validation.zag") as validation
+@import("../security/local_token.zag") as token
+struct Headers {
+    method: buf.Buffer, path: buf.Buffer, authorization: buf.Buffer, api_key: buf.Buffer,
+    session: buf.Buffer, host: buf.Buffer, content_length: i32, header_length: i32,
+    error: i32, authenticated: bool,
+}
+fn make() Headers {
+    return Headers{.method = buf.make(12), .path = buf.make(512), .authorization = buf.make(256), .api_key = buf.make(256),
+        .session = buf.make(96), .host = buf.make(128), .content_length = 0, .header_length = 0, .error = 0, .authenticated = false};
+}
+fn trim(s: []u8) []u8 {
+    let start: i32 = 0; let end: i32 = _zag_strlen(s);
+    while (start < end && (s[start] == 32 || s[start] == 9)) { start = start + 1; }
+    while (end > start && (s[end - 1] == 32 || s[end - 1] == 9)) { end = end - 1; }
+    return s[start..end];
+}
+fn number(s: []u8) i32 {
+    if (_zag_strlen(s) == 0 || _zag_strlen(s) > 7) { return 0 - 1; }
+    let n: i32 = 0; let i: i32 = 0;
+    while (i < _zag_strlen(s)) {
+        if (s[i] < 48 || s[i] > 57) { return 0 - 1; }
+        n = n * 10 + (s[i] - 48) as i32; if (n > 1048576) { return 0 - 1; } i = i + 1;
+    }
+    return n;
+}
+fn header_name(s: []u8) bool {
+    let n: i32 = _zag_strlen(s); if (n < 1 || n > 64) { return false; } let i: i32 = 0;
+    while (i < n) { let c: u8 = s[i]; if (!((c >= 65 && c <= 90) || (c >= 97 && c <= 122) || (c >= 48 && c <= 57) || c == 45)) { return false; } i = i + 1; }
+    return true;
+}
+fn parse(h: *Headers, input: []u8, port: i32, expected_key: []u8) bool {
+    let end: i32 = buf.find(input, "\r\n\r\n", 0);
+    if (end < 0) { return false; }
+    if (end > 16380) { h.*.error = 431; return true; }
+    h.*.header_length = end + 4;
+    let first: i32 = buf.find(input, "\r\n", 0); let a: i32 = buf.find(input, " ", 0); let b: i32 = buf.find(input, " ", a + 1);
+    if (first < 0 || a < 1 || b <= a + 1 || b > first || first > 2048 || !buf.eq(input[b + 1..first], "HTTP/1.1")) { h.*.error = 400; return true; }
+    buf.copy(&h.*.method, input[0..a]); buf.copy(&h.*.path, input[a + 1..b]);
+    if ((!buf.eq(buf.view(&h.*.method), "GET") && !buf.eq(buf.view(&h.*.method), "POST")) || h.*.path.ok == 0) { h.*.error = 405; return true; }
+    let name: buf.Buffer = buf.make(64); let lower: buf.Buffer = buf.make(256); let flags: i32 = 0; let count: i32 = 0; let cursor: i32 = first + 2;
+    while (cursor < end && h.*.error == 0) {
+        let line_end: i32 = buf.find(input, "\r\n", cursor); let colon: i32 = buf.find(input, ":", cursor);
+        if (line_end < 0 || colon <= cursor || colon >= line_end || !header_name(input[cursor..colon]) || count >= 64) { h.*.error = 400; break; }
+        validation.ascii_lower(input[cursor..colon], &name); let value: []u8 = trim(input[colon + 1..line_end]);
+        let i: i32 = 0;
+        while (i < _zag_strlen(value)) { if ((value[i] < 32 && value[i] != 9) || value[i] == 127) { h.*.error = 400; } i = i + 1; }
+        let field: []u8 = buf.view(&name); let bit: i32 = 0;
+        if (buf.eq(field, "host")) { bit = 1; validation.ascii_lower(value, &h.*.host); }
+        else if (buf.eq(field, "content-length")) { bit = 2; h.*.content_length = number(value); if (h.*.content_length < 0) { h.*.error = 413; } }
+        else if (buf.eq(field, "authorization")) { bit = 4; buf.copy(&h.*.authorization, value); }
+        else if (buf.eq(field, "x-api-key")) { bit = 8; buf.copy(&h.*.api_key, value); }
+        else if (buf.eq(field, "x-bridge-session")) { bit = 16; buf.copy(&h.*.session, value); }
+        else if (buf.eq(field, "transfer-encoding") || buf.eq(field, "expect")) { h.*.error = 400; }
+        else if (buf.eq(field, "origin")) { h.*.error = 403; }
+        else if (buf.eq(field, "sec-fetch-site") && !buf.eq(value, "none")) { h.*.error = 403; }
+        else if (buf.eq(field, "content-type")) {
+            bit = 32; validation.ascii_lower(value, &lower);
+            if (!buf.eq(buf.view(&lower), "application/json") && !buf.eq(buf.view(&lower), "application/json; charset=utf-8") && !buf.eq(buf.view(&lower), "application/json;charset=utf-8")) { h.*.error = 415; }
+        }
+        if (bit != 0 && (flags & bit) != 0) { h.*.error = 400; } flags = flags | bit;
+        count = count + 1; cursor = line_end + 2;
+    }
+    buf.clear(&lower); buf.add(&lower, "127.0.0.1:"); buf.integer(&lower, port as i64);
+    let valid_host: bool = buf.eq(buf.view(&h.*.host), buf.view(&lower));
+    buf.clear(&lower); buf.add(&lower, "localhost:"); buf.integer(&lower, port as i64);
+    valid_host = valid_host || buf.eq(buf.view(&h.*.host), buf.view(&lower));
+    if (!valid_host || h.*.host.ok == 0) { h.*.error = 403; }
+    if (buf.eq(buf.view(&h.*.method), "POST") && ((flags & 2) == 0 || (flags & 32) == 0)) { h.*.error = 411; }
+    if (buf.eq(buf.view(&h.*.method), "GET") && h.*.content_length != 0) { h.*.error = 400; }
+    if (h.*.session.ok == 0 || (h.*.session.len > 0 && !validation.safe_id(buf.view(&h.*.session)))) { h.*.error = 400; }
+    let bearer_ok: bool = false; let api_ok: bool = false;
+    if (h.*.authorization.len > 7 && buf.prefix(buf.view(&h.*.authorization), "Bearer ")) { bearer_ok = token.equal(expected_key, h.*.authorization.data[7..h.*.authorization.len]); }
+    if (h.*.api_key.len > 0) { api_ok = token.equal(expected_key, buf.view(&h.*.api_key)); }
+    h.*.authenticated = (bearer_ok || api_ok) && (h.*.authorization.len == 0 || bearer_ok) && (h.*.api_key.len == 0 || api_ok);
+    if (h.*.authorization.ok == 0 || h.*.api_key.ok == 0) { h.*.authenticated = false; }
+    buf.free(&name); buf.free(&lower); return true;
+}
+fn reason(status: i32) []u8 {
+    if (status == 200) { return "OK"; } if (status == 400) { return "Bad Request"; } if (status == 401) { return "Unauthorized"; }
+    if (status == 403) { return "Forbidden"; } if (status == 404) { return "Not Found"; } if (status == 405) { return "Method Not Allowed"; }
+    if (status == 408) { return "Request Timeout"; } if (status == 409) { return "Conflict"; } if (status == 411) { return "Length Required"; }
+    if (status == 413) { return "Content Too Large"; } if (status == 415) { return "Unsupported Media Type"; } if (status == 422) { return "Unprocessable Content"; }
+    if (status == 429) { return "Too Many Requests"; } if (status == 431) { return "Request Header Fields Too Large"; }
+    if (status == 502) { return "Bad Gateway"; } if (status == 503) { return "Service Unavailable"; } if (status == 504) { return "Gateway Timeout"; }
+    return "Internal Server Error";
+}
+fn response(out: *buf.Buffer, status: i32, body: []u8, session: []u8) void {
+    buf.add(out, "HTTP/1.1 "); buf.integer(out, status as i64); buf.byte(out, 32); buf.add(out, reason(status));
+    buf.add(out, "\r\nContent-Type: application/json; charset=utf-8\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n");
+    if (_zag_strlen(session) > 0) { buf.add(out, "X-Bridge-Session: "); buf.add(out, session); buf.add(out, "\r\n"); }
+    buf.add(out, "X-Bridge-Usage-Provenance: estimated-utf8-bytes-or-unknown\r\nContent-Length: "); buf.integer(out, _zag_strlen(body) as i64); buf.add(out, "\r\n\r\n"); buf.add(out, body);
+}
+fn stream_headers(out: *buf.Buffer, session: []u8) void {
+    buf.add(out, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nConnection: close\r\nCache-Control: no-cache, no-transform\r\nX-Accel-Buffering: no\r\nX-Content-Type-Options: nosniff\r\nX-Bridge-Usage-Provenance: estimated-utf8-bytes-or-unknown\r\nX-Bridge-Session: ");
+    buf.add(out, session); buf.add(out, "\r\n\r\n");
+}
+fn error_json(code: []u8, out: *buf.Buffer) void {
+    buf.add(out, "{\"type\":\"error\",\"error\":{\"type\":\"bridge_error\",\"code\":"); buf.json(out, code); buf.add(out, ",\"message\":"); buf.json(out, code); buf.add(out, "}}");
+}
+fn free(h: *Headers) void { buf.free(&h.*.method); buf.free(&h.*.path); buf.free(&h.*.authorization); buf.free(&h.*.api_key); buf.free(&h.*.session); buf.free(&h.*.host); }

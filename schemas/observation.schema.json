@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sanitized semantic observation (not arbitrary DOM or credential capture)",
+  "type": "object",
+  "required": [
+    "v",
+    "type",
+    "origin",
+    "document_id",
+    "password_fields_present",
+    "controls"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "type": {
+      "const": "observation"
+    },
+    "origin": {
+      "type": "string",
+      "maxLength": 512
+    },
+    "document_id": {
+      "type": "string",
+      "maxLength": 96,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "password_fields_present": {
+      "type": "boolean"
+    },
+    "controls": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "tag",
+          "role",
+          "label",
+          "visible",
+          "editable",
+          "disabled",
+          "live",
+          "busy",
+          "assistant",
+          "options"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 999999
+          },
+          "tag": {
+            "type": "string",
+            "maxLength": 24
+          },
+          "role": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "visible": {
+            "type": "boolean"
+          },
+          "editable": {
+            "type": "boolean"
+          },
+          "disabled": {
+            "type": "boolean"
+          },
+          "live": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "busy": {
+            "type": "boolean"
+          },
+          "assistant": {
+            "type": "boolean"
+          },
+          "options": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "required": [
+                "label",
+                "value",
+                "selected",
+                "disabled"
+              ],
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "selected": {
+                  "type": "boolean"
+                },
+                "disabled": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

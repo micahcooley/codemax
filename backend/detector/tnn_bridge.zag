@@ -1,0 +1,16 @@
+@import("../core/buffer.zag") as buf
+@import("../core/json.zag") as json
+// A shadow result is data, never an executable action. No TNN artifact has
+// been admitted in this package; loading state does not confer authority.
+struct ShadowPrediction { evidence_version: i32, node: i32, confidence_ppm: i32, valid: bool, }
+fn decode_shadow(d: *json.Document, object: i32) ShadowPrediction {
+    let evidence: i64 = json.number(d, json.get(d, object, "evidence_version"), 0 - 1);
+    let node: i64 = json.number(d, json.get(d, object, "node"), 0 - 1);
+    let confidence: i64 = json.number(d, json.get(d, object, "confidence_ppm"), 0 - 1);
+    let valid: bool = d.*.ok != 0 && evidence >= 0 && evidence < 2147483647 && node > 0 && node < 1000000 && confidence >= 0 && confidence <= 1000000;
+    return ShadowPrediction{.evidence_version = evidence as i32, .node = node as i32, .confidence_ppm = confidence as i32, .valid = valid};
+}
+fn qualified_for_production() bool { return false; }
+fn status(out: *buf.Buffer) void {
+    buf.add(out, "{\"engine\":\"symbolic\",\"tnn_artifact_loaded\":false,\"hybrid_qualified\":false,\"reason\":\"No admitted TNN detector artifact or validation campaign\"}");
+}

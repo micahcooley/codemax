@@ -1,0 +1,49 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../core/json.zag") as json
+@import("../security/redaction.zag") as redaction
+@import("../security/validation.zag") as validation
+fn string_field(d: *json.Document, object: i32, key: []u8, out: *buf.Buffer) void {
+    let raw: buf.Buffer = buf.make(256); let safe: buf.Buffer = buf.make(256);
+    json.field_text(d, object, key, &raw); redaction.label(buf.view(&raw), &safe);
+    buf.json(out, key); buf.byte(out, 58); if (raw.ok == 0) { buf.json(out, ""); } else { buf.json(out, buf.view(&safe)); }
+    buf.free(&raw); buf.free(&safe);
+}
+fn boolean_field(d: *json.Document, object: i32, key: []u8, out: *buf.Buffer) void {
+    buf.json(out, key); buf.byte(out, 58); if (json.kind(d, json.get(d, object, key)) == 5) { buf.add(out, "true"); } else { buf.add(out, "false"); }
+}
+// Rebuild the accepted structural observation. Extra fields, input values,
+// headers, payloads and arbitrary properties cannot cross into detector state.
+fn sanitize(d: *json.Document, event: i32, origin: []u8, out: *buf.Buffer) bool {
+    if (d.*.ok == 0 || !json.is_text(d, json.get(d, event, "origin"), origin)) { return false; }
+    let document: buf.Buffer = buf.make(96); json.field_text(d, event, "document_id", &document);
+    let controls: i32 = json.get(d, event, "controls");
+    if (document.ok == 0 || !validation.safe_id(buf.view(&document)) || json.kind(d, controls) != 2 || d.*.tokens[controls].size > 128) { buf.free(&document); return false; }
+    buf.clear(out); buf.add(out, "{\"type\":\"observation\",\"origin\":"); buf.json(out, origin);
+    buf.add(out, ",\"document_id\":"); buf.json(out, buf.view(&document)); buf.byte(out, 44); boolean_field(d, event, "password_fields_present", out); buf.add(out, ",\"controls\":[");
+    let first: bool = true; let i: i32 = controls + 1;
+    while (i < d.*.tokens[controls].next) {
+        let node: i64 = json.number(d, json.get(d, i, "id"), 0);
+        if (node > 0 && node < 1000000) {
+            if (!first) { buf.byte(out, 44); } first = false;
+            buf.add(out, "{\"id\":"); buf.integer(out, node);
+            buf.byte(out, 44); string_field(d, i, "tag", out); buf.byte(out, 44); string_field(d, i, "role", out); buf.byte(out, 44); string_field(d, i, "label", out);
+            buf.byte(out, 44); string_field(d, i, "live", out); buf.byte(out, 44); boolean_field(d, i, "visible", out);
+            buf.byte(out, 44); boolean_field(d, i, "editable", out); buf.byte(out, 44); boolean_field(d, i, "disabled", out);
+            buf.byte(out, 44); boolean_field(d, i, "busy", out); buf.byte(out, 44); boolean_field(d, i, "assistant", out);
+            buf.add(out, ",\"options\":["); let options: i32 = json.get(d, i, "options"); let count: i32 = 0;
+            if (json.kind(d, options) == 2 && d.*.tokens[options].size <= 32) {
+                let j: i32 = options + 1;
+                while (j < d.*.tokens[options].next) {
+                    if (count > 0) { buf.byte(out, 44); } buf.byte(out, 123);
+                    string_field(d, j, "value", out); buf.byte(out, 44); string_field(d, j, "label", out);
+                    buf.byte(out, 44); boolean_field(d, j, "disabled", out); buf.byte(out, 44); boolean_field(d, j, "selected", out); buf.byte(out, 125);
+                    count = count + 1; j = d.*.tokens[j].next;
+                }
+            }
+            buf.add(out, "]}");
+        }
+        i = d.*.tokens[i].next;
+    }
+    buf.add(out, "]}"); buf.free(&document); return out.*.ok != 0;
+}

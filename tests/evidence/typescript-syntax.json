@@ -1,0 +1,25 @@
+{
+  "scope": "TypeScript parser only, including script bodies extracted from Svelte files. NOT component compilation, type checking, HTML validation, or a native UI test.",
+  "files": [
+    "src/App.svelte",
+    "src/lib/api/bridge.ts",
+    "src/lib/components/Badge.svelte",
+    "src/lib/components/BrowserPane.svelte",
+    "src/lib/components/CodeBlock.svelte",
+    "src/lib/components/Dialog.svelte",
+    "src/lib/components/Empty.svelte",
+    "src/lib/components/Icon.svelte",
+    "src/lib/state/app.svelte.ts",
+    "src/lib/types/bridge.ts",
+    "src/main.ts",
+    "src/screens/Detector.svelte",
+    "src/screens/Harness.svelte",
+    "src/screens/Home.svelte",
+    "src/screens/Models.svelte",
+    "src/screens/ProviderBrowser.svelte",
+    "src/screens/Sessions.svelte",
+    "src/screens/Settings.svelte"
+  ],
+  "status": "PASS",
+  "errors": []
+}

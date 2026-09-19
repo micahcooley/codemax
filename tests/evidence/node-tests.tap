@@ -1,0 +1,112 @@
+TAP version 13
+# Subtest: network URL summaries exclude credentials, query secrets and identifiers
+ok 1 - network URL summaries exclude credentials, query secrets and identifiers
+  ---
+  duration_ms: 5.864161
+  type: 'test'
+  ...
+# Subtest: network structural evidence contains no payload values or arbitrary keys
+ok 2 - network structural evidence contains no payload values or arbitrary keys
+  ---
+  duration_ms: 1.048281
+  type: 'test'
+  ...
+# Subtest: Unicode stream splitting is byte bounded and lossless
+ok 3 - Unicode stream splitting is byte bounded and lossless
+  ---
+  duration_ms: 145.404073
+  type: 'test'
+  ...
+# Subtest: stream correction is not duplicated or silently appended
+ok 4 - stream correction is not duplicated or silently appended
+  ---
+  duration_ms: 1.395306
+  type: 'test'
+  ...
+# Subtest: common token formats are redacted from semantic labels
+ok 5 - common token formats are redacted from semantic labels
+  ---
+  duration_ms: 0.721859
+  type: 'test'
+  ...
+# Subtest: oversized and non-JSON network bodies remain opaque
+ok 6 - oversized and non-JSON network bodies remain opaque
+  ---
+  duration_ms: 0.411786
+  type: 'test'
+  ...
+# Subtest: mock provider binds loopback, serves UI, streams and rejects traversal
+ok 7 - mock provider binds loopback, serves UI, streams and rejects traversal
+  ---
+  duration_ms: 160.523447
+  type: 'test'
+  ...
+# Subtest: quota and login expiration are deterministic failure fixtures
+ok 8 - quota and login expiration are deterministic failure fixtures
+  ---
+  duration_ms: 22.149914
+  type: 'test'
+  ...
+# Subtest: mock tool payload contains nested JSON and echoes a requested framing nonce
+ok 9 - mock tool payload contains nested JSON and echoes a requested framing nonce
+  ---
+  duration_ms: 0.519705
+  type: 'test'
+  ...
+# Subtest: static: trusted commands scoped to the main webview, not its window
+ok 10 - static: trusted commands scoped to the main webview, not its window
+  ---
+  duration_ms: 9.023559
+  type: 'test'
+  ...
+# Subtest: static: remote capability has only bounded observation permission
+ok 11 - static: remote capability has only bounded observation permission
+  ---
+  duration_ms: 0.975192
+  type: 'test'
+  ...
+# Subtest: static: host events target main webview explicitly
+ok 12 - static: host events target main webview explicitly
+  ---
+  duration_ms: 1.05329
+  type: 'test'
+  ...
+# Subtest: static: production entry points remain in Zag and no preview backend exists
+ok 13 - static: production entry points remain in Zag and no preview backend exists
+  ---
+  duration_ms: 1.057382
+  type: 'test'
+  ...
+# Subtest: static: sidecar packaging and least-privilege CSP configured
+ok 14 - static: sidecar packaging and least-privilege CSP configured
+  ---
+  duration_ms: 0.586442
+  type: 'test'
+  ...
+# Subtest: static: all Zag imports resolve inside the package
+ok 15 - static: all Zag imports resolve inside the package
+  ---
+  duration_ms: 12.009167
+  type: 'test'
+  ...
+# Subtest: static: seven real Svelte screens exist and unknowns are explicit
+ok 16 - static: seven real Svelte screens exist and unknowns are explicit
+  ---
+  duration_ms: 0.700476
+  type: 'test'
+  ...
+# Subtest: static: provider execution code has no credential extraction or shell calls
+ok 17 - static: provider execution code has no credential extraction or shell calls
+  ---
+  duration_ms: 1.10221
+  type: 'test'
+  ...
+1..17
+# tests 17
+# suites 0
+# pass 17
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 527.291448

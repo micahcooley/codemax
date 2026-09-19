@@ -1,0 +1,59 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../core/json.zag") as json
+@import("../security/validation.zag") as validation
+@import("../providers/registry.zag") as registry
+@import("../sessions/manager.zag") as sessions
+@import("files.zag") as files
+// Persistent state excludes message bodies, tool arguments/results and remote
+// credentials. Live conversation continuation is intentionally invalidated on
+// restart until a future verified provider-conversation restoration contract.
+fn save(root: []u8, port: i32, providers: *registry.Registry, s: *sessions.Sessions) bool {
+    let out: buf.Buffer = buf.make(1048576); buf.add(&out, "{\"schema\":1,\"port\":"); buf.integer(&out, port as i64); buf.add(&out, ",\"providers\":["); let i: i32 = 0;
+    while (i < providers.*.count) {
+        let p: *registry.Provider = &providers.*.items[i]; if (i > 0) { buf.byte(&out, 44); }
+        buf.add(&out, "{\"id\":"); buf.integer(&out, p.*.id as i64); buf.add(&out, ",\"url\":"); buf.json(&out, buf.view(&p.*.url));
+        buf.add(&out, ",\"label\":"); buf.json(&out, buf.view(&p.*.label)); buf.add(&out, ",\"recipes\":"); buf.add(&out, buf.view(&p.*.recipes));
+        buf.add(&out, ",\"manual_model\":"); buf.json(&out, buf.view(&p.*.manual_model)); buf.byte(&out, 125); i = i + 1;
+    }
+    buf.add(&out, "],\"sessions\":"); sessions.snapshot(s, &out); buf.byte(&out, 125);
+    let ok: bool = out.ok != 0 && files.save(root, "state.json", buf.view(&out)); buf.free(&out); return ok;
+}
+fn load(root: []u8, dev: bool, port: *i32, providers: *registry.Registry, s: *sessions.Sessions) bool {
+    let bytes: buf.Buffer = buf.make(1048576); let rc: i32 = files.load(root, "state.json", &bytes);
+    if (rc == 0) { buf.free(&bytes); return true; } if (rc < 0) { buf.free(&bytes); return false; }
+    let d: json.Document = json.parse(buf.view(&bytes)); let value: i64 = json.number(&d, json.get(&d, 0, "port"), 0);
+    let list: i32 = json.get(&d, 0, "providers"); let ok: bool = d.ok != 0 && json.number(&d, json.get(&d, 0, "schema"), 0) == 1 && value >= 1024 && value <= 65535 && json.kind(&d, list) == 2 && d.tokens[list].size <= 16;
+    let url: buf.Buffer = buf.make(2048); let label: buf.Buffer = buf.make(256); let origin: buf.Buffer = buf.make(512);
+    if (ok) {
+        port.* = value as i32; let i: i32 = list + 1;
+        while (i < d.tokens[list].next && ok) {
+            json.field_text(&d, i, "url", &url); json.field_text(&d, i, "label", &label); let id: i64 = json.number(&d, json.get(&d, i, "id"), 0);
+            ok = url.ok != 0 && label.ok != 0 && id > 0 && id < 1000000 && registry.index(providers, id as i32) < 0 && validation.provider_origin(buf.view(&url), dev, &origin);
+            if (ok) {
+                let idx: i32 = registry.add(providers, buf.view(&origin), buf.view(&url), buf.view(&label)); let p: *registry.Provider = &providers.*.items[idx]; p.*.id = id as i32; p.*.state = 0;
+                if (providers.*.next_id <= id as i32) { providers.*.next_id = id as i32 + 1; }
+                let recipes: i32 = json.get(&d, i, "recipes"); if (json.kind(&d, recipes) != 2 || d.tokens[recipes].size > 5) { ok = false; } else { buf.copy(&p.*.recipes, json.raw(&d, recipes)); }
+                json.field_text(&d, i, "manual_model", &p.*.manual_model); if (p.*.recipes.ok == 0 || p.*.manual_model.ok == 0) { ok = false; }
+            }
+            i = d.tokens[i].next;
+        }
+    }
+    let old: i32 = json.get(&d, 0, "sessions");
+    if (ok && json.kind(&d, old) == 2 && d.tokens[old].size <= 128) {
+        let i: i32 = old + 1;
+        while (i < d.tokens[old].next && ok) {
+            json.field_text(&d, i, "id", &label); json.field_text(&d, i, "model", &url); let provider: i64 = json.number(&d, json.get(&d, i, "provider"), 0);
+            if (!validation.safe_id(buf.view(&label)) || label.ok == 0 || url.ok == 0 || provider < 1 || provider > 1000000) { ok = false; }
+            else {
+                let idx: i32 = sessions.add(s, buf.view(&label), provider as i32, buf.view(&url));
+                if (idx < 0) { ok = false; } else {
+                    s.*.items[idx].status = 2; let turns: i64 = json.number(&d, json.get(&d, i, "turn_count"), 0);
+                    if (turns < 0 || turns > 1000000) { ok = false; } else { s.*.items[idx].turns = turns as i32; }
+                }
+            }
+            i = d.tokens[i].next;
+        }
+    } else if (ok) { ok = false; }
+    buf.free(&url); buf.free(&label); buf.free(&origin); json.free(&d); buf.free(&bytes); return ok;
+}

@@ -1,0 +1,13 @@
+{
+  "scope": "Chromium + actual browser/agent.js + local deterministic fixture. Not Tauri, WebKitGTK, Zag, or a real coding-harness validation.",
+  "tests": [
+    {
+      "name": "browser_network_bootstrap",
+      "status": "BLOCKED",
+      "error": "Page.goto: net::ERR_BLOCKED_BY_ADMINISTRATOR at http://127.0.0.1:7340/\nCall log:\n  - navigating to \"http://127.0.0.1:7340/\", waiting until \"load\"\n"
+    }
+  ],
+  "passed": 0,
+  "failed": 0,
+  "blocked": 1
+}

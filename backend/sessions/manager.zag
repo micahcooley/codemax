@@ -1,0 +1,82 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../security/validation.zag") as validation
+@import("../protocol/normalized.zag") as normalized
+struct Session {
+    id: buf.Buffer, model: buf.Buffer, history: buf.Buffer, response: buf.Buffer, last_response_id: buf.Buffer,
+    provider_id: i32, turns: i32, input_messages: i32, created: i64, last_used: i64,
+    status: i32, estimated_used: i64, tools_last_turn: bool,
+}
+struct Sessions { items: *Session, count: i32, }
+fn make() Sessions { return Sessions{.items = _zag_malloc(128 * @sizeOf[Session]()) as *Session, .count = 0}; }
+fn find(s: *Sessions, id: []u8) i32 {
+    let i: i32 = 0; while (i < s.*.count) { if (buf.eq(buf.view(&s.*.items[i].id), id)) { return i; } i = i + 1; } return 0 - 1;
+}
+fn add(s: *Sessions, id: []u8, provider: i32, model: []u8) i32 {
+    if (s.*.count >= 128 || !validation.safe_id(id) || find(s, id) >= 0) { return 0 - 1; }
+    let now: i64 = _zag_clock_monotonic_ms();
+    let item: Session = Session{.id = buf.make(96), .model = buf.make(256), .history = buf.make(262144), .response = buf.make(262144), .last_response_id = buf.make(96),
+        .provider_id = provider, .turns = 0, .input_messages = 0, .created = now, .last_used = now, .status = 0, .estimated_used = 0, .tools_last_turn = false};
+    buf.copy(&item.id, id); buf.copy(&item.model, model); s.*.items[s.*.count] = item; s.*.count = s.*.count + 1; return s.*.count - 1;
+}
+fn status_name(status: i32) []u8 {
+    if (status == 1) { return "ACTIVE"; } if (status == 2) { return "PROVIDER_LOST"; }
+    if (status == 3) { return "RATE_LIMITED"; } if (status == 4) { return "EXPIRED"; } return "IDLE";
+}
+fn snapshot(s: *Sessions, out: *buf.Buffer) void {
+    buf.add(out, "["); let i: i32 = 0;
+    while (i < s.*.count) {
+        let item: *Session = &s.*.items[i]; if (i > 0) { buf.byte(out, 44); }
+        buf.add(out, "{\"id\":"); buf.json(out, buf.view(&item.*.id)); buf.add(out, ",\"provider\":"); buf.integer(out, item.*.provider_id as i64);
+        buf.add(out, ",\"model\":"); buf.json(out, buf.view(&item.*.model)); buf.add(out, ",\"turn_count\":"); buf.integer(out, item.*.turns as i64);
+        buf.add(out, ",\"status\":"); buf.json(out, status_name(item.*.status));
+        buf.add(out, ",\"context\":{\"estimated_used\":"); buf.integer(out, item.*.estimated_used);
+        buf.add(out, ",\"source\":\"ESTIMATED_BYTES\",\"nominal\":null,\"reported_used\":null}}"); i = i + 1;
+    }
+    buf.add(out, "]");
+}
+fn free(s: *Sessions) void {
+    let i: i32 = 0;
+    while (i < s.*.count) { let item: *Session = &s.*.items[i]; buf.free(&item.*.id); buf.free(&item.*.model); buf.free(&item.*.history); buf.free(&item.*.response); buf.free(&item.*.last_response_id); i = i + 1; }
+    _zag_free(s.*.items as *i8); s.*.count = 0;
+}
+
+fn find_response(s: *Sessions, response_id: []u8) i32 {
+    let i: i32 = 0;
+    while (i < s.*.count) { if (buf.eq(buf.view(&s.*.items[i].last_response_id), response_id)) { return i; } i = i + 1; }
+    return 0 - 1;
+}
+// Full histories must extend the exact canonical previous input + output.
+// An explicit session may instead submit only new user/tool records.
+// Returned offset is the suffix to send to the existing browser conversation.
+fn prepare(item: *Session, r: *normalized.Request) i32 {
+    if (item.*.status != 0 || !buf.eq(buf.view(&item.*.model), buf.view(&r.*.model))) { return 0 - 1; }
+    if (item.*.turns == 0) { return 0; }
+    let expected: buf.Buffer = buf.make(262144); buf.add(&expected, buf.view(&item.*.history)); buf.add(&expected, buf.view(&item.*.response));
+    let offset: i32 = expected.len;
+    if (expected.ok == 0) { buf.free(&expected); return 0 - 1; }
+    if (buf.prefix(buf.view(&r.*.canonical), buf.view(&expected)) && r.*.canonical.len > offset) {
+        buf.free(&expected); return offset;
+    }
+    // Incremental requests may not splice in a new assistant/system transcript.
+    if (!r.*.explicit_session && r.*.previous.len == 0) { buf.free(&expected); return 0 - 1; }
+    let remaining: []u8 = buf.view(&r.*.canonical); let cursor: i32 = 0; let safe: bool = true;
+    while (cursor < _zag_strlen(remaining)) {
+        let end: i32 = buf.find(remaining, "\n", cursor); if (end < 0) { safe = false; break; }
+        let line: []u8 = remaining[cursor..end];
+        if (!buf.prefix(line, "{\"role\":\"user\",") && !buf.prefix(line, "{\"role\":\"tool\",")) { safe = false; break; }
+        cursor = end + 1;
+    }
+    if (!safe) { buf.free(&expected); return 0 - 1; }
+    buf.add(&expected, remaining);
+    if (expected.ok == 0) { buf.free(&expected); return 0 - 1; }
+    buf.copy(&r.*.canonical, buf.view(&expected)); buf.free(&expected); return offset;
+}
+fn complete(item: *Session, r: *normalized.Request, text: []u8, calls: []u8, has_tools: bool) bool {
+    buf.copy(&item.*.history, buf.view(&r.*.canonical)); buf.clear(&item.*.response);
+    normalized.message("assistant", text, calls, "", &item.*.response);
+    if (item.*.history.ok == 0 || item.*.response.ok == 0) { item.*.status = 2; return false; }
+    buf.copy(&item.*.last_response_id, buf.view(&r.*.id)); item.*.turns = item.*.turns + 1;
+    item.*.input_messages = r.*.message_count; item.*.last_used = _zag_clock_monotonic_ms(); item.*.status = 0;
+    item.*.estimated_used = (item.*.history.len + item.*.response.len) as i64; item.*.tools_last_turn = has_tools; return true;
+}
