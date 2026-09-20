@@ -230,6 +230,11 @@ fn decode(r: *Request, body: []u8, protocol: i32, request_id: []u8, session_head
         if (json.kind(&d, reasoning) != 1 || d.tokens[reasoning].size > 1 || mode >= 0) { fail(r, "INVALID_REASONING"); }
         else { json.field_text(&d, reasoning, "effort", &r.*.reasoning); }
     }
+    let effort: i32 = json.get(&d, 0, "reasoning_effort");
+    if (effort >= 0) {
+        if (mode >= 0 || reasoning >= 0 || json.kind(&d, effort) != 3) { fail(r, "INVALID_REASONING"); }
+        else { json.text(&d, effort, &r.*.reasoning); }
+    }
     if (r.*.reasoning.ok == 0) { fail(r, "INVALID_REASONING"); }
     let variants: i32 = json.get(&d, 0, "n"); if (variants >= 0 && json.number(&d, variants, 0) != 1) { fail(r, "UNSUPPORTED_VARIANTS"); }
     buf.copy(&r.*.session_hint, session_header);

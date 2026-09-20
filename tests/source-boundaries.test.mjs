@@ -28,7 +28,7 @@ test('static: production entry points remain in Zag and no preview backend exist
  const ts=read('src/lib/api/bridge.ts');assert.match(ts,/NATIVE_HOST_REQUIRED/);assert.doesNotMatch(ts,/setInterval|fetch\(/);
 });
 test('static: sidecar packaging and least-privilege CSP configured',()=>{
- const cfg=json('src-tauri/tauri.conf.json');assert.deepEqual(cfg.bundle.externalBin,['binaries/bridge-zag']);
+ const cfg=json('src-tauri/tauri.conf.json');assert.deepEqual(cfg.bundle.externalBin,['binaries/bridge-zag','binaries/codemax-local-tools']);
  assert(cfg.app.security.csp.includes("frame-src 'none'"));assert(!cfg.app.security.csp.includes("script-src 'unsafe-eval'"));
  assert.match(read('src-tauri/src/main.rs'),/target_arch = "x86_64"/);
 });

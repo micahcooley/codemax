@@ -35,7 +35,17 @@ pub fn handle(host: &Arc<Host>, frame: &Value) -> Result<(), String> {
     let epoch = frame["epoch"].as_str().filter(|e| (20..128).contains(&e.len()) && e.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')).ok_or("MCP_INVALID_EPOCH")?.to_owned();
     match frame["action"].as_str() {
         Some("start") => {
-            let program = frame["command"].as_str().filter(|s| !s.is_empty() && s.len() < 2048 && !s.chars().any(char::is_control)).ok_or("MCP_INVALID_EXECUTABLE")?.to_owned();
+            let mut program = frame["command"].as_str().filter(|s| !s.is_empty() && s.len() < 2048 && !s.chars().any(char::is_control)).ok_or("MCP_INVALID_EXECUTABLE")?.to_owned();
+            // A fixed built-in identifier resolves only to the installed sibling.
+            // Neither the webpage nor the frontend can supply a substitute path.
+            if program == "builtin:local-tools" {
+                use std::os::unix::fs::MetadataExt;
+                let exe = std::env::current_exe().map_err(|_| "MCP_INSTALL_LOCATION_UNKNOWN")?;
+                let path = exe.parent().ok_or("MCP_INSTALL_LOCATION_UNKNOWN")?.join("codemax-local-tools");
+                let meta = std::fs::symlink_metadata(&path).map_err(|_| "BUILTIN_TOOLS_NOT_INSTALLED")?;
+                if !meta.is_file() || meta.file_type().is_symlink() || meta.mode() & 0o6022 != 0 { return Err("BUILTIN_TOOLS_UNSAFE_FILE".into()); }
+                program = path.to_str().ok_or("MCP_INSTALL_PATH_INVALID")?.to_owned();
+            }
             let raw = frame["args"].as_array().filter(|a| a.len() <= 32).ok_or("MCP_INVALID_ARGV")?;
             let args: Vec<String> = raw.iter().map(|v| v.as_str().filter(|s| !s.contains('\0') && s.len() <= 4000).map(str::to_owned).ok_or("MCP_INVALID_ARGUMENT")).collect::<Result<_, _>>()?;
             if args.iter().map(String::len).sum::<usize>() > 4096 { return Err("MCP_ARGV_LIMIT".into()); }

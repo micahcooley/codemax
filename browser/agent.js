@@ -4,73 +4,9 @@
 (() => {
   'use strict';
   const supplied = globalThis.__BRIDGE_BOOT__ || {};
-  const config = Object.freeze({origin: supplied.origin, testOnly: supplied.testOnly === true});
+  const config = Object.freeze({origin: supplied.origin});
   const encoder = new TextEncoder();
-  const sensitive = /password|passcode|credit.?card|card.?number|security.?code|verification.?code|one.?time|billing|payment|delete.?account|sign.?out|log.?out|oauth|secret/i;
-  const redact = value => String(value ?? '')
-    .replace(/\b(?:sk-[A-Za-z0-9_-]{8,}|Bearer\s+\S+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\b/g, '[redacted]')
-    .slice(0, 240);
-  function safeURL(value, base) {
-    try {
-      const url = new URL(value, base);
-      if (!['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol)) return null;
-      const path = url.pathname.split('/').filter(Boolean).slice(0, 4)
-        .map(part => /^(?:api|v\d+|chat|messages|completions|conversation|conversations|stream|models|generate|auth|login|session)$/.test(part) ? part : ':segment').join('/');
-      return url.origin + '/' + path;
-    } catch { return null; }
-  }
-  function shape(body) {
-    if (typeof body !== 'string' || body.length > 16384) return {kind: typeof body};
-    try {
-      const value = JSON.parse(body);
-      if (!value || typeof value !== 'object') return {kind: typeof value};
-      const allowed = new Set(['model', 'messages', 'stream', 'temperature', 'max_tokens', 'reasoning', 'tools']);
-      return {kind: Array.isArray(value) ? 'array' : 'object', fields: Object.keys(value).length,
-        known_fields: Object.keys(value).filter(k => allowed.has(k)).slice(0, 16)};
-    } catch { return {kind: 'opaque'}; }
-  }
-
-  // Explicit capability fields only. No message content, arbitrary payload keys,
-  // request headers, storage, cookies, hidden inputs, or credentials are emitted.
-  function metadata(value, source = 'OBSERVED_REQUEST') {
-    if (typeof value === 'string') { if (value.length > 32768) return []; try { value = JSON.parse(value); } catch { return []; } }
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
-    const safe = x => typeof x === 'string' && x.length > 0 && x.length <= 180 && !sensitive.test(x) && redact(x) === x;
-    const entries = Array.isArray(value.models) ? value.models : Array.isArray(value.data) ? value.data : [value];
-    const result = [];
-    for (const item of entries.slice(0, 32)) {
-      if (!item || typeof item !== 'object') continue;
-      const model = typeof item.model === 'string' ? item.model : item.id;
-      if (!safe(model)) continue;
-      const n = item.context_window ?? item.context_length ?? item.max_context_tokens;
-      const context_tokens = Number.isSafeInteger(n) && n >= 128 && n <= 10000000 ? n : null;
-      const tokenizer = safe(item.tokenizer) ? item.tokenizer : null;
-      const reasoning = safe(item.reasoning_effort) ? item.reasoning_effort : null;
-      const selected = source === 'OBSERVED_REQUEST' && Array.isArray(item.messages);
-      if (context_tokens || tokenizer || reasoning || selected) result.push({model, context_tokens, tokenizer, reasoning, selected, source});
-    }
-    return result;
-  }
-
-  function splitText(text, limit = 3072) {
-    if (!Number.isInteger(limit) || limit < 4) throw new Error('Invalid chunk limit');
-    const result = []; let chunk = ''; let size = 0;
-    for (const char of text) {
-      const n = encoder.encode(char).length;
-      if (size + n > limit) { result.push(chunk); chunk = ''; size = 0; }
-      chunk += char; size += n;
-    }
-    if (chunk) result.push(chunk);
-    return result;
-  }
-  function appendDelta(previous, next) {
-    if (!next.startsWith(previous)) throw new Error('RESPONSE_REWRITTEN');
-    return next.slice(previous.length);
-  }
-  if (config.testOnly) {
-    Object.defineProperty(globalThis, '__BRIDGE_TEST_API__', {value: Object.freeze({safeURL, shape, splitText, redact, appendDelta, metadata})});
-    return;
-  }
+  const {isSensitive,redact,safeURL,shape,metadata,splitText,appendDelta,contextEvidence} = globalThis.__CODEMAX_SEMANTICS__;
   if (!config.origin || location.origin !== config.origin || window.top !== window) return;
   if (globalThis.__BRIDGE_AGENT_ACTIVE__) return;
   Object.defineProperty(globalThis, '__BRIDGE_AGENT_ACTIVE__', {value: true});
@@ -78,6 +14,8 @@
     Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
   const ids = new WeakMap(); const nodes = new Map(); let nextId = 1;
   let generation = null; let preparingRequest = null; let observationTimer = 0; let responseTimer = 0;
+  let lastUserInteraction = 0; let investigating = false;
+  for (const event of ['pointerdown','keydown','input']) document.addEventListener(event,e=>{if(e.isTrusted)lastUserInteraction=performance.now();},true);
   let picker = null; let lastMenuTrigger = null; let lastMenuAt = 0; let discoveryEnabled = true;
   let lastSnapshot = ''; let stopped = false; let sending = false;
   const queue = []; const MAX_QUEUE = 128;
@@ -115,6 +53,24 @@
     const value = ids.get(node); nodes.set(value, node); return value;
   }
   function editable(node) { return node instanceof HTMLTextAreaElement || (node instanceof HTMLInputElement && ['text','search',''].includes(node.getAttribute('type') || '')) || node.isContentEditable; }
+  function semanticRole(node) {
+    const explicit = node.getAttribute('role'); if (explicit) return explicit;
+    if (node.tagName === 'BUTTON') return 'button';
+    if (node.tagName === 'SELECT') return 'combobox';
+    // Custom controls need an interaction signal AND an explicit accessible label.
+    if (!editable(node) && (node.hasAttribute('aria-label') || node.hasAttribute('title')) &&
+        (node.tabIndex >= 0 || node.hasAttribute('aria-haspopup') || getComputedStyle(node).cursor === 'pointer')) return 'button';
+    return '';
+  }
+  function controlValue(node) {
+    if (editable(node) || !['button','combobox','switch','checkbox'].includes(semanticRole(node))) return '';
+    if (node instanceof HTMLSelectElement) return redact(node.selectedOptions[0]?.value || '');
+    if (node.hasAttribute('aria-valuetext')) return redact(node.getAttribute('aria-valuetext'));
+    const copy = node.cloneNode(true);
+    for (const child of copy.querySelectorAll('input,textarea,[contenteditable],[role="menu"],[role="listbox"],[hidden],[aria-hidden="true"]')) child.remove();
+    const value = redact(copy.textContent).replace(/\s+/g,' ').trim();
+    return value.length <= 180 ? value : '';
+  }
   function label(node) {
     const by = node.getAttribute('aria-labelledby');
     const related = by ? by.split(/\s+/).slice(0, 3).map(k => document.getElementById(k)?.textContent || '').join(' ') : '';
@@ -129,7 +85,7 @@
     const auto = node.getAttribute('autocomplete') || '';
     if (['password', 'email', 'tel', 'file', 'hidden'].includes(inputType)) return true;
     if (/password|cc-|one-time|webauthn|email|tel/.test(auto)) return true;
-    if (sensitive.test([label(node), node.getAttribute('name') || '', node.getAttribute('id') || ''].join(' '))) return true;
+    if (isSensitive([label(node), node.getAttribute('name') || '', node.getAttribute('id') || ''].join(' '))) return true;
     const form = node.closest('form');
     return !!(form && form.querySelector('input[type="password"],input[autocomplete^="cc-"],input[autocomplete="one-time-code"]'));
   }
@@ -154,19 +110,37 @@
     const options = node instanceof HTMLSelectElement ? Array.from(node.options).slice(0, 32).map(option => ({
       value: redact(option.value).slice(0, 180), label: redact(option.textContent), disabled: option.disabled, selected: option.selected
     })) : [];
-    return {id: id(node), tag: node.tagName.toLowerCase(), role: node.getAttribute('role') || '', label: label(node),
+    return {id: id(node), tag: node.tagName.toLowerCase(), role: semanticRole(node), label: label(node),
       visible: isVisible, editable: editable(node), disabled: !!node.disabled || node.getAttribute('aria-disabled') === 'true',
       live: node.getAttribute('aria-live') || '', busy: node.getAttribute('aria-busy') === 'true',
-      current_value: node instanceof HTMLSelectElement ? redact(node.selectedOptions[0]?.value || '') : '',
+      current_value: controlValue(node),
       selected: node.matches('[aria-checked="true"],[aria-selected="true"],[aria-pressed="true"]'), menu_owner: menuOwner(node),
       value: ['option','menuitemradio','menuitem'].includes(node.getAttribute('role')) ? redact(node.getAttribute('data-value') || label(node)).slice(0,180) : '',
       popup: node.getAttribute('aria-haspopup') || '', file_input: fileInput,
-      assistant: node.matches('[data-message-author-role="assistant"],[data-role="assistant"],[data-bridge-assistant]'), options};
+      assistant: node.matches('[data-message-author-role="assistant"],[data-role="assistant"]'), options};
+  }
+  function modelContextFacts(controls) {
+    const modelControls = controls.filter(c=>c.visible && ['button','combobox'].includes(c.role) && /\bmodel\b/i.test(c.label));
+    const owners = new Set(modelControls.map(c=>c.id));
+    const facts=[];
+    for (const c of controls) {
+      if (!c.visible || c.disabled || !owners.has(c.id) && !owners.has(c.menu_owner)) continue;
+      const node=nodes.get(c.id); if(!node || forbidden(node))continue;
+      const related=(node.getAttribute('aria-describedby')||'').split(/\s+/).slice(0,3).map(key=>document.getElementById(key))
+        .filter(n=>n && visible(n) && !forbidden(n) && !n.querySelector('input,textarea,[contenteditable]'))
+        .map(n=>(n.textContent||'').slice(0,256)).join(' ');
+      const description=(node.getAttribute('title')||'')+' '+related+' '+(owners.has(c.menu_owner)?label(node):'');
+      const fact=contextEvidence(description.slice(0,1024));
+      const model=c.value||c.current_value;
+      if(fact && model && model.length<=180 && !isSensitive(model))facts.push({model,...fact,source:'VISIBLE_MODEL_CONTROL'});
+      if(facts.length>=16)break;
+    }
+    return facts;
   }
   function snapshot() {
     if (stopped || !discoveryEnabled || location.origin !== config.origin) return;
     // Bound traversal work even on very large pages. Skip page text and input values.
-    const candidates = document.querySelectorAll('textarea,input,[contenteditable]:not([contenteditable="false"]),button,select,[role="button"],[role="combobox"],[role="option"],[role="menuitemradio"],[role="menuitem"],[role="switch"],main,[role="main"],[role="log"],[aria-live],[data-message-author-role="assistant"],[data-role="assistant"],[data-bridge-assistant]');
+    const candidates = document.querySelectorAll('textarea,input,[contenteditable]:not([contenteditable="false"]),button,select,[role="button"],[role="combobox"],[role="option"],[role="menuitemradio"],[role="menuitem"],[role="switch"],[role="checkbox"],[aria-label],[title],[aria-haspopup],[tabindex],main,[role="main"],[role="log"],[aria-live],[data-message-author-role="assistant"],[data-role="assistant"]');
     const controls = []; let examined = 0;
     for (const node of candidates) {
       if (++examined > 512 || controls.length >= 128) break;
@@ -179,7 +153,9 @@
     // Chunk snapshots by dropping excess controls before their frame becomes too large.
     while (encoder.encode(JSON.stringify(event)).length > 28000 && event.controls.length) event.controls.pop();
     const digest = JSON.stringify(event);
-    if (digest !== lastSnapshot) { lastSnapshot = digest; emit(event); }
+    if (digest !== lastSnapshot) { lastSnapshot = digest; emit(event);
+      const facts=modelContextFacts(event.controls);if(facts.length)emit({type:'capabilities',origin:location.origin,facts});
+    }
     for (const node of document.querySelectorAll('[role="alert"],[role="status"]')) {
       if (!visible(node)) continue;
       const text = (node.textContent || '').slice(0, 1024);
@@ -199,7 +175,7 @@
     if (!allowDisabled && (node.disabled || node.getAttribute('aria-disabled') === 'true')) throw new Error('CONTROL_DISABLED');
     return node;
   }
-  const assistantSelector = '[data-message-author-role="assistant"],[data-role="assistant"],[data-bridge-assistant],.assistant-message,[data-testid="assistant-message"]';
+  const assistantSelector = '[data-message-author-role="assistant"],[data-role="assistant"],.assistant-message,[data-testid="assistant-message"]';
   function assistantNode(region) {
     if (region.matches(assistantSelector)) return region;
     const matches = region.querySelectorAll(assistantSelector);
@@ -217,9 +193,9 @@
       const binding = action.bindings?.[key];
       if (!binding || typeof binding.label !== 'string') throw error;
       const matches = [];
-      for (const node of Array.from(document.querySelectorAll('textarea,input,button,select,[contenteditable],main,[role],[aria-live]')).slice(0,512)) {
+      for (const node of Array.from(document.querySelectorAll('textarea,input,button,select,[contenteditable],main,[role],[aria-live],[aria-label],[title],[aria-haspopup],[tabindex]')).slice(0,512)) {
         if (visible(node) && !forbidden(node) && node.tagName.toLowerCase() === binding.tag &&
-            (node.getAttribute('role') || '') === binding.role && label(node) === binding.label) matches.push(node);
+            semanticRole(node) === binding.role && label(node) === binding.label) matches.push(node);
       }
       if (matches.length !== 1) throw new Error('MAPPING_BROKEN');
       id(matches[0]); return matches[0];
@@ -250,17 +226,27 @@
       if ((selector.getAttribute('aria-checked') === 'true') !== wanted) selector.click();
       await settle(); if ((selector.getAttribute('aria-checked') === 'true') !== wanted) throw new Error('SELECTION_FAILED'); return;
     }
-    if (!(selector instanceof HTMLButtonElement) && !['button','combobox'].includes(selector.getAttribute('role'))) throw new Error('CONTROL_TYPE_UNSUPPORTED');
+    if (!(selector instanceof HTMLButtonElement) && !['button','combobox'].includes(semanticRole(selector))) throw new Error('CONTROL_TYPE_UNSUPPORTED');
     // The current value can be its button's label. No model-name heuristics.
-    if (label(selector).trim() === displayName.trim()) return;
-    selector.click();
+    if (label(selector).trim() === displayName.trim() || controlValue(selector) === value || controlValue(selector) === displayName.trim()) return;
+    lastMenuTrigger = selector; lastMenuAt = Date.now(); selector.click();
     for (let attempt=0; attempt<30; attempt++) {
       await pause(50);
       const candidates = Array.from(document.querySelectorAll('[role="option"],[role="menuitemradio"],[role="menuitem"],button[data-value]')).slice(0,256)
         .filter(node => visible(node) && !forbidden(node) && !node.disabled && node.getAttribute('aria-disabled') !== 'true')
         .filter(node => (node.getAttribute('data-value') || '') === value || label(node).trim() === displayName.trim() || label(node).trim() === value.trim());
       if (candidates.length > 1) throw new Error('AMBIGUOUS_SELECTION');
-      if (candidates.length === 1) { candidates[0].click(); await settle(); return; }
+      if (candidates.length === 1 && menuOwner(candidates[0]) === id(selector)) {
+        const option = candidates[0]; option.click(); await settle();
+        for (let check=0;check<10;check++) {
+          let selected;
+          try { selected = resolve(action,key,nodeId); } catch { selected = null; }
+          if ((option.isConnected && option.matches('[aria-selected="true"],[aria-checked="true"]')) ||
+              (selected && [label(selected).trim(),controlValue(selected)].some(v=>v===value||v===displayName.trim()))) return;
+          await pause(100);
+        }
+        throw new Error('SELECTION_NOT_CONFIRMED');
+      }
     }
     throw new Error(key === 'model' ? 'MODEL_UNAVAILABLE' : 'REASONING_UNAVAILABLE');
   }
@@ -281,7 +267,7 @@
     const outline = shadow.querySelector('.outline'); let selected = null;
     const allowed = node => {
       if (!(node instanceof Element) || !visible(node)) return false;
-      if (mapping === 'attachment') return node instanceof HTMLInputElement && node.type === 'file' && !sensitive.test(label(node));
+      if (mapping === 'attachment') return node instanceof HTMLInputElement && node.type === 'file' && !isSensitive(label(node));
       if (forbidden(node)) return false;
       if (mapping === 'prompt') return editable(node);
       if (mapping === 'response') return node.matches('main,[role="main"],[role="log"],'+assistantSelector);
@@ -354,7 +340,7 @@
     const input = nodes.get(action.attachment_node);
     if (!(input instanceof HTMLInputElement) || input.type !== 'file' || !input.isConnected || input.disabled ||
         input.closest('form')?.querySelector('input[type="password"],input[autocomplete^="cc-"]') ||
-        sensitive.test([label(input),input.name,input.id].join(' '))) throw new Error('ATTACHMENT_CONTROL_REQUIRED');
+        isSensitive([label(input),input.name,input.id].join(' '))) throw new Error('ATTACHMENT_CONTROL_REQUIRED');
     if (input.files?.length) throw new Error('EXISTING_ATTACHMENTS_REQUIRE_USER_ACTION');
     if (!input.multiple && files.length > 1) throw new Error('ATTACHMENT_COUNT_UNSUPPORTED');
     const transfer = new DataTransfer(); let total = 0;
@@ -390,6 +376,25 @@
       target(action.node).click(); await settle(); await pause(200);
       emit({type:'action_result',request_id:action.request_id,status:'new_chat_opened'});
       lastSnapshot=''; snapshot(); return;
+    }
+    if (action.type === 'inspect_menu') {
+      if (generation || preparingRequest || investigating || picker || !discoveryEnabled || performance.now()-lastUserInteraction<3000) return;
+      if (document.querySelector('[aria-expanded="true"],[role="dialog"],[role="menu"],[role="listbox"]')) return;
+      if (Array.from(document.querySelectorAll('textarea,[contenteditable="true"]')).some(node=>visible(node)&&(node.value||node.textContent||'').trim())) return;
+      const node = target(action.node);
+      if (!['button','combobox'].includes(semanticRole(node)) || !['menu','listbox','true'].includes(node.getAttribute('aria-haspopup'))) return;
+      if (!/model|reason|think/i.test(label(node)) && !/^[a-z][a-z0-9 ._-]*[0-9][a-z0-9 ._-]*$/i.test(controlValue(node))) return;
+      const previous = document.activeElement; investigating = true;
+      try {
+        lastMenuTrigger=node;lastMenuAt=Date.now();node.click();await settle();await pause(150);lastSnapshot='';snapshot();
+        // Close only our own newly opened popover; never select an option.
+        if (performance.now()-lastUserInteraction>=3000 && node.isConnected) {
+          if(node.getAttribute('aria-expanded')==='true')node.click();
+          else node.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+          if(previous instanceof HTMLElement && previous.isConnected)previous.focus({preventScroll:true});
+        }
+      } finally {investigating=false;}
+      return;
     }
     if (action.type !== 'generate') throw new Error('ACTION_DENIED');
     endPicker();

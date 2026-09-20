@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** Compile the real Svelte interface with an explicitly supplied local compiler.
  * This is an offline verification path; `npm run build` remains the Vite path.
- * No fixture host or mock website is included in the distribution.
+ * No fixture host or test website is included in the distribution.
  */
 import fs from 'node:fs';
 import path from 'node:path';

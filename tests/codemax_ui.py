@@ -43,14 +43,14 @@ with sync_playwright() as pw:
    page.get_by_text('Other browser profiles · 2 not exposed',exact=True).click()
   record('Only detected profiles appear as providers; technical controls collapsed',detection_filter)
   def exposure():
-   page.get_by_role('checkbox',name='Expose Mock Coder',exact=True).uncheck()
-   assert ops('model.update')[-1]['params']=={'provider_id':1,'model':'p1/mock-coder','enabled':False}
+   page.get_by_role('checkbox',name='Expose Fixture Coder',exact=True).uncheck()
+   assert ops('model.update')[-1]['params']=={'provider_id':1,'model':'p1/fixture-coder','enabled':False}
    route('Connect a client');page.get_by_role('button',name='Save config').click();page.wait_for_function('window.__lastExport')
-   v=json.loads(page.evaluate('window.__lastExport.content'));assert 'p1/mock-coder' not in v['provider']['bridge']['models']
+   v=json.loads(page.evaluate('window.__lastExport.content'));assert 'p1/fixture-coder' not in v['provider']['bridge']['models']
    route('Providers');page.get_by_role('checkbox',name='Expose provider to harness',exact=True).uncheck()
    route('Connect a client');expect(page.get_by_role('button',name='Save config')).to_be_disabled()
    assert page.get_by_text('There are no ready, enabled models yet.',exact=False).count()
-   route('Providers');page.get_by_role('checkbox',name='Expose provider to harness',exact=True).check();page.get_by_role('checkbox',name='Expose Mock Coder',exact=True).check()
+   route('Providers');page.get_by_role('checkbox',name='Expose provider to harness',exact=True).check();page.get_by_role('checkbox',name='Expose Fixture Coder',exact=True).check()
   record('Per-model and per-provider exposure changes actual generated harness config',exposure)
   def policy():
    page.get_by_text('Advanced · overrides, mapping, and lifecycle',exact=True).click();page.get_by_role('checkbox',name='Scan provider automatically',exact=True).uncheck();assert ops('provider.update')[-1]['params']['scan_enabled'] is False

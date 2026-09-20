@@ -41,4 +41,5 @@ for p,(raw,t) in parsed.items():
   expected=exports.get(module,{}).get(name);actual=arity(t,k,end(t,k));checked+=1
   if expected is None or expected!=actual:errors.append({'file':str(p.relative_to(ROOT)),'call':t[i]+'.'+name,'expected':expected,'actual':actual})
 report={'scope':__doc__.strip(),'modules':len(FILES),'qualified_calls':checked,'errors':errors,'status':'PASS' if not errors else 'FAIL'}
+(ROOT/'tests/evidence').mkdir(parents=True,exist_ok=True)
 (ROOT/'tests/evidence/zag-static-contracts.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2));sys.exit(bool(errors))

@@ -23,3 +23,9 @@ MANIFEST.sha256
 docs/LOCAL_COMMIT.txt
 
 PACKAGE_METADATA.json
+
+src-tauri/binaries/codemax-local-tools-*
+
+tests/evidence/
+
+screenshots/

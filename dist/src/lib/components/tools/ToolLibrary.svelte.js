@@ -6,9 +6,10 @@ import { toolRecipes, recipeDefinition } from '../../tool-recipes.js';
 
 var root_1 = $.from_html(`<button><!><span><strong> </strong><small> </small></span><!></button>`);
 var root_3 = $.from_html(`<label class="field"><span>Folder to share</span><input aria-label="Tool folder" placeholder="/home/you/projects/my-project" autocomplete="off" spellcheck="false"/><button class="secondary" type="button"> </button><span class="field-hint">Use a specific project folder rather than your home directory. This path is passed as one argument, never a shell command.</span></label>`);
-var root_4 = $.from_html(`<p class="form-error" role="alert"> </p>`);
-var root_2 = $.from_html(`<div class="recipe-review"><h3> </h3><p class="field-hint"> </p> <!> <details class="advanced-client"><summary>Executable and pinned version</summary><pre class="code"> </pre></details> <!> <div class="button-group"><button class="primary">Use this definition</button><button class="secondary">Cancel</button></div></div>`);
-var root = $.from_html(`<section class="tool-library" aria-label="Tool library"><p class="field-hint">Add only what you need. These are optional external servers, not preinstalled tools. Nothing is downloaded or started until you approve its local process.</p> <div class="recipe-list"></div> <!></section>`);
+var root_4 = $.from_html(`<label class="setting-line"><div><strong>Allow project changes</strong><p>Enable file writes, edits, moves and recoverable deletion. Each tool call still needs your approval.</p></div><input type="checkbox" aria-label="Enable project changes"/></label> <details class="advanced-client"><summary>Advanced · trusted command execution</summary><label class="setting-line"><div><strong>Enable shell commands</strong><p>Commands run as your user, not in an operating-system sandbox. They can read or change files outside this project and access the network. Only enable this for trusted tasks.</p></div><input type="checkbox" aria-label="Enable trusted commands"/></label></details>`, 1);
+var root_5 = $.from_html(`<p class="form-error" role="alert"> </p>`);
+var root_2 = $.from_html(`<div class="recipe-review"><h3> </h3><p class="field-hint"> </p> <!> <!> <details class="advanced-client"><summary>Executable and pinned version</summary><pre class="code"> </pre></details> <!> <div class="button-group"><button class="primary">Use this definition</button><button class="secondary">Cancel</button></div></div>`);
+var root = $.from_html(`<section class="tool-library" aria-label="Tool library"><p class="field-hint">Add only what you need. Local project tools are bundled. Other entries are optional external servers. Nothing runs until you approve its local process.</p> <div class="recipe-list"></div> <!></section>`);
 
 export default function ToolLibrary($$anchor, $$props) {
 	$.push($$props, true);
@@ -18,6 +19,8 @@ export default function ToolLibrary($$anchor, $$props) {
 	let folder = $.state('');
 	let error = $.state('');
 	let picking = $.state(false);
+	let write = $.state(false);
+	let commands = $.state(false);
 
 	async function pick() {
 		const id = $.get(selection);
@@ -39,7 +42,7 @@ export default function ToolLibrary($$anchor, $$props) {
 
 	function use() {
 		try {
-			$$props.onchoose(recipeDefinition($.get(selection), $.get(folder)));
+			$$props.onchoose(recipeDefinition($.get(selection), $.get(folder), { write: $.get(write), commands: $.get(commands) }));
 			$.set(error, '');
 			$.set(selection, '');
 			$.set(folder, '');
@@ -59,6 +62,8 @@ export default function ToolLibrary($$anchor, $$props) {
 			$.set(selection, $.get(recipe).id, true);
 			$.set(folder, '');
 			$.set(error, '');
+			$.set(write, false);
+			$.set(commands, false);
 		};
 
 		var node = $.child(button);
@@ -103,7 +108,7 @@ export default function ToolLibrary($$anchor, $$props) {
 	var node_2 = $.sibling(div, 2);
 
 	{
-		var consequent_2 = ($$anchor) => {
+		var consequent_3 = ($$anchor) => {
 			var div_1 = root_2();
 			var h3 = $.child(div_1);
 			var text_2 = $.child(h3, true);
@@ -148,18 +153,46 @@ export default function ToolLibrary($$anchor, $$props) {
 				});
 			}
 
-			var details = $.sibling(node_3, 2);
-			var pre = $.sibling($.child(details));
-			var text_5 = $.child(pre);
-
-			$.reset(pre);
-			$.reset(details);
-
-			var node_4 = $.sibling(details, 2);
+			var node_4 = $.sibling(node_3, 2);
 
 			{
 				var consequent_1 = ($$anchor) => {
-					var p_1 = root_4();
+					var fragment = root_4();
+					var label_1 = $.first_child(fragment);
+					var input_1 = $.sibling($.child(label_1));
+
+					$.remove_input_defaults(input_1);
+					$.reset(label_1);
+
+					var details = $.sibling(label_1, 2);
+					var label_2 = $.sibling($.child(details));
+					var input_2 = $.sibling($.child(label_2));
+
+					$.remove_input_defaults(input_2);
+					$.reset(label_2);
+					$.reset(details);
+					$.bind_checked(input_1, () => $.get(write), ($$value) => $.set(write, $$value));
+					$.bind_checked(input_2, () => $.get(commands), ($$value) => $.set(commands, $$value));
+					$.append($$anchor, fragment);
+				};
+
+				$.if(node_4, ($$render) => {
+					if ($.get(selected).bundled) $$render(consequent_1);
+				});
+			}
+
+			var details_1 = $.sibling(node_4, 2);
+			var pre = $.sibling($.child(details_1));
+			var text_5 = $.child(pre);
+
+			$.reset(pre);
+			$.reset(details_1);
+
+			var node_5 = $.sibling(details_1, 2);
+
+			{
+				var consequent_2 = ($$anchor) => {
+					var p_1 = root_5();
 					var text_6 = $.child(p_1, true);
 
 					$.reset(p_1);
@@ -167,12 +200,12 @@ export default function ToolLibrary($$anchor, $$props) {
 					$.append($$anchor, p_1);
 				};
 
-				$.if(node_4, ($$render) => {
-					if ($.get(error)) $$render(consequent_1);
+				$.if(node_5, ($$render) => {
+					if ($.get(error)) $$render(consequent_2);
 				});
 			}
 
-			var div_2 = $.sibling(node_4, 2);
+			var div_2 = $.sibling(node_5, 2);
 			var button_2 = $.child(div_2);
 
 			button_2.__click = use;
@@ -204,7 +237,7 @@ ${$0 ?? ''}`);
 		};
 
 		$.if(node_2, ($$render) => {
-			if ($.get(selected)) $$render(consequent_2);
+			if ($.get(selected)) $$render(consequent_3);
 		});
 	}
 

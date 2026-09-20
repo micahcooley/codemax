@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const context = {__BRIDGE_BOOT__: {testOnly: true}, TextEncoder, URL};
-vm.runInNewContext(readFileSync(new URL('../browser/agent.js', import.meta.url), 'utf8'), context);
-const api = context.__BRIDGE_TEST_API__;
+const context = {TextEncoder, URL};
+vm.runInNewContext(readFileSync(new URL('../browser/semantics.js', import.meta.url), 'utf8'), context);
+const api = context.__CODEMAX_SEMANTICS__;
 test('network URL summaries exclude credentials, query secrets and identifiers', () => {
   assert.equal(api.safeURL('https://user:secret@example.com/api/conversation/secretid?token=private#oauth', 'https://example.com'), 'https://example.com/api/conversation/:segment');
   assert.equal(api.safeURL('file:///etc/passwd', 'https://example.com'), null);
@@ -56,4 +56,17 @@ test('credential-shaped model or tokenizer identities are not exported',()=>{
 });
 test('model catalog metadata is not falsely marked as the current selection',()=>{
  const d=api.metadata({models:[{id:'m-1',context_window:2048,messages:['private']},{id:'m-2',context_length:4096}]},'PROVIDER_METADATA');assert.equal(d[0].selected,false);assert.equal(d[1].selected,false);
+});
+
+test('context labels require an explicit context field; model names are not limits',()=>{
+ assert.equal(api.contextEvidence('GLM-5.3-128k'),null);
+ assert.equal(api.contextEvidence('128,000 context tokens').context_tokens,128000);
+ assert.equal(api.contextEvidence('Context window: 131072 tokens').context_tokens,131072);
+ assert.equal(api.contextEvidence('Context window: 128K tokens').context_tokens,null);
+ assert.equal(api.contextEvidence('Context window: 128K tokens').context_display,'Context window: 128K tokens');
+ assert.equal(api.contextEvidence('Context window: 1,28,000').context_tokens,null);
+});
+test('automatic inspection forbids authentication and billing actions',()=>{
+ for(const label of ['Sign in','Authorize account','Continue with Google','Grant access','Upgrade plan','Delete account'])assert(api.isSensitive(label),label);
+ for(const label of ['Select a model','Deep Think','Max','Send Message'])assert(!api.isSensitive(label),label);
 });

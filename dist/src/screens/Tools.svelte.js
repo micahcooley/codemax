@@ -5,7 +5,6 @@ import { app } from '../lib/state/app.svelte.js';
 import * as bridge from '../lib/api/bridge.js';
 import ToolLibrary from '../lib/components/tools/ToolLibrary.svelte.js';
 import Icon from '../lib/components/Icon.svelte.js';
-import FileProbe from '../lib/components/FileProbe.svelte.js';
 import { errorText } from '../lib/format.js';
 
 var root_1 = $.from_html(`<button class="secondary">Tool library</button><details class="setup-menu"><summary>More setup</summary><div><button class="secondary">Import configuration</button><button class="secondary"><!>Add tool server</button></div></details>`, 1);
@@ -37,7 +36,7 @@ var root_29 = $.from_html(`<p class="field-hint">No tools match. <button class="
 var root_27 = $.from_html(`<details class="advanced-client tool-catalog"><summary> </summary><label class="field"><span>Find a tool</span><input type="search"/></label> <!><!><p class="field-hint">Up to 32 enabled tools within the shared schema budget. Descriptions are sent to the website when a task starts.</p></details>`);
 var root_30 = $.from_html(`<details><summary> </summary><pre class="code"> </pre></details>`);
 var root_23 = $.from_html(`<div class="tool-server"><div class="section-title"><div><strong> </strong><p class="field-hint"> </p></div><div class="button-group"><!></div></div> <!> <!> <details class="advanced-client"><summary>Advanced · executable and tool schemas</summary><p class="field-hint"> </p><pre class="code"> </pre><!><p class="field-hint">Descriptions are supplied by the server, not a security guarantee. Reconnecting or a changed catalog resets enabled choices and task grants.</p><button class="text-button danger-text">Remove server</button></details></div>`);
-var root_21 = $.from_html(`<section class="section"><div class="section-title"><h2>Tool servers</h2><span class="tag"> </span></div> <!> <!></section> <details class="advanced-client"><summary>Advanced · synthetic file permission diagnostic</summary><!></details>`, 1);
+var root_21 = $.from_html(`<section class="section"><div class="section-title"><h2>Tool servers</h2><span class="tag"> </span></div> <!> <!></section>`);
 var root = $.from_html(`<section class="screen"><div class="screen-inner tools-screen"><header class="screen-head"><div><div class="breadcrumb">Codemax / Website tasks</div><h1>Website tasks</h1><p>Choose a task and its tools. Approve access, then let the same conversation continue.</p></div><div class="button-group"><!></div></header> <!> <!> <!> <!> <!> <!></div></section>`);
 
 export default function Tools($$anchor, $$props) {
@@ -942,8 +941,7 @@ ${$0 ?? ''}`);
 
 	{
 		var consequent_23 = ($$anchor) => {
-			var fragment_2 = root_21();
-			var section_6 = $.first_child(fragment_2);
+			var section_6 = root_21();
 			var div_17 = $.child(section_6);
 			var span_3 = $.sibling($.child(div_17));
 			var text_21 = $.child(span_3);
@@ -1198,14 +1196,8 @@ ${$3 ?? ''}`);
 			});
 
 			$.reset(section_6);
-
-			var details_7 = $.sibling(section_6, 2);
-			var node_34 = $.sibling($.child(details_7));
-
-			FileProbe(node_34, {});
-			$.reset(details_7);
 			$.template_effect(() => $.set_text(text_21, `${$.get(servers).length ?? ''} configured`));
-			$.append($$anchor, fragment_2);
+			$.append($$anchor, section_6);
 		};
 
 		$.if(node_24, ($$render) => {

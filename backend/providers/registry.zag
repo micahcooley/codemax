@@ -2,13 +2,13 @@
 @import("../core/buffer.zag") as buf
 @import("../core/json.zag") as json
 // Fixed limits are part of PROTOCOL.md: 16 providers, 32 models each.
-struct Model { id: buf.Buffer, label: buf.Buffer, value: buf.Buffer, option_node: i32, supplied: bool, enabled: bool, available: bool, context_tokens: i64, context_source: buf.Buffer, tokenizer: buf.Buffer, }
+struct Model { id: buf.Buffer, label: buf.Buffer, value: buf.Buffer, option_node: i32, supplied: bool, enabled: bool, available: bool, context_tokens: i64, context_source: buf.Buffer, context_label: buf.Buffer, label_seen: i64, tokenizer: buf.Buffer, tokenizer_seen: i64, reasoning_modes: buf.Buffer, reasoning_observed: bool, reasoning_seen: i64, capabilities_seen: i64, }
 struct Provider {
     detected: bool, exposed: bool, scan_enabled: bool, dismissed: bool, discovery_score: i32, discovery_reason: buf.Buffer, current_model: buf.Buffer, reasoning_modes: buf.Buffer,
     id: i32, origin: buf.Buffer, url: buf.Buffer, label: buf.Buffer, document: buf.Buffer,
     state: i32, models: *Model, model_count: i32, prompt: i32, send: i32, response: i32,
     stop: i32, new_chat: i32, model_control: i32, reasoning_control: i32,
-    last_seen: i64, last_used: i64, version: i32, quota: i32, active_request: i32, session: i32,
+    investigation_count: i32, investigation_at: i64, investigation_node: i32, last_seen: i64, last_used: i64, version: i32, quota: i32, active_request: i32, session: i32,
     last_error: buf.Buffer, evidence: buf.Buffer, recipes: buf.Buffer, manual_model: buf.Buffer, current_url: buf.Buffer, reasoning_value: buf.Buffer, open_tab: bool, pinned: bool, context_hint: i64, attachment: i32, preparing: bool, prepared: bool, browser_busy: bool,
 }
 struct Registry { items: *Provider, count: i32, next_id: i32, }
@@ -27,11 +27,11 @@ fn add(r: *Registry, origin: []u8, url: []u8, label: []u8) i32 {
         .id = r.*.next_id, .origin = buf.make(512), .url = buf.make(2048), .label = buf.make(256), .document = buf.make(96),
         .state = 1, .models = _zag_malloc(32 * @sizeOf[Model]()) as *Model, .model_count = 0,
         .prompt = 0, .send = 0, .response = 0, .stop = 0, .new_chat = 0, .model_control = 0, .reasoning_control = 0,
-        .last_seen = 0, .last_used = _zag_clock_monotonic_ms(), .version = 0, .quota = 0, .active_request = 0 - 1, .session = 0 - 1,
+        .investigation_count = 0, .investigation_at = 0, .investigation_node = 0, .last_seen = 0, .last_used = _zag_clock_monotonic_ms(), .version = 0, .quota = 0, .active_request = 0 - 1, .session = 0 - 1,
         .last_error = buf.make(256), .evidence = buf.make(32768), .recipes = buf.make(8192), .manual_model = buf.make(256), .current_url = buf.make(2048), .reasoning_value = buf.make(192), .open_tab = true, .pinned = false, .context_hint = 0, .attachment = 0, .preparing = false, .prepared = false, .browser_busy = false};
     buf.copy(&p.reasoning_modes, "[]"); buf.copy(&p.discovery_reason, "No AI chat evidence observed"); buf.copy(&p.recipes, "[]"); buf.copy(&p.origin, origin); buf.copy(&p.url, url); buf.copy(&p.current_url, url); buf.copy(&p.label, label);
     let m: i32 = 0;
-    while (m < 32) { p.models[m] = Model{.id = buf.make(256), .label = buf.make(256), .value = buf.make(192), .option_node = 0, .supplied = false, .enabled = true, .available = false, .context_tokens = 0, .context_source = buf.make(48), .tokenizer = buf.make(128)}; m = m + 1; }
+    while (m < 32) { p.models[m] = Model{.id = buf.make(256), .label = buf.make(256), .value = buf.make(192), .option_node = 0, .supplied = false, .enabled = true, .available = false, .context_tokens = 0, .context_source = buf.make(48), .context_label = buf.make(192), .label_seen = 0, .tokenizer = buf.make(128), .tokenizer_seen = 0, .reasoning_modes = buf.make(4096), .reasoning_observed = false, .reasoning_seen = 0, .capabilities_seen = 0}; buf.copy(&p.models[m].reasoning_modes, "[]"); m = m + 1; }
     r.*.items[i] = p; r.*.count = i + 1; r.*.next_id = r.*.next_id + 1; return i;
 }
 fn index(r: *Registry, id: i32) i32 {
@@ -43,6 +43,11 @@ fn model(p: *Provider, value: []u8, label: []u8, option_node: i32) void {
     while (i < p.*.model_count) { if (buf.eq(buf.view(&p.*.models[i].value), value)) { buf.copy(&p.*.models[i].label, label); p.*.models[i].option_node = option_node; p.*.models[i].available = true; return; } i = i + 1; }
     if (p.*.model_count >= 32) { return; }
     let m: *Model = &p.*.models[p.*.model_count]; buf.clear(&m.*.id);
+    // Reusing a registry slot after profile reset cannot inherit another model's facts.
+    m.*.context_tokens = 0; m.*.capabilities_seen = 0; m.*.label_seen = 0;
+    m.*.tokenizer_seen = 0; m.*.reasoning_seen = 0; m.*.reasoning_observed = false;
+    m.*.enabled = true; buf.clear(&m.*.context_source); buf.clear(&m.*.context_label);
+    buf.clear(&m.*.tokenizer); buf.copy(&m.*.reasoning_modes, "[]");
     buf.add(&m.*.id, "p"); buf.integer(&m.*.id, p.*.id as i64); buf.add(&m.*.id, "/"); buf.add(&m.*.id, value);
     buf.copy(&m.*.value, value); buf.copy(&m.*.label, label); m.*.option_node = option_node; m.*.supplied = false; m.*.available = true;
     p.*.model_count = p.*.model_count + 1;
@@ -56,8 +61,42 @@ fn find_model(r: *Registry, id: []u8) i32 {
     }
     return 0 - 1;
 }
+// Public catalog contains model capabilities, never conversation URLs, tokens,
+// selectors or page text. A stable body hash is its cache validator.
+fn evidence_fresh(seen: i64) bool {
+    let age: i64 = _zag_clock_monotonic_ms() - seen;
+    return seen > 0 && age >= 0 && age <= 900000;
+}
+fn model_context(p: *Provider, m: i32) i64 {
+    if (p.*.context_hint > 0) { return p.*.context_hint; }
+    let model: *Model = &p.*.models[m];
+    if (!evidence_fresh(model.*.capabilities_seen)) { return 0; }
+    return model.*.context_tokens;
+}
+fn model_metadata(p: *Provider, m: i32, out: *buf.Buffer) void {
+    let model: *Model = &p.*.models[m]; let nominal: i64 = model_context(p, m);
+    buf.add(out, ",\"display_name\":"); buf.json(out, buf.view(&model.*.label));
+    buf.add(out, ",\"context\":{\"nominal\":");
+    if (nominal > 0) { buf.integer(out, nominal); } else { buf.add(out, "null"); }
+    buf.add(out, ",\"effective\":null,\"source\":");
+    if (p.*.context_hint > 0) { buf.json(out, "USER_OVERRIDE"); }
+    else if (nominal > 0) { buf.json(out, buf.view(&model.*.context_source)); }
+    else { buf.json(out, "UNKNOWN"); }
+    buf.add(out, ",\"advertised_label\":");
+    if (model.*.context_label.len > 0 && evidence_fresh(model.*.label_seen)) { buf.json(out, buf.view(&model.*.context_label)); }
+    else { buf.add(out, "null"); }
+    buf.add(out, "},\"tokenizer\":{\"name\":");
+    if (model.*.tokenizer.len > 0 && evidence_fresh(model.*.tokenizer_seen)) { buf.json(out, buf.view(&model.*.tokenizer)); } else { buf.add(out, "null"); }
+    buf.add(out, ",\"mode\":\"estimated\",\"exact_counting\":false},\"reasoning\":{\"supported\":");
+    let actionable: bool = model.*.reasoning_observed && p.*.reasoning_control > 0 && evidence_fresh(model.*.reasoning_seen);
+    if (actionable) { buf.add(out, "true"); } else { buf.add(out, "null"); }
+    buf.add(out, ",\"control_observed\":"); flag(out, actionable); buf.add(out, ",\"modes\":");
+    if (actionable) { buf.add(out, buf.view(&model.*.reasoning_modes)); } else { buf.add(out, "[]"); }
+    buf.add(out, "},\"max_output_tokens\":null,\"vision\":null,\"tools\":\"emulated\"");
+}
 fn public_models(r: *Registry, out: *buf.Buffer) void {
-    buf.clear(out); buf.add(out, "{\"object\":\"list\",\"data\":["); let first: bool = true; let i: i32 = 0;
+    buf.clear(out); buf.add(out, "{\"object\":\"list\",\"codemax_catalog_version\":1,\"data\":[");
+    let first: bool = true; let i: i32 = 0;
     while (i < r.*.count) {
         let p: *Provider = &r.*.items[i]; let m: i32 = 0;
         if (p.*.state == 4 && p.*.detected && p.*.exposed && !p.*.dismissed) {
@@ -65,7 +104,9 @@ fn public_models(r: *Registry, out: *buf.Buffer) void {
                 if (!p.*.models[m].enabled || !p.*.models[m].available) { m = m + 1; continue; }
                 if (!first) { buf.byte(out, 44); } first = false;
                 buf.add(out, "{\"id\":"); buf.json(out, buf.view(&p.*.models[m].id));
-                buf.add(out, ",\"object\":\"model\",\"created\":0,\"owned_by\":\"p"); buf.integer(out, p.*.id as i64); buf.add(out, "\"}"); m = m + 1;
+                buf.add(out, ",\"object\":\"model\",\"created\":0,\"owned_by\":\"p");
+                buf.integer(out, p.*.id as i64); buf.add(out, "\"");
+                model_metadata(p, m, out); buf.byte(out, 125); m = m + 1;
             }
         }
         i = i + 1;
@@ -103,14 +144,9 @@ fn snapshot(r: *Registry, out: *buf.Buffer) void {
         buf.add(out, ",\"attachment\":"); buf.integer(out, p.*.attachment as i64); buf.add(out, "},\"models\":["); let m: i32 = 0;
         while (m < p.*.model_count) {
             if (m != 0) { buf.byte(out, 44); }
-            buf.add(out, "{\"id\":"); buf.json(out, buf.view(&p.*.models[m].id)); buf.add(out, ",\"display_name\":"); buf.json(out, buf.view(&p.*.models[m].label));
+            buf.add(out, "{\"id\":"); buf.json(out, buf.view(&p.*.models[m].id));
             buf.add(out, ",\"enabled\":"); flag(out, p.*.models[m].enabled); buf.add(out, ",\"available\":"); flag(out, p.*.models[m].available);
-            buf.add(out, ",\"context\":{\"nominal\":"); if (p.*.models[m].context_tokens > 0) { buf.integer(out, p.*.models[m].context_tokens); } else { buf.add(out, "null"); }
-            buf.add(out, ",\"effective\":null,\"source\":"); if (p.*.models[m].context_source.len > 0) { buf.json(out, buf.view(&p.*.models[m].context_source)); } else { buf.json(out, "UNKNOWN"); }
-            buf.add(out, "},\"tokenizer\":{\"mode\":"); if (p.*.models[m].tokenizer.len > 0) { buf.json(out, "provider_reported_identity_only"); } else { buf.json(out, "estimated"); }
-            buf.add(out, ",\"name\":"); if (p.*.models[m].tokenizer.len > 0) { buf.json(out, buf.view(&p.*.models[m].tokenizer)); } else { buf.add(out, "null"); }
-            buf.add(out, "},\"vision\":null,\"tools\":\"emulated\",\"reasoning\":");
-            if (p.*.reasoning_control != 0) { buf.add(out, "{\"supported\":null,\"control_observed\":true}"); } else { buf.add(out, "null"); }
+            model_metadata(p, m, out);
             buf.add(out, ",\"confidence\":"); if (p.*.models[m].supplied) { buf.json(out, "USER_SUPPLIED"); } else { buf.json(out, "OBSERVED"); } buf.byte(out, 125); m = m + 1;
         }
         buf.add(out, "]}"); i = i + 1;
@@ -121,7 +157,7 @@ fn free(r: *Registry) void {
     let i: i32 = 0;
     while (i < r.*.count) {
         let p: *Provider = &r.*.items[i]; let j: i32 = 0;
-        while (j < 32) { buf.free(&p.*.models[j].id); buf.free(&p.*.models[j].label); buf.free(&p.*.models[j].value); buf.free(&p.*.models[j].context_source); buf.free(&p.*.models[j].tokenizer); j = j + 1; }
+        while (j < 32) { buf.free(&p.*.models[j].id); buf.free(&p.*.models[j].label); buf.free(&p.*.models[j].value); buf.free(&p.*.models[j].context_source); buf.free(&p.*.models[j].context_label); buf.free(&p.*.models[j].tokenizer); buf.free(&p.*.models[j].reasoning_modes); j = j + 1; }
         buf.free(&p.*.discovery_reason); buf.free(&p.*.current_model); buf.free(&p.*.reasoning_modes);
         _zag_free(p.*.models as *i8); buf.free(&p.*.origin); buf.free(&p.*.url); buf.free(&p.*.label); buf.free(&p.*.document); buf.free(&p.*.last_error); buf.free(&p.*.evidence); buf.free(&p.*.recipes); buf.free(&p.*.manual_model); buf.free(&p.*.current_url); buf.free(&p.*.reasoning_value); i = i + 1;
     }

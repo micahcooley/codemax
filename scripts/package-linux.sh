@@ -3,6 +3,8 @@ set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 command -v cargo >/dev/null || { echo 'BLOCKED: Rust toolchain is missing.' >&2; exit 77; }
+bash scripts/build-local-tools.sh
+python3 tests/real/local_tools_test.py
 bash scripts/test-native.sh
 npm run check
 npm run build

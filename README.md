@@ -1,96 +1,85 @@
 # Codemax
 
-A dedicated, browser-first desktop application that discovers AI websites as you browse and exposes their observed models to compatible coding clients. Website sessions and website quotas provide inference; no provider API credential is required.
+Codemax is a desktop browser that turns AI chat websites you already use into model providers for coding agents.
 
-**Delivery:** application source, compiled Svelte frontend, screenshots, tests, Linux build scripts and Git recovery bundle. Native Zag/Rust compilation and live interoperability remain unverified; no native installer is included. Read EXECUTION_REPORT.md before treating this as release-qualified.
+Open a chat website inside Codemax, sign in normally, and keep using the website quota attached to your account. Codemax observes the page, discovers models and controls, and exposes verified choices to local coding clients.
 
-## Daily use
+Provider passwords, cookies, and authentication tokens stay inside the website browser profile.
 
-Open a website in the address bar and sign in normally. Discovery follows the page and your model/reasoning controls without sending test prompts or opening menus. Ordinary websites remain browser tabs; only positive chat/model evidence admits a provider. Hidden capability data stays unknown until the website exposes it.
+![Codemax privacy settings](docs/images/settings.png)
 
-Open **Connect a client**, choose your client and a website model, then **Copy private launch command**. That action starts the local gateway when necessary, checks it, and produces a safely quoted command. Paste it into your terminal with the client already installed. No configuration-file overwrite is required. The command contains the local bearer key: clipboard and terminal history may retain it. Manual configuration, export and endpoint/key controls remain under Advanced. A successful gateway health check only verifies the local listener; it does not claim that the client is connected or that a website request succeeded. The localhost access token protects the client-to-Codemax connection, not access to a paid model API. The registry and generated configuration update as models are observed. A client that caches a fixed model list may need refresh/restart or an updated export.
+## How it works
 
-**Providers** controls which sites and models are exposed. Context, tokenizer and reasoning evidence are visible; overrides, recorder tools and lifecycle settings are under Advanced. Turning off a site or model removes it from the gateway and revokes a conflicting active tool task.
+1. Open an AI chat website in Codemax.
+2. Sign in through the website itself.
+3. Codemax discovers the chat input, model controls, reasoning controls, response surface, and capability evidence that the site actually exposes.
+4. Registered providers appear in the left provider shelf.
+5. Open Connect, choose your coding client and website model, then copy the local launch command.
+6. Your coding agent talks to Codemax locally while Codemax drives the signed in website conversation.
 
-**Tools & MCP** is a separate optional workflow. Open the on-demand Tool library for five pinned external-server recipes, or add/import your own stdio server through More setup. A recipe fills a draft only; review and authorize its executable before connection, select tools, and start a website task. Codemax inserts instructions, asks permission for calls, and returns results into the same conversation. Auto-continuation does not imply automatic execution permission. A broader per-tool grant for that one task is available under Advanced. Servers run as the user and must be trusted; this is not an OS sandbox. Direct remote MCP HTTP/SSE/OAuth is not implemented in this revision.
+Codemax keeps uncertain capability data unknown. A model name does not become a context limit. A reasoning label does not become a usable mode until the corresponding control has been observed.
 
-The synthetic file diagnostic now lives under Tools & MCP → Advanced. It is not required for everyday setup.
+## Local tools
 
-## Desktop workspace
+Codemax includes native project tools for reading, searching, editing, moving, and deleting files inside a chosen workspace. Trusted commands can also be enabled explicitly.
 
-A single top tab strip and address bar surround native provider webviews. A collapsible left shelf lists only positively registered providers, including those whose browser tabs are closed. It is not another tab strip: it has no tab close/reorder controls. Clicking a provider reuses or opens its website; its settings appear only on request. Ctrl+Shift+B toggles the shelf. Tools and Connect remain the two main toolbar utilities; the Codemax menu contains the other management pages. The optional connection inspector starts closed and its preference persists. The UI includes back/forward/reload, find, zoom, keyboard shortcuts, a command palette, reorderable tabs, an optional resizable inspector, light/dark themes and reduced motion. Spinning rings indicate loading/generation; stationary rings indicate idle/sleeping or attention states, with accessible labels. Automatic submission preserves unsent drafts and refuses a composer changed by the user.
+Tool access is separate from website access. A provider page cannot directly read files or run commands. Local operations require the Codemax permission path and stay scoped to the selected workspace.
 
-Limits include 16 origin-isolated profiles, one provider conversation per profile, 32 models per profile, four external generations, and one built-in MCP task at a time. The product does not claim full Chromium parity, arbitrary extensions, multiple simultaneous same-origin conversations, universal provider compatibility or cross-platform qualification.
+Codemax can also connect to external MCP servers when you want additional tools.
 
-## Task continuity
+![Codemax tool library](docs/images/tools.png)
 
-The built-in runner now uses a 100-model-turn / 30-active-minute budget by default, configurable under Task options (10–500 turns; 5–240 active minutes). Approval/result waiting is not charged as active work. Exhaustion pauses at a safe boundary, retaining this run’s in-memory transcript, last result and conversation/session ID. **Continue task** extends its budget rather than creating a new task. It revokes broad tool grants and cannot replay a completed tool approval. This is not crash/restart recovery: native execution and the new native regression source remain unverified.
+## Coding clients
 
-Actual tool progress can extend a five-minute MCP inactivity deadline, with an independent one-hour ceiling. Website generation gets ten minutes of inactivity tolerance and a one-hour ceiling. Quotas, lost authentication, finite context/byte limits, output errors and OS/process failures still require an honest stop or recovery; the application cannot guarantee uninterrupted agents. No automatic side-effect retry is added.
+Codemax exposes a local model gateway for compatible clients.
 
-## Interaction behavior
+The gateway supports OpenAI chat completions, OpenAI responses, Anthropic messages, and model discovery through one normalized Zag backend.
 
-Management pages have their own Back/Forward history. Find and the command palette autofocus; Escape cancels address edits or dismisses the current layer without closing the website underneath. Slow tab activation cannot steal a later selection.
+The repository also includes a Koryphaios provider adapter that reads the private Codemax connection descriptor, refreshes the model catalog, preserves observed reasoning values, and refuses remote gateway redirection.
 
-Provider overrides use explicit Save/Reset. Unsent provider edits, tool tasks and server definitions survive navigation in memory, not across application restart. Model/session filters and the Settings section are retained during the app session. Failed saves keep the draft or restore the last saved value as appropriate.
+## Detection
 
-Actions that stop work or remove saved state ask for confirmation. Cancel is initially focused; shortcuts cannot act on browser tabs behind a modal. Stop-task and Deny remain immediate. Tool approval requests stay visible outside the Tools page, while broader permission starts unchecked for each changed call.
+The browser instrumentation watches bounded structural evidence such as interactive controls, selected states, response regions, navigation, and safe network metadata.
 
-Local gateway loss retains the last snapshot, clearly marked as stale, and blocks mutations. Small success notices use the fixed footer instead of shifting the remote website. A ready-model count includes only enabled, exposed and currently available models. Provider credentials remain in website storage; a localhost gateway does not imply that model inference is offline.
+Automatic discovery is conservative. It does not treat an ordinary website as an AI provider just because model related text appears on the page.
+
+Authentication and billing actions are outside automatic discovery. Unknown websites can still be inspected through the same generic detector without adding a site specific provider implementation first.
 
 ## Architecture
 
-Svelte is presentation. Tauri/Rust is the thin webview, window, process and IPC host. **Zag owns discovery, registry, routing, protocol translation, permissions, MCP, task continuation and persistence.** Remote website pages receive only their observation channel and validated browser actions, not filesystem/shell commands. TNN remains gated pending a qualified artifact; symbolic discovery is the active implementation.
+Svelte renders the application interface.
 
-The external gateway supports `/v1/models`, `/v1/chat/completions`, `/v1/messages` and `/v1/responses` on authenticated loopback. The protocol subset and error behavior are documented in PROTOCOL.md. Backend source is not replaced by JavaScript/Rust to claim native verification.
+Tauri owns windows, native webviews, process lifecycle, and the narrow desktop bridge.
 
-## Build and run on Linux x86-64
+Zag owns provider discovery, model registry, sessions, protocol translation, routing, permissions, and the local gateway.
 
-Required: Node 22.12+, npm, Rust/Cargo, Git, Python 3, pkg-config, GTK 3 and WebKitGTK 4.1 development dependencies. A graphical session is required for the actual desktop.
+The native local tools process handles permission scoped filesystem and command operations.
 
-```bash
-bash build-linux.sh
-```
+Remote provider pages stay outside the trusted desktop command surface.
 
-The script obtains the pinned Zag toolchain, installs dependencies, runs native and frontend gates, and packages `.deb`/AppImage output under `src-tauri/target/release/bundle/`. It stops on failures. To develop after dependencies are installed:
+## Build
 
-```bash
-bash scripts/build-backend.sh
-npm run desktop
-```
+The current release target is Linux x86_64.
 
-`backend/zag.mod` selects edition 2027. `scripts/bootstrap-zag.sh` pins Zag revision `abed8aa170ef1bc33e5aca68b99fcdd905a4545f`; `ZNC=/absolute/path/to/znc` selects a provisioned compiler. npm/Cargo lockfiles must be generated and reviewed on a network-enabled build host; reproducible native builds are not claimed.
-
-## Tests and evidence
+You need Node, npm, Rust, Cargo, Python, pkg config, GTK 3 development files, WebKitGTK 4.1 development files, and the pinned Zag compiler path used by the build scripts.
 
 ```bash
-npm test
-npm run build
-python3 tests/ui_browser.py
-python3 tests/codemax_ui.py
-python3 tests/chrome_ui.py
-python3 tests/ux_audit.py
-python3 tests/progressive_ux.py
-python3 tests/browser_dom.py
-bash scripts/test-native.sh
+npm install
+npm run package:linux
 ```
 
-The UI scripts above consume the included compiled module-graph distribution. `npm run build` is the separate normal Vite path, not the build used for this evidence. `scripts/build-offline.mjs` rebuilds the fixture-free module graph with an explicitly supplied trusted local Svelte ESM distribution (`SVELTE_RUNTIME_DIR`); the compiler itself is not redistributed.
+The Linux bundles are created in the Tauri release bundle directory after every build and test gate succeeds.
 
-The native test command requires the real Zag compiler. It includes discovery/MCP native unit tests and a stdio/synthetic-file round trip through the actual compiled backend, with explicit test browser/transport fixtures. That native suite has not run in this environment.
+## Verification
 
-This revision has executable evidence for Svelte compilation (31 modules, zero component warnings), 103 compiled-UI scenarios across five suites, 26 browser-agent scenarios, and 32 Node/helper/HTTP/static/launch-command tests. The command tests execute Bash with explicit stub clients, not actual coding harnesses. Browser/UI fixtures do not establish native Tauri/WebKit, live model, MCP or harness correctness. See EXECUTION_REPORT.md and docs/release-gates.json.
+The native project tool executable is exercised against real temporary files and real child processes. The current suite covers reads, writes, edits, moves, recoverable deletion, traversal refusal, symlink and hardlink refusal, command timeout, cancellation, output limits, protocol negotiation, and capability scoped catalogs.
 
-## Documentation
+The Koryphaios adapter is tested against real private connection descriptor files, model catalog parsing, message translation, cancellation, and streaming event framing.
 
-- `docs/PROGRESSIVE_WORKSPACE.md`: current cleanliness/continuity audit and evidence.
-- `TOOL_LIBRARY.md`: published version pins, prerequisites and trust limitations.
-- `docs/UX_AUDIT.md`: source findings, implemented corrections, scenario-by-scenario evidence and remaining native checks.
-- `docs/CODEMAX_WORKFLOW.md`: admission, low-setup UX and model-provider vs MCP distinction.
-- `docs/MCP_CLIENT.md`: protocol, consent, limits and native validation instructions.
-- `SECURITY.md`: browser and native trust boundaries.
-- `PROTOCOL.md`: normalized model protocol and private operations.
-- `docs/SOURCES.md`: primary reference research.
-- `docs/RECOVERY.md`: restore the full local Git history from RECOVERY.bundle.
+Static checks also verify Tauri capability separation and the Zag module graph.
 
-The compiled distribution excludes browser test fixtures. No production provider mock, extension manifest, broad remote-page privilege, guessed context limit or simulated native success is included.
+Full website behavior still depends on the website itself, its current interface, authentication state, quotas, and platform webview behavior.
+
+## Project status
+
+Codemax is under active development. The source tree contains the production browser, detector, Zag gateway, native tools, Tauri host, Svelte interface, Koryphaios integration, tests, and Linux packaging scripts.

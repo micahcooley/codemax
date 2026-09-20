@@ -1,8 +1,8 @@
 [package]
-name = "desktop-ai-bridge"
+name = "codemax"
 version = "0.1.0-dev.7"
 edition = "2021"
-description = "Thin Tauri host for a native Zag AI bridge"
+description = "Thin Tauri host for Codemax"
 
 [build-dependencies]
 tauri-build = { version = "2.6", features = [] }

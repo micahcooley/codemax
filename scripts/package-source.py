@@ -93,16 +93,16 @@ def main():
     with zipfile.ZipFile(output,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as archive:
         for path in source_files():
             relative=path.relative_to(ROOT).as_posix()
-            info=zipfile.ZipInfo('desktop-ai-bridge/'+relative,date_time=(2026,9,19,0,0,0))
+            info=zipfile.ZipInfo('codemax/'+relative,date_time=(2026,9,19,0,0,0))
             info.external_attr=(path.stat().st_mode & 0xFFFF)<<16;info.compress_type=zipfile.ZIP_DEFLATED
             archive.writestr(info,path.read_bytes())
     with zipfile.ZipFile(output) as archive:
         assert archive.testzip() is None,'Archive CRC verification failed'
         for line in manifest.splitlines():
             digest,name=line.split('  ',1)
-            assert hashlib.sha256(archive.read('desktop-ai-bridge/'+name)).hexdigest()==digest,name
+            assert hashlib.sha256(archive.read('codemax/'+name)).hexdigest()==digest,name
         assert len(archive.namelist())==len(content)+2
-        assert any(name.startswith('desktop-ai-bridge/dist/') for name in archive.namelist())
+        assert any(name.startswith('codemax/dist/') for name in archive.namelist())
         count=len(archive.namelist())
     digest=hashlib.sha256(output.read_bytes()).hexdigest()
     output.with_suffix(output.suffix+'.sha256').write_text(f'{digest}  {output.name}\n')

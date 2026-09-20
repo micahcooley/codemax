@@ -10,14 +10,14 @@ The native Zag and Rust programs and Svelte application **could not be compiled 
 
 | Check executed | Result | Scope |
 |---|---|---|
-| Node tests | 17 passed / 0 failed | Six browser helper tests, three actual loopback HTTP mock-provider tests, eight static source/security-boundary checks |
+| Node tests | 17 passed / 0 failed | Six browser helper tests, three actual loopback HTTP fixture-provider tests, eight static source/security-boundary checks |
 | Chromium DOM tests | 17 passed / 0 failed | Actual `browser/agent.js`; in-memory DOM, network and storage fixtures; includes a 22-turn browser-agent sequence |
 | Chromium HTTP navigation | Blocked | Administrator URL policy blocked the local fixture; no policy was modified |
 | Native Zag / gateway integration | Blocked | No executable Zag compiler / gateway binary |
 | Rust / Svelte / Tauri builds | Blocked | Rust, WebKitGTK development libraries and npm dependencies unavailable; package network requests failed |
 | Live provider / real coding harness / full UI smoke | Not run | No qualification claimed |
 
-Raw reports are in `tests/evidence/`. `mock-provider-browser.png` is a screenshot of the **test website**, not of a compiled Svelte/Tauri application.
+Raw reports are in `tests/evidence/`. `fixture-provider-browser.png` is a screenshot of the **test website**, not of a compiled Svelte/Tauri application.
 
 ## Architecture preserved
 
@@ -39,7 +39,7 @@ The mock provider and Python tests are **test infrastructure only**. There is no
 
 ## Directory map
 
-`backend/` is the authoritative Zag source. `src/` contains the seven Svelte screens and reactive presentation state. `src-tauri/` contains process/webview orchestration and capability configuration. `browser/agent.js` is injected into allowed provider origins. `mock-provider/` is the local deterministic website. `tests/` and `scripts/` contain test/build tools. `MASTERPLAN.md` is the original plan, preserved unchanged.
+`backend/` is the authoritative Zag source. `src/` contains the seven Svelte screens and reactive presentation state. `src-tauri/` contains process/webview orchestration and capability configuration. `browser/agent.js` is injected into allowed provider origins. `fixture-provider/` is the local deterministic website. `tests/` and `scripts/` contain test/build tools. `MASTERPLAN.md` is the original plan, preserved unchanged.
 
 ## Development on a suitably provisioned Linux x86_64 host
 
@@ -75,7 +75,7 @@ npm run test:browser
 
 `test:browser:dom` uses explicit in-memory fixtures and is the suite that passed here. `test:browser` navigates to the actual local HTTP fixture and was blocked here. The scripts preserve failures instead of silently downgrading the scope.
 
-To inspect the mock website manually, run `npm run mock` and open `http://127.0.0.1:7340/`. For native development with that one HTTP exception, launch `BRIDGE_DEV_FIXTURE=1 npm run tauri -- dev`. The Rust host ignores this exception in release builds. The public fixture password/card values are synthetic privacy-test canaries, not account credentials.
+To inspect the test website manually, run `npm run mock` and open `http://127.0.0.1:7340/`. For native development with that one HTTP exception, launch `BRIDGE_DEV_FIXTURE=1 npm run tauri -- dev`. The Rust host ignores this exception in release builds. The public fixture password/card values are synthetic privacy-test canaries, not account credentials.
 
 ### Native packaging
 

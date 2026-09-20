@@ -1,6 +1,6 @@
 <script lang="ts">
  import {tick} from 'svelte';import {app} from '../lib/state/app.svelte';import * as bridge from '../lib/api/bridge';
- import ToolLibrary from '../lib/components/tools/ToolLibrary.svelte';import Icon from '../lib/components/Icon.svelte';import FileProbe from '../lib/components/FileProbe.svelte';import {errorText} from '../lib/format';import type {McpServer} from '../lib/types/bridge';
+ import ToolLibrary from '../lib/components/tools/ToolLibrary.svelte';import Icon from '../lib/components/Icon.svelte';import {errorText} from '../lib/format';import type {McpServer} from '../lib/types/bridge';
  const draft=$derived(app.toolDraft);let forRun=$state(false),formError=$state('');
  let library=$state(false),toolFilter=$state('');
  let consent=$state<McpServer|null>(null),trust=$state(false),consentPanel=$state<HTMLElement>();
@@ -81,5 +81,5 @@
  {#each server.tools.filter(t=>`${t.name} ${t.description}`.toLowerCase().includes(toolFilter.toLowerCase())) as tool(tool.alias)}<label class="setting-line"><div><strong>{tool.name}</strong><p>{tool.description}</p></div><input type="checkbox" aria-label={`Enable MCP tool ${tool.name}`} checked={tool.enabled} disabled={running||!app.ready||server.state!=='READY'} onchange={e=>{const value=e.currentTarget.checked;e.currentTarget.checked=tool.enabled;void app.perform('mcp.tool.update',{tool:tool.alias,enabled:value});}}/></label>{/each}{#if !server.tools.some(t=>`${t.name} ${t.description}`.toLowerCase().includes(toolFilter.toLowerCase()))}<p class="field-hint">No tools match. <button class="text-button" onclick={()=>toolFilter=''}>Clear filter</button></p>{/if}<p class="field-hint">Up to 32 enabled tools within the shared schema budget. Descriptions are sent to the website when a task starts.</p></details>{/if}
  <details class="advanced-client"><summary>Advanced · executable and tool schemas</summary><p class="field-hint">MCP {server.protocol||'not negotiated'} · local stdio</p><pre class="code">{server.command}{'\n'}{JSON.stringify(server.args,null,2)}</pre>{#each server.tools as tool(tool.alias)}<details><summary>{tool.name}</summary><pre class="code">{JSON.stringify(tool.schema,null,2)}</pre></details>{/each}<p class="field-hint">Descriptions are supplied by the server, not a security guarantee. Reconnecting or a changed catalog resets enabled choices and task grants.</p><button class="text-button danger-text" disabled={running||!app.ready} onclick={()=>remove(server)}>Remove server</button></details></div>{/each}
  </section>
- <details class="advanced-client"><summary>Advanced · synthetic file permission diagnostic</summary><FileProbe/></details>{/if}
+{/if}
 </div></section>

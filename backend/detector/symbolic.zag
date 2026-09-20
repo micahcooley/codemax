@@ -16,6 +16,7 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
     if (changed && p.*.preparing) { p.*.prepared = true; }
     if (changed && p.*.active_request >= 0 && !p.*.preparing) { p.*.state = 6; buf.copy(&p.*.last_error, "SITE_CHANGED"); buf.free(&document); return false; }
     buf.copy(&p.*.document, buf.view(&document)); buf.free(&document);
+    if (changed) { p.*.investigation_count = 0; p.*.investigation_at = 0; p.*.investigation_node = 0; }
     p.*.browser_busy = false;
     if (!p.*.scan_enabled || p.*.dismissed) { p.*.state = 8; buf.copy(&p.*.discovery_reason, "Discovery paused by user"); return true; }
     let strong_response: bool = false;
@@ -28,6 +29,7 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
     // selected by an in-flight request. Registry indices remain stable.
     // Retain the catalog when a popover closes. Selection validates availability
     // immediately before dispatch; only an explicit complete <select> replaces it.
+    buf.copy(&p.*.reasoning_modes, "[]");
     let prompt_score: i32 = 0; let response_score: i32 = 0; let send_score: i32 = 0;
     let label: buf.Buffer = buf.make(256); let lower: buf.Buffer = buf.make(256); let value: buf.Buffer = buf.make(256);
     let i: i32 = controls + 1;
@@ -63,12 +65,12 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
             }
             if (json.kind(d, json.get(d, i, "file_input")) == 5) { p.*.attachment = node; }
             if (is_visible && (json.is_text(d, json.get(d, i, "tag"), "main") || json.is_text(d, json.get(d, i, "role"), "main")) && response_score == 0) { p.*.response = node; }
-            if (is_visible && (json.is_text(d, json.get(d, i, "role"), "combobox") || json.is_text(d, json.get(d, i, "tag"), "button") || json.is_text(d, json.get(d, i, "role"), "switch"))) {
+            if (is_visible && (json.is_text(d, json.get(d, i, "role"), "combobox") || json.is_text(d, json.get(d, i, "tag"), "button") || json.is_text(d, json.get(d, i, "role"), "button") || json.is_text(d, json.get(d, i, "role"), "switch"))) {
                 if (validation.contains(s, "model") || (model_label(s) && !buf.eq(s, "step 1") && !buf.eq(s, "step 2"))) { p.*.model_control = node; }
-                if (validation.contains(s, "reasoning") || validation.contains(s, "thinking")) { p.*.reasoning_control = node; }
+                if (validation.contains(s, "reasoning") || validation.contains(s, "think")) { p.*.reasoning_control = node; }
             }
             if (is_visible && json.is_text(d, json.get(d, i, "tag"), "select")) {
-                if (validation.contains(s, "reason") || validation.contains(s, "thinking")) { p.*.reasoning_control = node; copy_modes(p, d, i); }
+                if (validation.contains(s, "reason") || validation.contains(s, "think")) { p.*.reasoning_control = node; copy_modes(p, d, i); }
                 else if (validation.contains(s, "model")) {
                     p.*.model_control = node; let options: i32 = json.get(d, i, "options");
                     if (json.kind(d, options) == 2 && d.*.tokens[options].size <= 32 && p.*.active_request < 0) {
@@ -94,9 +96,17 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
         let owner: i32 = json.number(d, json.get(d, i, "menu_owner"), 0) as i32;
         if (json.kind(d, json.get(d, i, "visible")) == 5 && json.kind(d, json.get(d, i, "disabled")) != 5) {
             if (node == p.*.model_control && !json.is_text(d, json.get(d, i, "tag"), "select")) {
-                json.field_text(d, i, "label", &label); validation.ascii_lower(buf.view(&label), &lower);
+                json.field_text(d, i, "current_value", &label);
+                if (label.len == 0) { json.field_text(d, i, "label", &label); }
+                validation.ascii_lower(buf.view(&label), &lower);
                 if (model_label(buf.view(&lower)) && !validation.contains(buf.view(&lower), "model")) {
                     registry.model(p, buf.view(&label), buf.view(&label), 0); buf.copy(&p.*.current_model, buf.view(&label));
+                }
+            }
+            if (node == p.*.reasoning_control) {
+                copy_modes(p, d, i);
+                if (json.is_text(d, json.get(d, i, "role"), "switch") || json.is_text(d, json.get(d, i, "role"), "checkbox")) {
+                    append_mode(p, "on", "On"); append_mode(p, "off", "Off");
                 }
             }
             if (owner > 0 && (json.is_text(d, json.get(d, i, "role"), "option") || json.is_text(d, json.get(d, i, "role"), "menuitemradio") || json.is_text(d, json.get(d, i, "role"), "menuitem"))) {
@@ -142,6 +152,15 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
         else if (!model_evidence) { buf.copy(&p.*.discovery_reason, "Chat candidate; no model identity exposed yet"); }
         else { buf.copy(&p.*.discovery_reason, "Model label alone is insufficient; conversation evidence needed"); }
     }
+    let current: i32 = 0;
+    while (current < p.*.model_count) {
+        if (p.*.reasoning_control > 0 && buf.eq(buf.view(&p.*.models[current].value), buf.view(&p.*.current_model))) {
+            p.*.models[current].reasoning_observed = true;
+            p.*.models[current].reasoning_seen = _zag_clock_monotonic_ms();
+            if (p.*.reasoning_modes.len > 2) { buf.copy(&p.*.models[current].reasoning_modes, buf.view(&p.*.reasoning_modes)); }
+        }
+        current = current + 1;
+    }
     p.*.version = p.*.version + 1; p.*.last_seen = _zag_clock_monotonic_ms();
     buf.copy(&p.*.evidence, json.raw(d, event)); return true;
 }
@@ -181,7 +200,7 @@ fn capabilities(p: *registry.Provider, d: *json.Document, event: i32) bool {
     let value: buf.Buffer = buf.make(192); let text: buf.Buffer = buf.make(192); let changed: bool = false; let i: i32 = facts + 1;
     while (i < d.*.tokens[facts].next) {
         json.field_text(d, i, "model", &value);
-        let source: i32 = json.get(d, i, "source"); let allowed: bool = json.is_text(d, source, "OBSERVED_REQUEST") || json.is_text(d, source, "PROVIDER_METADATA");
+        let source: i32 = json.get(d, i, "source"); let allowed: bool = json.is_text(d, source, "OBSERVED_REQUEST") || json.is_text(d, source, "PROVIDER_METADATA") || json.is_text(d, source, "VISIBLE_MODEL_CONTROL");
         if (value.ok != 0 && value.len > 0 && !validation.sensitive_label(buf.view(&value)) && allowed) {
             if (json.is_text(d, source, "OBSERVED_REQUEST") && json.kind(d, json.get(d, i, "selected")) == 5 && p.*.prompt > 0 && p.*.send > 0) {
                 buf.copy(&p.*.current_model, buf.view(&value));
@@ -190,9 +209,20 @@ fn capabilities(p: *registry.Provider, d: *json.Document, event: i32) bool {
             let m: i32 = 0;
             while (m < p.*.model_count) {
                 if (buf.eq(buf.view(&p.*.models[m].value), buf.view(&value)) || buf.eq(buf.view(&p.*.models[m].label), buf.view(&value))) {
+                    // A request's reasoning parameter is not proof that a UI
+                    // control or selectable option exists. Only observe() grants
+                    // reasoning-control evidence to this model.
+                    let display: i32 = json.get(d, i, "context_display");
+                    if (json.is_text(d, source, "VISIBLE_MODEL_CONTROL") && json.kind(d, display) == 3) {
+                        json.text(d, display, &text);
+                        if (text.ok != 0 && text.len > 0 && text.len <= 180 && !validation.sensitive_label(buf.view(&text))) {
+                            buf.copy(&p.*.models[m].context_label, buf.view(&text));
+                            p.*.models[m].label_seen = _zag_clock_monotonic_ms(); changed = true;
+                        }
+                    }
                     let n: i64 = json.number(d, json.get(d, i, "context_tokens"), 0);
-                    if (n >= 128 && n <= 10000000) { p.*.models[m].context_tokens = n; buf.copy(&p.*.models[m].context_source, "WEBSITE_REPORTED"); changed = true; }
-                    if (json.kind(d, json.get(d, i, "tokenizer")) == 3) { json.field_text(d, i, "tokenizer", &text); if (text.ok != 0 && text.len < 128 && !validation.sensitive_label(buf.view(&text))) { buf.copy(&p.*.models[m].tokenizer, buf.view(&text)); changed = true; } }
+                    if (n >= 128 && n <= 10000000) { p.*.models[m].capabilities_seen = _zag_clock_monotonic_ms(); p.*.models[m].context_tokens = n; buf.copy(&p.*.models[m].context_source, "WEBSITE_REPORTED"); changed = true; }
+                    if (json.kind(d, json.get(d, i, "tokenizer")) == 3) { json.field_text(d, i, "tokenizer", &text); if (text.ok != 0 && text.len < 128 && !validation.sensitive_label(buf.view(&text))) { buf.copy(&p.*.models[m].tokenizer, buf.view(&text)); p.*.models[m].tokenizer_seen = _zag_clock_monotonic_ms(); changed = true; } }
                 }
                 m = m + 1;
             }

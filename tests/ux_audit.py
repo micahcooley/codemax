@@ -54,7 +54,7 @@ def run(browser,name,fn):
     finally:page.close()
 
 SERVER={'id':1,'label':'Local fixture tools','command':'node','args':['/UI-FIXTURE-ONLY/mcp-server.mjs'],'state':'READY','error':'','protocol':'2025-11-25','tools':[{'name':'read_note','alias':'mcp_1_0','description':'UI test tool; reads no real file.','enabled':True,'schema':{'type':'object','properties':{'path':{'type':'string'}}}}]}
-TASK={'id':'ux-run-1','state':'PERMISSION_REQUIRED','provider_id':1,'model':'p1/mock-reasoner','turns':1,'calls':0,'auto_continue':False,'error':'','answer':'','call_id':'call-1','tool':'mcp_1_0','arguments':'{"path":"test-fixture.txt"}','last_result':''}
+TASK={'id':'ux-run-1','state':'PERMISSION_REQUIRED','provider_id':1,'model':'p1/fixture-reasoner','turns':1,'calls':0,'auto_continue':False,'error':'','answer':'','call_id':'call-1','tool':'mcp_1_0','arguments':'{"path":"test-fixture.txt"}','last_result':''}
 
 def seed_task(page):
     page.evaluate('(v)=>{window.__uiFixture.snapshot.mcp_servers=[v.server];window.__uiFixture.snapshot.mcp_run=v.task;window.__uiFixture.push()}',{'server':SERVER,'task':TASK})
@@ -191,8 +191,8 @@ with sync_playwright() as pw:
     run(browser,'A negative health result cannot produce a successful connection message',health_failure)
 
     def no_model_substitution(p):
-        route(p,'Connect a client');p.get_by_role('combobox',name='Client model').select_option('p1/mock-coder')
-        p.evaluate("window.__uiFixture.snapshot.providers[0].models.find(m=>m.id==='p1/mock-coder').enabled=false;window.__uiFixture.push()")
+        route(p,'Connect a client');p.get_by_role('combobox',name='Client model').select_option('p1/fixture-coder')
+        p.evaluate("window.__uiFixture.snapshot.providers[0].models.find(m=>m.id==='p1/fixture-coder').enabled=false;window.__uiFixture.push()")
         expect(p.get_by_role('button',name='Save config',exact=True)).to_be_disabled()
         expect(p.get_by_text('Your previous selection is no longer available.',exact=False)).to_be_visible()
     run(browser,'Unavailable explicit client model selection is not silently replaced by another model',no_model_substitution)
@@ -208,9 +208,9 @@ with sync_playwright() as pw:
     def model_status(p):
         p.evaluate('window.__uiFixture.snapshot.providers[0].models[0].enabled=false;window.__uiFixture.snapshot.providers[0].models[1].available=false;window.__uiFixture.push()')
         route(p,'Models');p.get_by_role('combobox',name='Filter by availability').select_option('READY')
-        expect(p.locator('tbody tr')).to_have_count(1);expect(p.locator('tbody tr')).to_contain_text('Mock Coder')
+        expect(p.locator('tbody tr')).to_have_count(1);expect(p.locator('tbody tr')).to_contain_text('Fixture Coder')
         p.get_by_role('combobox',name='Filter by availability').select_option('all')
-        expect(p.get_by_role('button',name='Set Mock Small as default')).to_be_disabled();expect(p.get_by_role('button',name='Set Mock Reasoner as default')).to_be_disabled()
+        expect(p.get_by_role('button',name='Set Fixture Small as default')).to_be_disabled();expect(p.get_by_role('button',name='Set Fixture Reasoner as default')).to_be_disabled()
     run(browser,'Ready filters and default-model actions respect model and provider exposure',model_status)
 
     def filters(p):

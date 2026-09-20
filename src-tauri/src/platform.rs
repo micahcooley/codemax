@@ -10,7 +10,7 @@ pub fn autostart(app: &tauri::AppHandle, enabled: bool) -> Result<(), String> {
     use std::io::Write;
     let directory = app.path().config_dir().map_err(|_| "CONFIG_DIRECTORY_UNAVAILABLE")?.join("autostart");
     views::private_directory(&directory)?;
-    let path = directory.join("com.sylorlabs.desktopaibridge.desktop");
+    let path = directory.join("com.micahcooley.codemax.desktop");
     if let Ok(meta) = fs::symlink_metadata(&path) {
         if meta.file_type().is_symlink() || !meta.is_file() { return Err("AUTOSTART_PATH_DENIED".into()); }
     }
@@ -27,7 +27,7 @@ pub fn autostart(app: &tauri::AppHandle, enabled: bool) -> Result<(), String> {
     if text.chars().any(char::is_control) { return Err("EXECUTABLE_PATH_DENIED".into()); }
     // Desktop Entry Exec quoting is not a shell command. Escape its field codes.
     let quoted = text.replace('\\', "\\\\\\\\").replace('"', "\\\"").replace('`', "\\`").replace('$', "\\$").replace('%', "%%");
-    let contents = format!("[Desktop Entry]\nType=Application\nName=Desktop AI Bridge\nExec=\"{quoted}\"\nTerminal=false\nX-GNOME-Autostart-enabled=true\n");
+    let contents = format!("[Desktop Entry]\nType=Application\nName=Codemax\nExec=\"{quoted}\"\nTerminal=false\nX-GNOME-Autostart-enabled=true\n");
     let temporary = path.with_extension(format!("desktop-{}-tmp", std::process::id()));
     let result = (|| -> Result<(), String> {
         let mut file = fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&temporary).map_err(|_| "AUTOSTART_WRITE_FAILED")?;
@@ -65,7 +65,7 @@ pub async fn document_export(webview: Webview, name: String, content: String) ->
         return Err("EXPORT_LIMIT".into());
     }
     let _: Value = serde_json::from_str(&content).map_err(|_| "EXPORT_REQUIRES_JSON")?;
-    let Some(file) = rfd::AsyncFileDialog::new().set_title("Export from Desktop AI Bridge")
+    let Some(file) = rfd::AsyncFileDialog::new().set_title("Export from Codemax")
         .set_file_name(&name).add_filter("JSON", &["json"]).save_file().await else { return Ok(false); };
     file.write(content.as_bytes()).await.map_err(|_| "EXPORT_WRITE_FAILED")?;
     Ok(true)

@@ -24,7 +24,7 @@ Settings manages port updates, temporary token reveal/copy/regeneration, backend
 
 Ctrl/Cmd+K opens the command palette. Escape closes native dialogs. Focus-visible outlines and real button/input labels are present. Dialogs use the browser dialog element, keyboard focus and restoration. Motion respects prefers-reduced-motion. Core status uses text in addition to colored dots. Responsive styles compact the rail and stack information panels.
 
-Keyboard/screen-reader semantics, full Svelte component compilation and application screenshots require further verification. `tests/evidence/mock-provider-browser.png` documents only the mock website. Do not use that image as evidence of a built product UI.
+Keyboard/screen-reader semantics, full Svelte component compilation and application screenshots require further verification. `tests/evidence/fixture-provider-browser.png` documents only the test website. Do not use that image as evidence of a built product UI.
 
 ## Explicit missing UI/platform work
 

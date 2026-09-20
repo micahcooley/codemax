@@ -137,8 +137,8 @@ with sync_playwright() as pw:
   record('real CSS spinner, manual generation, idle ring, limit state and reduced motion',tab_activity)
   def model_search():
    route('Models');page.get_by_role('textbox',name='Search models').fill('coder');assert page.locator('tbody tr').count()==1
-   page.get_by_role('button',name='Set Mock Coder as default').click();page.wait_for_function("window.__uiFixture.snapshot.settings.default_model==='p1/mock-coder'")
-   page.get_by_role('textbox',name='Search models').fill('');page.get_by_role('button',name='Copy Mock Coder model ID').click();page.wait_for_function("window.__clipboard==='p1/mock-coder'")
+   page.get_by_role('button',name='Set Fixture Coder as default').click();page.wait_for_function("window.__uiFixture.snapshot.settings.default_model==='p1/fixture-coder'")
+   page.get_by_role('textbox',name='Search models').fill('');page.get_by_role('button',name='Copy Fixture Coder model ID').click();page.wait_for_function("window.__clipboard==='p1/fixture-coder'")
   record('model filtering, exact identifier copy and backend-driven default selection',model_search)
   if page.get_by_role('button',name='Dismiss notification').count():page.get_by_role('button',name='Dismiss notification').click()
   page.screenshot(animations='disabled',path=str(SHOTS/'02-model-registry.png'))

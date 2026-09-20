@@ -476,7 +476,9 @@ export default function Providers($$anchor, $$props) {
 							? `${number($.get(current).context_hint)} · user supplied`
 							: $.get(model).context.nominal
 								? `${number($.get(model).context.nominal)} · website reported`
-								: 'Unknown'
+								: $.get(model).context.advertised_label
+									? `${$.get(model).context.advertised_label} · exact count unknown`
+									: 'Unknown'
 					]
 				);
 

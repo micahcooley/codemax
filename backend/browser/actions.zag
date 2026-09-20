@@ -45,3 +45,32 @@ fn new_chat(p: *registry.Provider, request_id: []u8, out: *buf.Buffer) bool {
     buf.add(out, ",\"action\":{\"type\":\"new_chat\",\"document_id\":"); buf.json(out, buf.view(&p.*.document));
     buf.add(out, ",\"request_id\":"); buf.json(out, request_id); buf.add(out, ",\"node\":"); buf.integer(out, p.*.new_chat as i64); buf.add(out, "}}\n"); return out.*.ok != 0;
 }
+
+// Bounded, non-destructive discovery. Never authorizes accounts, sends prompts,
+// changes a model/reasoning choice, or runs a tool. Browser revalidates idleness.
+fn investigate(p: *registry.Provider, out: *buf.Buffer) void {
+    let now: i64 = _zag_clock_monotonic_ms();
+    if (!p.*.scan_enabled || p.*.dismissed || p.*.active_request >= 0 || p.*.browser_busy || p.*.preparing ||
+        p.*.prompt <= 0 || p.*.send <= 0 || p.*.response <= 0 || p.*.model_control <= 0 ||
+        p.*.investigation_count >= 4 || now - p.*.investigation_at < 5000 || p.*.state == 2 || p.*.quota != 0) { return; }
+    let node: i32 = p.*.model_control;
+    if (p.*.investigation_node == node) { node = p.*.reasoning_control; }
+    if (node <= 0) { return; }
+    let d: json.Document = json.parse(buf.view(&p.*.evidence)); let list: i32 = json.get(&d, 0, "controls"); let eligible: bool = false;
+    if (d.ok != 0 && json.kind(&d, list) == 2) {
+        let i: i32 = list + 1;
+        while (i < d.tokens[list].next) {
+            if (json.number(&d, json.get(&d, i, "id"), 0) == node as i64) {
+                let popup: i32 = json.get(&d, i, "popup");
+                eligible = json.kind(&d, json.get(&d, i, "visible")) == 5 && json.kind(&d, json.get(&d, i, "disabled")) != 5 &&
+                    (json.is_text(&d, popup, "menu") || json.is_text(&d, popup, "listbox") || json.is_text(&d, popup, "true"));
+            }
+            i = d.tokens[i].next;
+        }
+    }
+    json.free(&d); if (!eligible) { return; }
+    p.*.investigation_count = p.*.investigation_count + 1; p.*.investigation_at = now; p.*.investigation_node = node;
+    buf.add(out, "{\"type\":\"action\",\"provider_id\":"); buf.integer(out, p.*.id as i64);
+    buf.add(out, ",\"action\":{\"type\":\"inspect_menu\",\"document_id\":"); buf.json(out, buf.view(&p.*.document));
+    buf.add(out, ",\"node\":"); buf.integer(out, node as i64); buf.add(out, "}}\n");
+}

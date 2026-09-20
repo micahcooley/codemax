@@ -119,7 +119,7 @@ fn main() i32 {
     check(validation.provider_origin("https://chat.example.com/", false, &origin), "HTTPS provider");
     check(!validation.provider_origin("https://user:secret@example.com/", false, &origin), "credential URL rejected");
     check(!validation.provider_origin("http://127.0.0.1:7340/", false, &origin), "insecure production URL rejected");
-    check(validation.provider_origin("http://127.0.0.1:7340/", true, &origin), "explicit dev fixture");
+    check(!validation.provider_origin("http://127.0.0.1:7340/", true, &origin), "legacy dev flag cannot enable an insecure test provider");
     check(!context.fits(900, 100, 10, 1000), "context reservation");
     buf.free(&origin); _zag_println("native unit suite passed"); return 0;
 }

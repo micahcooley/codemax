@@ -59,7 +59,7 @@ fn parameters_meta(s: *Server, out: *buf.Buffer) void {
     }
 }
 fn rpc(s: *Server, method: []u8, params: []u8, operation: i32, out: *buf.Buffer) void {
-    let frame: buf.Buffer=buf.make(32768);s.*.request_id=s.*.request_id+1;s.*.pending_id=s.*.request_id;s.*.operation=operation;
+    let frame: buf.Buffer=buf.make(131072);s.*.request_id=s.*.request_id+1;s.*.pending_id=s.*.request_id;s.*.operation=operation;
     buf.add(&frame,"{\"jsonrpc\":\"2.0\",\"id\":");buf.integer(&frame,s.*.request_id);buf.add(&frame,",\"method\":");buf.json(&frame,method);
     buf.add(&frame,",\"params\":");buf.add(&frame,params);buf.byte(&frame,125);
     if (frame.ok==0) { buf.free(&frame);fail(s,"MCP_REQUEST_LIMIT",out);return; }
@@ -95,7 +95,7 @@ fn connect(s: *Server, confirmed: bool, out: *buf.Buffer) bool {
     if (!confirmed || (s.*.state!=0 && s.*.state!=5)) { return false; }
     clear_tools(s);buf.clear(&s.*.error);buf.clear(&s.*.cursor);buf.clear(&s.*.result);s.*.pages=0;s.*.result_ready=false;
     if (!token.generate(&s.*.epoch)) { return false; }
-    buf.copy(&s.*.version,"2025-11-25");s.*.state=1;s.*.operation=0;s.*.pending_id=0;s.*.deadline=_zag_clock_monotonic_ms()+120000;s.*.changed=true;transport(s,"start","",out);return true;
+    buf.copy(&s.*.version,"2026-07-28");s.*.state=1;s.*.operation=0;s.*.pending_id=0;s.*.deadline=_zag_clock_monotonic_ms()+120000;s.*.changed=true;transport(s,"start","",out);return true;
 }
 fn catalog(s: *Server, d: *json.Document, result: i32, out: *buf.Buffer) void {
     if (buf.eq(buf.view(&s.*.version),"2026-07-28") && !json.is_text(d,json.get(d,result,"resultType"),"complete")) { fail(s,"MCP_CATALOG_RESULT_UNSUPPORTED",out);return; }
@@ -123,6 +123,10 @@ fn catalog(s: *Server, d: *json.Document, result: i32, out: *buf.Buffer) void {
         if (next.ok==0 || next.len==0 || buf.eq(buf.view(&next),buf.view(&s.*.cursor))) { buf.free(&next);fail(s,"MCP_INVALID_CURSOR",out);return; }
         buf.copy(&s.*.cursor,buf.view(&next));buf.free(&next);list_tools(s,out);
     } else { s.*.state=3;s.*.pending_id=0;s.*.operation=0;s.*.deadline=0;s.*.hard_deadline=0;s.*.changed=true; }
+}
+fn legacy_initialize(s: *Server, out: *buf.Buffer) void {
+    buf.copy(&s.*.version,"2025-11-25");
+    rpc(s,"initialize","{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"Codemax\",\"version\":\"0.2.0\"}}",1,out);
 }
 fn incoming(s: *Server, bytes: []u8, out: *buf.Buffer) void {
     if (_zag_strlen(bytes)>131072) { fail(s,"MCP_FRAME_LIMIT",out);return; }
@@ -158,8 +162,12 @@ fn incoming(s: *Server, bytes: []u8, out: *buf.Buffer) void {
     if (s.*.pending_id<=0 || json.number(&d,id,0 - 1)!=s.*.pending_id) { json.free(&d);return; }
     let error: i32=json.get(&d,0,"error");let result: i32=json.get(&d,0,"result");
     if (error>=0) {
-        if (s.*.operation==1 && (json.kind(&d,json.get(&d,error,"code"))==4 && buf.eq(json.raw(&d,json.get(&d,error,"code")),"-32601")) && !buf.eq(buf.view(&s.*.version),"2026-07-28")) {
-            buf.copy(&s.*.version,"2026-07-28");rpc(s,"server/discover","{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"Codemax\",\"version\":\"0.1.0\"},\"io.modelcontextprotocol/clientCapabilities\":{}}}",1,out);
+        if (s.*.operation==1 && buf.eq(buf.view(&s.*.version),"2026-07-28")) {
+            let code: i64=json.number(&d,json.get(&d,error,"code"),0);
+            // Recognized modern errors never authorize a legacy downgrade.
+            // Other errors can come from older pre-initialize implementations.
+            if (code==0 - 32020 || code==0 - 32021 || code==0 - 32022) { fail(s,"MCP_MODERN_NEGOTIATION_REJECTED",out); }
+            else { legacy_initialize(s,out); }
         } else if (s.*.operation==3) {
             buf.copy(&s.*.result,"{\"isError\":true,\"content\":[{\"type\":\"text\",\"text\":\"MCP server rejected this tool request. It was not retried.\"}]}");
             s.*.result_ready=true;s.*.pending_id=0;s.*.operation=0;s.*.deadline=0;s.*.hard_deadline=0;s.*.state=3;s.*.changed=true;
@@ -195,14 +203,17 @@ fn event(h: *Hub, d: *json.Document, p: i32, out: *buf.Buffer) void {
     if (s.*.epoch.len==0 || !json.is_text(d,json.get(d,p,"epoch"),buf.view(&s.*.epoch))) { return; }
     let e: i32=json.get(d,p,"event");
     if (json.is_text(d,e,"connected") && s.*.state==1 && s.*.operation==0) {
-        rpc(s,"initialize","{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"Codemax\",\"version\":\"0.1.0\"}}",1,out);
+        rpc(s,"server/discover","{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"Codemax\",\"version\":\"0.1.0\"},\"io.modelcontextprotocol/clientCapabilities\":{}}}",1,out);
     } else if (json.is_text(d,e,"line")) { let line: buf.Buffer=buf.make(131073);json.field_text(d,p,"line",&line);if (line.ok!=0) { incoming(s,buf.view(&line),out); } else { fail(s,"MCP_FRAME_LIMIT",out); }buf.free(&line); }
     else if (json.is_text(d,e,"closed") || json.is_text(d,e,"error")) { fail(s,"MCP_PROCESS_LOST",out); }
     h.*.changed=true;
 }
 fn tick(h: *Hub, out: *buf.Buffer) void {
     let i: i32=0;let now: i64=_zag_clock_monotonic_ms();while (i<h.*.count) {
-        let s: *Server=&h.*.servers[i];if ((s.*.deadline>0 && now>=s.*.deadline) || (s.*.hard_deadline>0 && now>=s.*.hard_deadline)) { fail(s,"MCP_REQUEST_TIMEOUT",out); }
+        let s: *Server=&h.*.servers[i];if ((s.*.deadline>0 && now>=s.*.deadline) || (s.*.hard_deadline>0 && now>=s.*.hard_deadline)) {
+            if (s.*.operation==1 && buf.eq(buf.view(&s.*.version),"2026-07-28")) { legacy_initialize(s,out); }
+            else { fail(s,"MCP_REQUEST_TIMEOUT",out); }
+        }
         if (s.*.changed) { h.*.changed=true;s.*.changed=false; }i=i+1;
     }
 }
@@ -222,9 +233,9 @@ fn definitions(h: *Hub, out: *buf.Buffer) void {
 }
 fn call(h: *Hub, index: i32, arguments: []u8, out: *buf.Buffer) bool {
     if (index<0 || index/64>=h.*.count) { return false; }let s: *Server=&h.*.servers[index/64];let j: i32=index%64;
-    if (s.*.state!=3 || j>=s.*.count || !s.*.tools[j].enabled || _zag_strlen(arguments)>8192) { return false; }
+    if (s.*.state!=3 || j>=s.*.count || !s.*.tools[j].enabled || _zag_strlen(arguments)>60000) { return false; }
     let d: json.Document=json.parse(arguments);let valid: bool=d.ok!=0 && json.kind(&d,0)==1;json.free(&d);if (!valid) { return false; }
-    let p: buf.Buffer=buf.make(12288);buf.add(&p,"{\"name\":");buf.json(&p,buf.view(&s.*.tools[j].name));buf.add(&p,",\"arguments\":");buf.add(&p,arguments);buf.add(&p,",\"_meta\":{\"progressToken\":");buf.integer(&p,s.*.request_id+1);
+    let p: buf.Buffer=buf.make(65536);buf.add(&p,"{\"name\":");buf.json(&p,buf.view(&s.*.tools[j].name));buf.add(&p,",\"arguments\":");buf.add(&p,arguments);buf.add(&p,",\"_meta\":{\"progressToken\":");buf.integer(&p,s.*.request_id+1);
     if (buf.eq(buf.view(&s.*.version),"2026-07-28")) { buf.add(&p,",\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"Codemax\",\"version\":\"0.1.0\"},\"io.modelcontextprotocol/clientCapabilities\":{}"); }
     buf.add(&p,"}}");
     s.*.state=4;s.*.result_ready=false;buf.clear(&s.*.result);rpc(s,"tools/call",buf.view(&p),3,out);buf.free(&p);return s.*.state==4;

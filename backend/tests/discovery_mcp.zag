@@ -21,7 +21,7 @@ fn provider_cases() void {
  check(buf.find(buf.view(&p.*.reasoning_modes),"high",0)>=0,"reasoning options observed without invented levels");
  check(p.*.models[0].context_tokens==0 && p.*.models[0].tokenizer.len==0,"no capability from model names");
  registry.public_models(&r,&out);check(buf.find(buf.view(&out),"p1/fixture-1",0)>=0,"admitted model published");
- p.*.models[0].enabled=false;registry.public_models(&r,&out);check(buf.eq(buf.view(&out),"{\"object\":\"list\",\"data\":[]}"),"disabled model hidden");p.*.models[0].enabled=true;
+ p.*.models[0].enabled=false;registry.public_models(&r,&out);check(buf.eq(buf.view(&out),"{\"object\":\"list\",\"codemax_catalog_version\":1,\"data\":[]}"),"disabled model hidden");p.*.models[0].enabled=true;
  p.*.exposed=false;check(registry.find_model(&r,"p1/fixture-1")<0,"provider exposure gates routing");p.*.exposed=true;
  let md: json.Document=json.parse("{\"origin\":\"https://fixture.example\",\"facts\":[{\"model\":\"unrelated\",\"context_tokens\":999999,\"source\":\"PROVIDER_METADATA\"},{\"model\":\"fixture-1\",\"context_tokens\":65536,\"tokenizer\":\"fixture-tok\",\"source\":\"PROVIDER_METADATA\"}]}");check(symbolic.capabilities(p,&md,0),"explicit metadata accepted");json.free(&md);
  check(p.*.models[0].context_tokens==65536 && buf.eq(buf.view(&p.*.models[0].tokenizer),"fixture-tok"),"metadata model scoped");
@@ -37,15 +37,13 @@ fn mcp_cases() void {
  check(!mcp.connect(s,false,&out) && out.len==0,"process consent mandatory");
  check(mcp.connect(s,true,&out),"explicit consent emits bounded process start");
  check(buf.find(buf.view(&out),"start",0)>=0,"process start frame");
- // Inject protocol frames directly; no child process is spawned in a unit test.
- mcp.rpc(s,"initialize","{}",1,&out);
+ // Unit inputs exercise protocol decoding, not a fake running provider.
+ mcp.rpc(s,"server/discover","{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientCapabilities\":{}}}",1,&out);
  mcp.incoming(s,"{\"jsonrpc\":\"2.0\",\"id\":99999,\"result\":{}}",&out);
  check(s.*.pending_id==1 && s.*.operation==1,"wrong response id ignored");
- mcp.incoming(s,"{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32601,\"message\":\"Method not found\"}}",&out);
- check(buf.eq(buf.view(&s.*.version),"2026-07-28") && s.*.pending_id==2,"negative method error triggers explicit modern discovery");
- mcp.incoming(s,"{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"resultType\":\"complete\",\"supportedVersions\":[\"2026-07-28\"],\"capabilities\":{\"tools\":{}}}}",&out);
- check(s.*.state==2 && s.*.pending_id==3,"negotiated modern catalog requested");
- mcp.incoming(s,"{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{\"resultType\":\"complete\",\"tools\":[{\"name\":\"read_note\",\"inputSchema\":{\"type\":\"object\"}}]}}",&out);
+ mcp.incoming(s,"{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"resultType\":\"complete\",\"supportedVersions\":[\"2026-07-28\"],\"capabilities\":{\"tools\":{}},\"ttlMs\":0,\"cacheScope\":\"private\"}}",&out);
+ check(s.*.state==2 && s.*.pending_id==2,"modern discovery requests catalog");
+ mcp.incoming(s,"{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"resultType\":\"complete\",\"tools\":[{\"name\":\"read_note\",\"inputSchema\":{\"type\":\"object\"}}],\"ttlMs\":0,\"cacheScope\":\"private\"}}",&out);
  check(s.*.state==3 && s.*.count==1 && !s.*.tools[0].enabled,"catalog tools default disabled");
  check(!mcp.call(&h,0,"{}",&out),"disabled tools cannot execute");s.*.tools[0].enabled=true;
  let run: runner.Run=runner.make();check(runner.begin(&run,&h,1,"p1/fixture-1","Read a fixture note",true),"trusted task establishes binding");
@@ -53,7 +51,7 @@ fn mcp_cases() void {
  check(!mcp.call(&h,0,"[]",&out),"tool arguments must be object");
  let binding: buf.Buffer=buf.make(65536);mcp.binding(&h,&binding);check(runner.valid_catalog(&run,&h),"task catalog stable");
  check(mcp.call(&h,0,"{}",&out),"enabled tool emits request");check(runner.valid_catalog(&run,&h),"in-flight call does not revoke own catalog");
- mcp.incoming(s,"{\"jsonrpc\":\"2.0\",\"id\":4,\"result\":{\"resultType\":\"complete\",\"content\":[{\"type\":\"text\",\"text\":\"fixture data\"}]}}",&out);
+ mcp.incoming(s,"{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{\"resultType\":\"complete\",\"content\":[{\"type\":\"text\",\"text\":\"fixture data\"}]}}",&out);
  check(s.*.result_ready && s.*.state==3,"complete result becomes untrusted data");
  mcp.incoming(s,"{\"jsonrpc\":\"2.0\",\"method\":\"notifications/tools/list_changed\"}",&out);
  check(!runner.valid_catalog(&run,&h) && s.*.count==0,"catalog change invalidates grants");

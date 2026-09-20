@@ -7,7 +7,7 @@ import {spawnSync} from 'node:child_process';
 import {privateLaunch,shellQuote} from '../dist/src/lib/launch-command.js';
 import {recipeDefinition,toolRecipes} from '../dist/src/lib/tool-recipes.js';
 
-// Execute generated Bash against a tiny local EXPLICIT TEST DOUBLE executable.
+// Execute generated Bash against a temporary local argument capture executable.
 // This verifies argument/env transport, NOT actual OpenCode or Claude compatibility.
 function execute(command,program='opencode') {
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'codemax-command-test-'));
@@ -24,10 +24,10 @@ function execute(command,program='opencode') {
 const endpoint='http://127.0.0.1:7331';
 const key="sk-local-' ; touch INJECTED; #";
 const model="p1/model';touch INJECTED;#";
-test('OpenCode launch preserves special characters and existing config via real Bash with fixture executable',()=>{
- const config={model:'bridge/'+model,provider:{bridge:{options:{baseURL:endpoint+'/v1',apiKey:'{env:BRIDGE_API_KEY}'}}}};
+test('OpenCode launch preserves special characters and existing config via real Bash with temporary executable',()=>{
+ const config={model:'codemax/'+model,provider:{codemax:{options:{baseURL:endpoint+'/v1',apiKey:'{env:CODEMAX_API_KEY}'}}}};
  const out=execute(privateLaunch('opencode',endpoint,model,key,config));
- assert.equal(out.env.BRIDGE_API_KEY,key);assert.deepEqual(JSON.parse(out.env.OPENCODE_CONFIG_CONTENT),config);
+ assert.equal(out.env.CODEMAX_API_KEY,key);assert.deepEqual(JSON.parse(out.env.OPENCODE_CONFIG_CONTENT),config);
 });
 test('Claude launch passes the selected model to each named model tier without shell injection',()=>{
  const out=execute(privateLaunch('claude',endpoint,model,key,{}),'claude');
@@ -47,9 +47,9 @@ test('Launch refuses non-loopback endpoint, missing data and header-breaking cre
  assert.throws(()=>privateLaunch('chat',endpoint,'',key,{}));assert.equal(shellQuote(''),"''");
 });
 test('Tool recipes are pinned definitions, not executable shell commands or automatic effects',()=>{
- assert.equal(toolRecipes.length,5);
- assert.deepEqual(Object.fromEntries(toolRecipes.map(r=>[r.id,r.version])),{files:'2026.8.31',git:'2026.8.18',fetch:'2026.8.18',memory:'2026.8.31',browser:'0.0.82'});
- for(const recipe of toolRecipes){const config=recipeDefinition(recipe.id,'/tmp/project');assert(['npx','uvx'].includes(config.command));assert(config.args.some(a=>a.includes(recipe.version)));assert(!config.args.includes('-c'));}
+ assert.equal(toolRecipes.length,6);
+ assert.deepEqual(Object.fromEntries(toolRecipes.map(r=>[r.id,r.version])),{native:'0.2.0',files:'2026.8.31',git:'2026.8.18',fetch:'2026.8.18',memory:'2026.8.31',browser:'0.0.82'});
+ for(const recipe of toolRecipes){const config=recipeDefinition(recipe.id,'/tmp/project');if(recipe.bundled){assert.equal(config.command,'builtin:local-tools');assert(config.args.includes('/tmp/project'));}else{assert(['npx','uvx'].includes(config.command));assert(config.args.some(a=>a.includes(recipe.version)));}assert(!config.args.includes('-c'));}
  assert(recipeDefinition('browser').args.includes('--isolated'));
 });
 test('Folder recipe refuses root, dot-root, relative paths, control bytes and traversal',()=>{

@@ -3,7 +3,7 @@
 @import("app.zag") as app
 fn main() i32 {
     let root: []u8 = _zag_getenv("BRIDGE_STATE_DIR");
-    let dev: bool = buf.eq(_zag_getenv("BRIDGE_DEV_FIXTURE"), "1");
+    let dev: bool = false;
     if (_zag_strlen(root) == 0) { _zag_eprintln("BRIDGE_STATE_DIR_REQUIRED"); return 2; }
     let state: app.App = app.make(root, dev);
     if (!app.start(&state)) {

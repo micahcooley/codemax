@@ -21,7 +21,7 @@ struct Run {
 fn make() Run {
     return Run{.budget=budget.make(_zag_clock_monotonic_ms()),.resume_state=1,.id=buf.make(96),.model=buf.make(256),.history=buf.make(196608),.definitions=buf.make(49152),
         .binding=buf.make(131072),.outgoing=buf.make(262144),.incoming=buf.make(131072),.error=buf.make(128),
-        .answer=buf.make(32768),.call_id=buf.make(192),.alias=buf.make(64),.arguments=buf.make(8192),
+        .answer=buf.make(32768),.call_id=buf.make(192),.alias=buf.make(64),.arguments=buf.make(60001),
         .grants=buf.make(4096),.result=buf.make(24576),.provider=0,.state=0,.turns=0,.calls=0,.active_tool=0 - 1,
         .fd=0 - 1,.offset=0,.deadline=0,.pending=false,.auto_continue=true,.changed=false,.cleanup_session=false};
 }
@@ -33,6 +33,12 @@ fn state_name(state: i32) []u8 {
     if (state==5) { return "COMPLETED"; }if (state==6) { return "FAILED"; }if (state==7) { return "CANCELLED"; }return "IDLE";
 }
 fn close(r: *Run) void { if (r.*.fd>=0) { net.close(r.*.fd);r.*.fd=0 - 1; }r.*.pending=false;r.*.offset=0;buf.clear(&r.*.outgoing);buf.clear(&r.*.incoming); }
+fn stop_active_tool(r: *Run, h: *hub.Hub, out: *buf.Buffer) void {
+    if (r.*.state!=3 || r.*.active_tool<0 || r.*.active_tool/64>=h.*.count) { return; }
+    // Killing only the bound local server cancels its child process group.
+    // Reconnection and fresh tool consent are required; never replay this call.
+    hub.stop(&h.*.servers[r.*.active_tool/64],out);r.*.active_tool=0 - 1;
+}
 fn terminal(r: *Run, state: i32, code: []u8) void {
     close(r);r.*.state=state;r.*.changed=true;r.*.cleanup_session=true;buf.copy(&r.*.error,code);buf.clear(&r.*.grants);
     // Run transcript is volatile. Website history belongs to its profile; no
@@ -116,7 +122,7 @@ fn pump(r: *Run, h: *hub.Hub, out: *buf.Buffer) void {
         let resume_state: i32=1;if (r.*.state==2) { resume_state=2; }
         pause(r,"WORK_BUDGET_REACHED",resume_state);return;
     }
-    if (!valid_catalog(r,h)) { terminal(r,6,"MCP_CATALOG_OR_CONNECTION_CHANGED");return; }
+    if (!valid_catalog(r,h)) { stop_active_tool(r,h,out);terminal(r,6,"MCP_CATALOG_OR_CONNECTION_CHANGED");return; }
     if (r.*.state==2) {
         let needle: buf.Buffer=buf.make(80);buf.byte(&needle,124);buf.add(&needle,buf.view(&r.*.alias));buf.byte(&needle,124);
         let granted: bool=buf.find(buf.view(&r.*.grants),buf.view(&needle),0)>=0;buf.free(&needle);

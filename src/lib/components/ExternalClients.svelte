@@ -1,7 +1,7 @@
 <script lang="ts">
  import {onDestroy} from 'svelte';import {app} from '../state/app.svelte';import * as bridge from '../api/bridge';import Icon from './Icon.svelte';
  import {privateLaunch} from '../launch-command';
- type Client='opencode'|'claude'|'chat'|'responses'|'messages';
+ type Client='opencode'|'claude'|'chat'|'responses'|'messages'|'koryphaios';
  let alive=true;let setupBusy=$state(false),setupMessage=$state(''),setupError=$state(false);
  let probing=$state(false),probeMessage=$state(''),probeFailed=$state(false);let timer:ReturnType<typeof setTimeout>;
  const client=$derived<Client>(app.preferences.harness||'opencode');
@@ -10,18 +10,19 @@
  const choice=$derived(app.clientModel?app.exposedModels.find(m=>m.id===app.clientModel):app.exposedModels.find(m=>m.id===app.preferences.default_model)||app.exposedModels[0]);
  const model=$derived(choice?.id||'');
  const running=$derived(app.ready&&app.snapshot?.api.running===true);
- const formatNames:Record<Client,string>={opencode:'OpenCode',claude:'Claude Code',chat:'Chat API',responses:'Responses API',messages:'Messages API'};
- const config=$derived({$schema:'https://opencode.ai/config.json',model:`bridge/${model}`,provider:{bridge:{npm:'@ai-sdk/openai-compatible',name:'Codemax websites',options:{baseURL:`${endpoint}/v1`,apiKey:'{env:BRIDGE_API_KEY}'},models:Object.fromEntries(app.exposedModels.map(m=>[m.id,{name:`${m.provider.label} / ${m.display_name}`}]))}}});
- const filename=$derived(client==='opencode'?'opencode.json':client==='claude'?'Start Claude Code · Bash':'Streaming request · Bash');
+ const formatNames:Record<Client,string>={koryphaios:'Koryphaios',opencode:'OpenCode',claude:'Claude Code',chat:'Chat API',responses:'Responses API',messages:'Messages API'};
+ const config=$derived({$schema:'https://opencode.ai/config.json',model:`codemax/${model}`,provider:{codemax:{npm:'@ai-sdk/openai-compatible',name:'Codemax websites',options:{baseURL:`${endpoint}/v1`,apiKey:'{env:CODEMAX_API_KEY}'},models:Object.fromEntries(app.exposedModels.map(m=>[m.id,{name:`${m.provider.label} / ${m.display_name}`}]))}}});
+ const filename=$derived(client==='koryphaios'?'Automatic local connection':client==='opencode'?'opencode.json':client==='claude'?'Start Claude Code · Bash':'Streaming request · Bash');
  const snippet=$derived.by(()=>{
   if(!model)return '';
+  if(client==='koryphaios')return '1. Keep Codemax and its local gateway running.\n2. Open Koryphaios with the included Codemax provider integration installed.\n3. Select Codemax websites, then your detected model.\n\nThe integration reads Codemax’s private connection file and refreshes its model catalog.\nNo provider key, terminal command, or secret copying is required.';
   if(client==='opencode')return JSON.stringify(config,null,2);
   if(client==='claude')return `read -rsp 'Codemax local key: ' ANTHROPIC_AUTH_TOKEN; echo\nexport ANTHROPIC_AUTH_TOKEN\nexport ANTHROPIC_BASE_URL='${endpoint}'\nexport ANTHROPIC_MODEL=${sh(model)}\nexport ANTHROPIC_DEFAULT_HAIKU_MODEL=${sh(model)}\nexport ANTHROPIC_DEFAULT_SONNET_MODEL=${sh(model)}\nexport ANTHROPIC_DEFAULT_OPUS_MODEL=${sh(model)}\nclaude`;
   const path=client==='chat'?'/v1/chat/completions':client==='responses'?'/v1/responses':'/v1/messages';
   const payload=client==='responses'?{model,input:'Explain how you will approach a code review.',stream:true}:client==='messages'?{model,max_tokens:1024,stream:true,messages:[{role:'user',content:'Explain how you will approach a code review.'}]}:{model,stream:true,messages:[{role:'user',content:'Explain how you will approach a code review.'}]};
-  return `read -rsp 'Codemax local key: ' BRIDGE_API_KEY; echo\nexport BRIDGE_API_KEY\ncurl --no-buffer '${endpoint}${path}' \\\n  -H "Authorization: Bearer $BRIDGE_API_KEY" \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-Bridge-Session: terminal-review' \\\n${client==='messages'?"  -H 'anthropic-version: 2023-06-01' \\\n":''}  --data ${sh(JSON.stringify(payload))}`;
+  return `read -rsp 'Codemax local key: ' CODEMAX_API_KEY; echo\nexport CODEMAX_API_KEY\ncurl --no-buffer '${endpoint}${path}' \\\n  -H "Authorization: Bearer $CODEMAX_API_KEY" \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-Bridge-Session: terminal-review' \\\n${client==='messages'?"  -H 'anthropic-version: 2023-06-01' \\\n":''}  --data ${sh(JSON.stringify(payload))}`;
  });
- const startCommand="read -rsp 'Codemax local key: ' BRIDGE_API_KEY; echo\nexport BRIDGE_API_KEY\nopencode";
+ const startCommand="read -rsp 'Codemax local key: ' CODEMAX_API_KEY; echo\nexport CODEMAX_API_KEY\nopencode";
  async function reveal(){if(app.secret){app.secret='';clearTimeout(timer);return;}const result=await app.perform<{token:string}>('key.reveal');if(result){app.secret=result.token;clearTimeout(timer);timer=setTimeout(()=>app.secret='',30000);}}
  async function copyKey(){const result=await app.perform<{token:string}>('key.reveal');if(result)await app.clipboard(result.token);}
  async function probe(){
@@ -40,6 +41,7 @@
    if(!running&&await app.perform('api.start')===undefined)throw Error('Could not start the local connection.');
    const health=await bridge.probe();if(!health.healthy)throw Error('Local connection check failed.');
    if(!alive||!app.ready||selected.client!==client||selected.model!==model||selected.endpoint!==endpoint)throw Error('The connection changed. Review your selection and try again.');
+   if(selected.client==='koryphaios'){setupMessage='Local gateway ready. In Koryphaios, select Codemax websites. Requires the included Koryphaios integration; no secret was copied.';return;}
    const credentials=await app.perform<{token:string}>('key.reveal');if(!credentials)throw Error('Local access key unavailable.');
    const command=privateLaunch(selected.client,selected.endpoint,selected.model,credentials.token,selected.config);
    if(!alive||!app.ready||selected.model!==model||selected.client!==client||selected.endpoint!==endpoint)throw Error('The connection changed before copying. Try again.');
@@ -53,13 +55,14 @@
 </script>
 <section class="quick-connect" aria-label="Simple client connection">
  <div class="quick-connection-status"><span class="dot" class:online={running}></span><span>{!app.ready?'Reconnect Codemax to continue':running?'Local gateway ready':'Ready to set up'}</span></div>
- <label class="field"><span>Coding client</span><select aria-label="Quick coding client" value={client} disabled={!app.ready||setupBusy} onchange={e=>app.settings({harness:e.currentTarget.value as Client})}><option value="opencode">OpenCode</option><option value="claude">Claude Code</option><option value="chat">Other · Chat Completions</option><option value="responses">Other · Responses API</option><option value="messages">Other · Messages API</option></select></label>
+ <label class="field"><span>Coding client</span><select aria-label="Quick coding client" value={client} disabled={!app.ready||setupBusy} onchange={e=>app.settings({harness:e.currentTarget.value as Client})}><option value="koryphaios">Koryphaios</option><option value="opencode">OpenCode</option><option value="claude">Claude Code</option><option value="chat">Other · Chat Completions</option><option value="responses">Other · Responses API</option><option value="messages">Other · Messages API</option></select></label>
  <label class="field"><span>Website model</span><select aria-label="Quick website model" value={app.clientModel||model} disabled={!app.ready||setupBusy||!app.exposedModels.length} onchange={e=>app.clientModel=e.currentTarget.value}>{#if !model}<option value="">Choose an available model</option>{/if}{#each app.exposedModels as m(m.id)}<option value={m.id}>{m.provider.label} / {m.display_name}</option>{/each}</select></label>
  {#if app.clientModel&&!choice}<p class="note warning">Your selected model is unavailable. Choose another explicitly; no automatic replacement.</p>{/if}
  {#if !app.exposedModels.length}<p class="connect-empty">Visit an AI chat website and sign in. Your available models appear here automatically.</p><button class="secondary" onclick={()=>app.newTab()}>Browse a website</button>{:else}
- <button class="primary launch-connect" disabled={!app.ready||!model||setupBusy} onclick={prepareAndCopy}>{#if setupBusy}<span class="spinner"></span>{:else}<Icon name="copy" size={15}/>{/if}{setupBusy?'Preparing…':client==='opencode'||client==='claude'?'Copy private launch command':'Copy private test request'}</button>
+ <button class="primary launch-connect" disabled={!app.ready||!model||setupBusy} onclick={prepareAndCopy}>{#if setupBusy}<span class="spinner"></span>{:else}<Icon name="copy" size={15}/>{/if}{setupBusy?'Preparing…':client==='koryphaios'?'Connect Koryphaios':client==='opencode'||client==='claude'?'Copy private launch command':'Copy private test request'}</button>
+ {#if client==='koryphaios'}<p class="field-hint">The included Koryphaios integration discovers this gateway and its available models on this computer. Existing installations need the integration applied first.</p>{:else}
  <p class="field-hint">Starts and checks the gateway. Requires {client==='opencode'?'OpenCode':client==='claude'?'Claude Code':'curl'} installed. No provider key, no config file editing.</p>
- <p class="private-command-note"><Icon name="lock" size={12}/>Includes your local access key. Paste only into your terminal; clipboard and terminal history may retain it.</p>
+ <p class="private-command-note"><Icon name="lock" size={12}/>Includes your local access key. Paste only into your terminal; clipboard and terminal history may retain it.</p>{/if}
  {/if}
  {#if setupMessage}<p class="setup-result" class:danger-text={setupError} role="status">{setupMessage}</p>{/if}
  {#if client==='claude'}<p class="field-hint compatibility-note">Non-Claude website models may not support every Claude Code feature. This does not certify vendor compatibility.</p>{/if}
@@ -69,7 +72,7 @@
 <div class="connection-layout">
  <div class="connection-main">
  <section class="section"><div class="section-title"><h2>1. Choose your client</h2><span class="tag">Website quota</span></div>
-  <div class="segmented" aria-label="Client format">{#each ['opencode','claude'] as id}<button class:active={client===id} aria-pressed={client===id} disabled={!app.ready||app.busy('settings.update')} onclick={()=>app.settings({harness:id as Client})}>{formatNames[id as Client]}</button>{/each}</div>
+  <div class="segmented" aria-label="Client format">{#each ['koryphaios','opencode','claude'] as id}<button class:active={client===id} aria-pressed={client===id} disabled={!app.ready||app.busy('settings.update')} onclick={()=>app.settings({harness:id as Client})}>{formatNames[id as Client]}</button>{/each}</div>
   <details class="advanced-client client-formats" open={['chat','responses','messages'].includes(client)}><summary>Other clients · protocol examples</summary><div class="segmented">{#each ['chat','responses','messages'] as id}<button class:active={client===id} aria-pressed={client===id} disabled={!app.ready||app.busy('settings.update')} onclick={()=>app.settings({harness:id as Client})}>{formatNames[id as Client]}</button>{/each}</div><p class="field-hint">Use a protocol your client supports. These are example requests, not one-click installers.</p></details>
   <label class="field"><span>Website model</span><select aria-label="Client model" value={app.clientModel||model} disabled={!app.ready||!app.exposedModels.length} onchange={e=>app.clientModel=e.currentTarget.value}>{#if !model}<option value="">Select an available model</option>{/if}{#each app.exposedModels as m(m.id)}<option value={m.id}>{m.provider.label} / {m.display_name}</option>{/each}</select></label>
   {#if app.clientModel&&!choice}<div class="note warning" role="status">Your previous selection is no longer available. Choose a model above; Codemax will not switch it silently.</div>{/if}
@@ -82,10 +85,10 @@
  </section>
  <section class="section"><div class="section-title"><h2>3. Configure {formatNames[client]}</h2>{#if client==='opencode'}<button class="text-button" disabled={!app.ready||!model} onclick={()=>app.export('opencode.json',config)}><Icon name="download" size={14}/>Save config</button>{/if}</div>
  {#if model}
-  <p class="connection-instruction">{client==='opencode'?'Save this in your project, or merge the provider entry into your existing opencode.json. Do not replace an existing configuration without reviewing it.':client==='claude'?'Run this in a Bash terminal, then paste the copied local key at the prompt. It only changes that terminal’s environment.':'Run this example in a Bash terminal and paste the copied local key at the prompt.'}</p>
+  <p class="connection-instruction">{client==='koryphaios'?'The gateway publishes a private connection descriptor for Koryphaios. Metadata is refreshed with a short, authorization-scoped cache.':client==='opencode'?'Save this in your project, or merge the provider entry into your existing opencode.json. Do not replace an existing configuration without reviewing it.':client==='claude'?'Run this in a Bash terminal, then paste the copied local key at the prompt. It only changes that terminal’s environment.':'Run this example in a Bash terminal and paste the copied local key at the prompt.'}</p>
   <div class="code-panel"><div class="code-heading"><Icon name={client==='opencode'?'folder':'terminal'} size={13}/><span>{filename}</span><button class="text-button" disabled={!app.ready} onclick={()=>app.clipboard(snippet)}><Icon name="copy" size={13}/>Copy</button></div><pre>{snippet}</pre></div>
   {#if client==='opencode'}<div class="code-panel launch-command"><div class="code-heading"><Icon name="terminal" size={13}/><span>Start OpenCode · Bash</span><button class="text-button" disabled={!app.ready} onclick={()=>app.clipboard(startCommand)}>Copy setup command</button></div><pre>{startCommand}</pre></div>{/if}
-  <div class="button-group" style="margin-top:14px"><button class="secondary" disabled={!app.ready||app.busy('key.reveal')} onclick={copyKey}><Icon name="key" size={14}/>Copy local key</button><span class="field-hint">Paste at the terminal prompt. It will not be displayed or saved in the config.</span></div>
+  {#if client!=='koryphaios'}<div class="button-group" style="margin-top:14px"><button class="secondary" disabled={!app.ready||app.busy('key.reveal')} onclick={copyKey}><Icon name="key" size={14}/>Copy local key</button><span class="field-hint">Paste at the terminal prompt. It will not be displayed or saved in the config.</span></div>{/if}
   {#if client==='claude'}<div class="note"><Icon name="alert" size={16}/><span>This non-Claude model connection is not vendor-supported. Actual compatibility depends on the website model and Claude Code’s protocol requirements.</span></div>{/if}
  {:else}<p class="muted">Configuration appears when a website model is ready. Nothing needs to be copied yet.</p>{/if}
  <details class="advanced-client"><summary>Manual connection details · endpoint and local access token</summary>

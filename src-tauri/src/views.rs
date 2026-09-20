@@ -25,12 +25,12 @@ pub fn private_directory(path: &Path) -> Result<(), String> {
     if meta.uid() != owner { return Err("DIRECTORY_OWNER_MISMATCH".into()); }
     fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|_| "DIRECTORY_MODE_FAILED")
 }
-pub fn safe_provider_url(url: &Url, dev: bool) -> bool {
+pub fn safe_provider_url(url: &Url, _dev: bool) -> bool {
     if !url.username().is_empty() || url.password().is_some() || url.host_str().is_none() { return false; }
     if url.scheme() == "https" {
         return !matches!(url.host_str(), Some("tauri.localhost" | "ipc.localhost" | "localhost" | "127.0.0.1" | "::1"));
     }
-    dev && url.scheme() == "http" && url.host_str() == Some("127.0.0.1") && url.port() == Some(7340)
+    false
 }
 pub fn trusted_main(view: &Webview) -> Result<(), String> {
     if view.label() != "main" { return Err("TRUSTED_UI_REQUIRED".into()); }
@@ -54,7 +54,7 @@ async fn open(app: &AppHandle, host: &Arc<Host>, id: u32, url: Url, origin: Stri
         views.insert(id, ProviderView { origin: origin.clone(), profile: profile.clone(), window_start: Instant::now(), observations: 0, popup_until: None, download_until: None, last_url: String::new(), zoom: 1.0 });
     }
     let config = serde_json::to_string(&json!({"origin":origin})).map_err(|_| "CONFIG_ENCODE_FAILED")?;
-    let script = format!("Object.defineProperty(globalThis,'__BRIDGE_BOOT__',{{value:Object.freeze({config})}});\n{}", include_str!("../../browser/agent.js"));
+    let script = format!("Object.defineProperty(globalThis,'__BRIDGE_BOOT__',{{value:Object.freeze({config})}});\n{}\n{}", include_str!("../../browser/semantics.js"), include_str!("../../browser/agent.js"));
     let app_on_main = app.clone(); let app_for_events = app.clone(); let dev = host.dev_fixture;
     let host_events=host.clone(); let host_popup=host.clone(); let host_download=host.clone(); let popup_app=app.clone(); let download_app=app.clone();
     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -143,7 +143,7 @@ pub async fn host_action(app: &AppHandle, host: &Arc<Host>, value: &Value) -> Re
 }
 pub fn execute(app: &AppHandle, host: &Arc<Host>, frame: &Value) -> Result<(), String> {
     let id = provider_id(frame)?; let action = frame.get("action").ok_or("ACTION_REQUIRED")?;
-    if !matches!(action["type"].as_str(), Some("discovery_policy" | "generate" | "stop" | "scan" | "pick" | "new_chat")) { return Err("ACTION_DENIED".into()); }
+    if !matches!(action["type"].as_str(), Some("discovery_policy" | "generate" | "stop" | "scan" | "pick" | "new_chat" | "inspect_menu")) { return Err("ACTION_DENIED".into()); }
     let view = app.get_webview(&format!("provider-{id}")).ok_or("PROVIDER_VIEW_CLOSED")?;
     let actual = view.url().map_err(|_| "VIEW_URL_UNAVAILABLE")?;
     let origin = host.views.lock().map_err(|_| "HOST_LOCK_FAILED")?.get(&id).ok_or("UNKNOWN_VIEW")?.origin.clone();

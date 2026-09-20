@@ -70,10 +70,10 @@ fn main() {
         .setup(|app| {
             let root = app.path().app_local_data_dir()?.join("state");
             views::private_directory(&root).map_err(std::io::Error::other)?;
-            let dev_fixture = cfg!(debug_assertions) && std::env::var("BRIDGE_DEV_FIXTURE").as_deref() == Ok("1");
+            let dev_fixture = false;
             let (host, receiver) = Host::new(root, dev_fixture); app.manage(host.clone());
             tauri::WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                .enable_clipboard_access().title("Desktop AI Bridge").decorations(false).inner_size(1500.0, 940.0).min_inner_size(1000.0, 680.0)
+                .enable_clipboard_access().title("Codemax").decorations(false).inner_size(1500.0, 940.0).min_inner_size(1000.0, 680.0)
                 .on_navigation(|url| (url.scheme() == "tauri" && url.host_str() == Some("localhost")) || (cfg!(debug_assertions) && url.scheme() == "http" && url.host_str() == Some("127.0.0.1") && url.port() == Some(1420)))
                 .build()?;
             tauri::async_runtime::spawn(host::supervise(app.handle().clone(), host, receiver));
@@ -90,5 +90,5 @@ fn main() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("Desktop AI Bridge host initialization failed");
+        .expect("Codemax host initialization failed");
 }

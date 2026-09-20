@@ -26,7 +26,7 @@ fn continuity_cases() void {
  let config: json.Document=json.parse("{\"label\":\"Unit tools\",\"command\":\"unit-only\",\"args\":[]}");
  check(hub.add(&h,&config,0)==1,"configure unit server");json.free(&config);
  let s: *hub.Server=&h.servers[0];check(hub.connect(s,true,&out),"consent emits only a frame here");
- let catalog: json.Document=json.parse("{\"tools\":[{\"name\":\"read_note\",\"description\":\"Unit fixture\",\"inputSchema\":{\"type\":\"object\"}}]}");
+ let catalog: json.Document=json.parse("{\"resultType\":\"complete\",\"tools\":[{\"name\":\"read_note\",\"description\":\"Unit fixture\",\"inputSchema\":{\"type\":\"object\"}}]}");
  hub.catalog(s,&catalog,0,&out);json.free(&catalog);check(s.*.state==3 && s.*.count==1,"catalog admitted");
  check(s.*.tools[0].schema_hash.len==64,"schema digest cached at admission");s.*.tools[0].enabled=true;
  let r: runner.Run=runner.make();check(runner.begin(&r,&h,1,"p1/unit","Use the supplied unit tool",true),"start unit task");

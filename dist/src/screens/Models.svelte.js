@@ -6,7 +6,7 @@ import Icon from '../lib/components/Icon.svelte.js';
 
 var root_1 = $.from_html(`<option> </option>`);
 var root_3 = $.from_html(`<span class="count">DEFAULT</span>`);
-var root_2 = $.from_html(`<tr><td><div class="inline"><span class="model-letter"> </span><div><span class="primary-line"> <!></span><span class="secondary-line mono"> </span></div></div></td><td><button class="text-button" style="padding:0;font-size:12px"> </button></td><td><span> </span><span class="secondary-line"> </span></td><td> <span class="secondary-line"> </span></td><td>Text bridge<span class="secondary-line"> </span></td><td><span><span></span> </span></td><td><div class="row-actions"><button class="icon-button" title="Copy model ID"><!></button><button title="Use as the bridge/default model"><!></button></div></td></tr>`);
+var root_2 = $.from_html(`<tr><td><div class="inline"><span class="model-letter"> </span><div><span class="primary-line"> <!></span><span class="secondary-line mono"> </span></div></div></td><td><button class="text-button" style="padding:0;font-size:12px"> </button></td><td><span> </span><span class="secondary-line"> </span></td><td> <span class="secondary-line"> </span></td><td>Text bridge<span class="secondary-line"> </span></td><td><span><span></span> </span></td><td><div class="row-actions"><button class="icon-button" title="Copy model ID"><!></button><button title="Use as the codemax/default model"><!></button></div></td></tr>`);
 var root_5 = $.from_html(`<button class="secondary">Clear filters</button>`);
 var root_6 = $.from_html(`<button class="secondary">Open browser<!></button>`);
 var root_4 = $.from_html(`<div class="empty-state"><!><h2> </h2><p> </p><!></div>`);
@@ -268,7 +268,11 @@ export default function Models($$anchor, $$props) {
 
 				$.set_text(text_8, $.get(model).provider.context_hint
 					? 'User supplied'
-					: $.get(model).context.nominal ? 'Provider reported' : 'No limit exposed');
+					: $.get(model).context.nominal
+						? 'Provider reported'
+						: $.get(model).context.advertised_label
+							? 'Website label · exact count unknown'
+							: 'No limit exposed');
 
 				$.set_text(text_9, $.get(model).vision === true ? 'Vision observed' : 'Vision unknown');
 				classes = $.set_class(span_8, 1, 'tag', null, classes, $2);
@@ -282,7 +286,9 @@ export default function Models($$anchor, $$props) {
 				() => initials($.get(model).display_name).slice(0, 2),
 				() => $.get(model).provider.context_hint
 					? number($.get(model).provider.context_hint)
-					: $.get(model).context.nominal ? number($.get(model).context.nominal) : 'Unknown',
+					: $.get(model).context.nominal
+						? number($.get(model).context.nominal)
+						: $.get(model).context.advertised_label || 'Unknown',
 
 				() => ({
 					ready: modelReady($.get(model), $.get(model).provider),

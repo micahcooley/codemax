@@ -8,7 +8,7 @@
    removeItem:key=>storage.delete(key), clear:()=>storage.clear()
  }});
  window.__exportFixtureStorage = () => Object.fromEntries(storage);
- const answer=(prompt,turn)=>prompt.includes('[[unicode]]') ? `Turn ${turn}: A🎯漢字 café — streamed correctly.` : `Turn ${turn}: received your message. This is deterministic mock-provider output, not an AI model.`;
+ const answer=(prompt,turn)=>prompt.includes('[[unicode]]') ? `Turn ${turn}: A🎯漢字 café — streamed correctly.` : `Turn ${turn}: received your message. This is deterministic fixture-provider output, not an AI model.`;
  window.fetch=async (url,init={})=>{
   const {prompt='',turn=1,mode='normal'}=JSON.parse(init.body||'{}');
   if(mode==='quota')return new Response('{"error":"rate_limited"}',{status:429,headers:{'Content-Type':'application/json'}});

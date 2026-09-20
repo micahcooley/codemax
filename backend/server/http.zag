@@ -4,12 +4,12 @@
 @import("../security/local_token.zag") as token
 struct Headers {
     method: buf.Buffer, path: buf.Buffer, authorization: buf.Buffer, api_key: buf.Buffer,
-    session: buf.Buffer, host: buf.Buffer, content_length: i32, header_length: i32,
+    session: buf.Buffer, host: buf.Buffer, if_none_match: buf.Buffer, content_length: i32, header_length: i32,
     error: i32, authenticated: bool,
 }
 fn make() Headers {
     return Headers{.method = buf.make(12), .path = buf.make(512), .authorization = buf.make(256), .api_key = buf.make(256),
-        .session = buf.make(96), .host = buf.make(128), .content_length = 0, .header_length = 0, .error = 0, .authenticated = false};
+        .session = buf.make(96), .host = buf.make(128), .if_none_match = buf.make(128), .content_length = 0, .header_length = 0, .error = 0, .authenticated = false};
 }
 fn trim(s: []u8) []u8 {
     let start: i32 = 0; let end: i32 = _zag_strlen(s);
@@ -53,6 +53,7 @@ fn parse(h: *Headers, input: []u8, port: i32, expected_key: []u8) bool {
         else if (buf.eq(field, "authorization")) { bit = 4; buf.copy(&h.*.authorization, value); }
         else if (buf.eq(field, "x-api-key")) { bit = 8; buf.copy(&h.*.api_key, value); }
         else if (buf.eq(field, "x-bridge-session")) { bit = 16; buf.copy(&h.*.session, value); }
+        else if (buf.eq(field, "if-none-match")) { bit = 64; buf.copy(&h.*.if_none_match, value); if (h.*.if_none_match.ok == 0) { h.*.error = 431; } }
         else if (buf.eq(field, "transfer-encoding") || buf.eq(field, "expect")) { h.*.error = 400; }
         else if (buf.eq(field, "origin")) { h.*.error = 403; }
         else if (buf.eq(field, "sec-fetch-site") && !buf.eq(value, "none")) { h.*.error = 403; }
@@ -100,4 +101,14 @@ fn stream_headers(out: *buf.Buffer, session: []u8) void {
 fn error_json(code: []u8, out: *buf.Buffer) void {
     buf.add(out, "{\"type\":\"error\",\"error\":{\"type\":\"bridge_error\",\"code\":"); buf.json(out, code); buf.add(out, ",\"message\":"); buf.json(out, code); buf.add(out, "}}");
 }
-fn free(h: *Headers) void { buf.free(&h.*.method); buf.free(&h.*.path); buf.free(&h.*.authorization); buf.free(&h.*.api_key); buf.free(&h.*.session); buf.free(&h.*.host); }
+fn free(h: *Headers) void { buf.free(&h.*.method); buf.free(&h.*.path); buf.free(&h.*.authorization); buf.free(&h.*.api_key); buf.free(&h.*.session); buf.free(&h.*.host); buf.free(&h.*.if_none_match); }
+
+// Catalogs are private to the authenticated caller. Never cache generations.
+fn catalog_response(out: *buf.Buffer, body: []u8, etag: []u8, not_modified: bool) void {
+    if (not_modified) { buf.add(out, "HTTP/1.1 304 Not Modified\r\n"); }
+    else { buf.add(out, "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\n"); }
+    buf.add(out, "Connection: close\r\nCache-Control: private, max-age=15, must-revalidate\r\nVary: Authorization, X-Api-Key\r\nX-Content-Type-Options: nosniff\r\nETag: ");
+    buf.add(out, etag); buf.add(out, "\r\n");
+    if (!not_modified) { buf.add(out, "Content-Length: "); buf.integer(out, body.len as i64); buf.add(out, "\r\n"); }
+    buf.add(out, "\r\n"); if (!not_modified) { buf.add(out, body); }
+}

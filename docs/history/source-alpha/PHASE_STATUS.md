@@ -28,7 +28,7 @@ A source path is not a passed release gate. No native feature below is described
 1. Compile the pinned Zag native unit suite. Fix actual compiler diagnostics before interpreting source checks as native validity.
 2. Compile/run the actual Zag gateway fixture; inspect authentication, tools, 22-turn session, SSE and disconnect reports.
 3. Resolve dependencies, run Svelte checking/build and Rust host tests; fix actual frontend/host diagnostics.
-4. Run Tauri/WebKitGTK mock-provider UI, resize/modal/permission/profile-isolation and crash tests.
+4. Run Tauri/WebKitGTK fixture-provider UI, resize/modal/permission/profile-isolation and crash tests.
 5. Qualify one authorized real website and one named coding harness, including repeated permitted tool cycles, stop and 20+ turns.
 6. Implement/qualify restart restoration, missing executor/UI controls and hardening. Only then build/sign release installers.
 
