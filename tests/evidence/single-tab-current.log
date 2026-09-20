@@ -1,0 +1,96 @@
+PASS One top tab strip; no sidebar; full-width website; legacy layout migrates closed
+PASS Providers, Tools and Connect are utilities; websites retain one set of tabs
+PASS App menu has keyboard navigation, restores focus and hides untrusted native surface
+PASS Ctrl-W closes a utility page without closing the selected website
+PASS Every existing management screen remains reachable from the app menu
+PASS Arrow, Home, End, Ctrl-Tab and reverse tab navigation use the single tab strip
+PASS Top-tab context menu supports reorder, keyboard access and confirmed profile clearing
+PASS Drag-and-drop tab ordering remains available without the sidebar
+PASS Closing a top tab preserves its detected provider and reopening does not duplicate it
+PASS Inspector is opt-in, bounds follow it and the closed preference persists
+PASS Internal addresses identify management pages and never create remote provider tabs
+PASS Sixteen tabs fit via strip scrolling; controls and menus remain usable at 1000 × 680
+PASS Spinning/idle rings remain on the top tabs and respect reduced motion
+PASS Chrome navigation does not authorize tools or delete profiles; no runtime errors
+{
+  "scope": "Actual compiled Svelte UI in Chromium; Tauri/native-provider test doubles only.",
+  "native_tauri_executed": false,
+  "zag_executed": false,
+  "live_provider_contacted": false,
+  "passed": 14,
+  "failed": 0,
+  "tests": [
+    {
+      "name": "One top tab strip; no sidebar; full-width website; legacy layout migrates closed",
+      "status": "PASS",
+      "seconds": 0.534
+    },
+    {
+      "name": "Providers, Tools and Connect are utilities; websites retain one set of tabs",
+      "status": "PASS",
+      "seconds": 0.458
+    },
+    {
+      "name": "App menu has keyboard navigation, restores focus and hides untrusted native surface",
+      "status": "PASS",
+      "seconds": 0.173
+    },
+    {
+      "name": "Ctrl-W closes a utility page without closing the selected website",
+      "status": "PASS",
+      "seconds": 0.395
+    },
+    {
+      "name": "Every existing management screen remains reachable from the app menu",
+      "status": "PASS",
+      "seconds": 2.701
+    },
+    {
+      "name": "Arrow, Home, End, Ctrl-Tab and reverse tab navigation use the single tab strip",
+      "status": "PASS",
+      "seconds": 0.071
+    },
+    {
+      "name": "Top-tab context menu supports reorder, keyboard access and confirmed profile clearing",
+      "status": "PASS",
+      "seconds": 1.199
+    },
+    {
+      "name": "Drag-and-drop tab ordering remains available without the sidebar",
+      "status": "PASS",
+      "seconds": 0.111
+    },
+    {
+      "name": "Closing a top tab preserves its detected provider and reopening does not duplicate it",
+      "status": "PASS",
+      "seconds": 0.441
+    },
+    {
+      "name": "Inspector is opt-in, bounds follow it and the closed preference persists",
+      "status": "PASS",
+      "seconds": 0.171
+    },
+    {
+      "name": "Internal addresses identify management pages and never create remote provider tabs",
+      "status": "PASS",
+      "seconds": 0.168
+    },
+    {
+      "name": "Sixteen tabs fit via strip scrolling; controls and menus remain usable at 1000 \u00d7 680",
+      "status": "PASS",
+      "seconds": 0.318
+    },
+    {
+      "name": "Spinning/idle rings remain on the top tabs and respect reduced motion",
+      "status": "PASS",
+      "seconds": 0.313
+    },
+    {
+      "name": "Chrome navigation does not authorize tools or delete profiles; no runtime errors",
+      "status": "PASS",
+      "seconds": 0.004
+    }
+  ],
+  "runtime_errors": [],
+  "chromium": "144.0.7559.96"
+}

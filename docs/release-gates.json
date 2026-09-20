@@ -109,6 +109,12 @@
       "description": "Actual Rust stdio transport, Zag runner and authenticated website model repeated tools",
       "status": "NOT_VERIFIED",
       "evidence": null
+    },
+    {
+      "id": "single_tab_ui",
+      "description": "Single tablist, menu, utility-close semantics and bounds using compiled UI/native doubles",
+      "status": "VERIFIED",
+      "evidence": "tests/evidence/single-tab-ui.json"
     }
   ]
 }

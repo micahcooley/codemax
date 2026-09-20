@@ -6,7 +6,8 @@ import * as bridge from '../api/bridge.js';
 import Icon from './Icon.svelte.js';
 
 var root_1 = $.from_html(`<!><h2>Reconnect the browser</h2><p>The native host or Zag gateway is not connected. Your website profile is preserved.</p><button class="secondary">Open runtime settings</button>`, 1);
-var root_2 = $.from_html(`<div class="spinner"></div><h2> </h2><p>The website opens here in its own persistent, native browser view.</p><button class="text-button"><!>Reopen website</button>`, 1);
+var root_3 = $.from_html(`<!><h2> </h2><p>Close the menu to return to the website. Its session stays connected.</p>`, 1);
+var root_4 = $.from_html(`<div class="spinner"></div><h2> </h2><p>The website opens here in its own persistent, native browser view.</p><button class="text-button"><!>Reopen website</button>`, 1);
 var root = $.from_html(`<div class="browser-surface"><div class="browser-awaiting"><!></div></div>`);
 
 export default function BrowserPane($$anchor, $$props) {
@@ -85,28 +86,60 @@ export default function BrowserPane($$anchor, $$props) {
 			$.append($$anchor, fragment);
 		};
 
-		var alternate = ($$anchor) => {
-			var fragment_1 = root_2();
-			var h2 = $.sibling($.first_child(fragment_1));
-			var text = $.child(h2);
+		var alternate_1 = ($$anchor) => {
+			var fragment_1 = $.comment();
+			var node_2 = $.first_child(fragment_1);
 
-			$.reset(h2);
+			{
+				var consequent_1 = ($$anchor) => {
+					var fragment_2 = root_3();
+					var node_3 = $.first_child(fragment_2);
 
-			var button_1 = $.sibling(h2, 2);
+					Icon(node_3, { name: 'globe', size: 27 });
 
-			button_1.__click = () => app.openProvider($$props.provider.id);
+					var h2 = $.sibling(node_3);
+					var text = $.child(h2);
 
-			var node_2 = $.child(button_1);
+					$.reset(h2);
+					$.next();
+					$.template_effect(() => $.set_text(text, `${$$props.provider.label ?? ''} is still open`));
+					$.append($$anchor, fragment_2);
+				};
 
-			Icon(node_2, { name: 'refresh', size: 14 });
-			$.next();
-			$.reset(button_1);
-			$.template_effect(() => $.set_text(text, `Opening ${$$props.provider.label ?? ''}`));
+				var alternate = ($$anchor) => {
+					var fragment_3 = root_4();
+					var h2_1 = $.sibling($.first_child(fragment_3));
+					var text_1 = $.child(h2_1);
+
+					$.reset(h2_1);
+
+					var button_1 = $.sibling(h2_1, 2);
+
+					button_1.__click = () => app.openProvider($$props.provider.id);
+
+					var node_4 = $.child(button_1);
+
+					Icon(node_4, { name: 'refresh', size: 14 });
+					$.next();
+					$.reset(button_1);
+					$.template_effect(() => $.set_text(text_1, `Opening ${$$props.provider.label ?? ''}`));
+					$.append($$anchor, fragment_3);
+				};
+
+				$.if(
+					node_2,
+					($$render) => {
+						if (app.popup) $$render(consequent_1); else $$render(alternate, false);
+					},
+					true
+				);
+			}
+
 			$.append($$anchor, fragment_1);
 		};
 
 		$.if(node, ($$render) => {
-			if (!app.ready) $$render(consequent); else $$render(alternate, false);
+			if (!app.ready) $$render(consequent); else $$render(alternate_1, false);
 		});
 	}
 

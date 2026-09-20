@@ -21,7 +21,10 @@ with sync_playwright() as pw:
  page.evaluate('(html)=>window.__fixtureWebsite=html',(ROOT/'tests/fixtures/ui-website.html').read_text());page.evaluate((ROOT/'tests/fixtures/ui-host.js').read_text())
  page.evaluate('''(modules)=>{const imports={};for(const [key,code]of Object.entries(modules))imports[key]=URL.createObjectURL(new Blob([code],{type:'text/javascript'}));const map=document.createElement('script');map.type='importmap';map.textContent=JSON.stringify({imports});document.head.append(map);}''',modules)
  page.add_script_tag(type='module',content="import 'bridge/src/main.js';");page.wait_for_selector('.app-shell',timeout=20000)
- def route(label):page.locator('.workspace-nav button').filter(has_text=label).click();page.wait_for_timeout(100)
+ def route(label):
+  page.get_by_role('button',name='Codemax menu',exact=True).click()
+  page.get_by_role('menuitem',name=label,exact=True).click()
+  page.wait_for_timeout(120)
  def ops(name):return page.evaluate('(op)=>window.__uiFixture.calls.filter(c=>c.op===op)',name)
  def dismiss():
   if page.get_by_role('button',name='Dismiss notification').count():page.get_by_role('button',name='Dismiss notification').click()

@@ -12,6 +12,15 @@ Once a site is ready, its enabled observed models enter the authenticated local 
 
 This is a normal desktop browser workspace, not an extension. Source constraints remain: Linux x86-64, up to 16 origin-isolated profiles, one active provider conversation per profile, up to 32 models per profile. It is not a full Chromium replacement, does not promise multiple simultaneous same-origin provider tabs, and does not claim compatibility with every website.
 
+## Navigation
+
+Open websites appear once, in the top tab strip. There is no permanent tab
+sidebar. **Providers**, **Tools**, and **Connect** are compact toolbar utilities;
+**Codemax menu** and **Ctrl-K** expose the remaining management pages. Providers
+is a settings registry, not a duplicate list of open browser tabs. The inspector
+is optional and starts closed. Tab menus and tool confirmations are trusted UI
+and remain separate from remote website content.
+
 ## What counts as evidence
 
 | Evidence | Interpretation |

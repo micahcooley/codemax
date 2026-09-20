@@ -1,156 +1,156 @@
 
-> codemax@0.1.0-dev.4 test
+> codemax@0.1.0-dev.5 test
 > node --test tests/*.test.mjs
 
 TAP version 13
 # Subtest: network URL summaries exclude credentials, query secrets and identifiers
 ok 1 - network URL summaries exclude credentials, query secrets and identifiers
   ---
-  duration_ms: 1.443926
+  duration_ms: 1.019575
   type: 'test'
   ...
 # Subtest: network structural evidence contains no payload values or arbitrary keys
 ok 2 - network structural evidence contains no payload values or arbitrary keys
   ---
-  duration_ms: 0.518689
+  duration_ms: 0.277709
   type: 'test'
   ...
 # Subtest: Unicode stream splitting is byte bounded and lossless
 ok 3 - Unicode stream splitting is byte bounded and lossless
   ---
-  duration_ms: 64.204996
+  duration_ms: 163.402123
   type: 'test'
   ...
 # Subtest: stream correction is not duplicated or silently appended
 ok 4 - stream correction is not duplicated or silently appended
   ---
-  duration_ms: 0.699386
+  duration_ms: 7.389636
   type: 'test'
   ...
 # Subtest: common token formats are redacted from semantic labels
 ok 5 - common token formats are redacted from semantic labels
   ---
-  duration_ms: 0.35894
+  duration_ms: 0.288545
   type: 'test'
   ...
 # Subtest: oversized and non-JSON network bodies remain opaque
 ok 6 - oversized and non-JSON network bodies remain opaque
   ---
-  duration_ms: 0.195736
+  duration_ms: 0.176966
   type: 'test'
   ...
 # Subtest: capability extraction copies only explicit per-model facts, never messages or auth
 ok 7 - capability extraction copies only explicit per-model facts, never messages or auth
   ---
-  duration_ms: 0.674169
+  duration_ms: 0.487033
   type: 'test'
   ...
 # Subtest: model names alone do not invent context, tokenizer or selection
 ok 8 - model names alone do not invent context, tokenizer or selection
   ---
-  duration_ms: 0.282698
+  duration_ms: 0.131087
   type: 'test'
   ...
 # Subtest: metadata values and sample counts are bounded
 ok 9 - metadata values and sample counts are bounded
   ---
-  duration_ms: 1.047666
+  duration_ms: 0.482736
   type: 'test'
   ...
 # Subtest: credential-shaped model or tokenizer identities are not exported
 ok 10 - credential-shaped model or tokenizer identities are not exported
   ---
-  duration_ms: 0.424874
+  duration_ms: 0.319541
   type: 'test'
   ...
 # Subtest: model catalog metadata is not falsely marked as the current selection
 ok 11 - model catalog metadata is not falsely marked as the current selection
   ---
-  duration_ms: 0.693355
+  duration_ms: 0.204377
   type: 'test'
   ...
 # Subtest: mock provider binds loopback, serves UI, streams and rejects traversal
 ok 12 - mock provider binds loopback, serves UI, streams and rejects traversal
   ---
-  duration_ms: 119.415013
+  duration_ms: 188.134622
   type: 'test'
   ...
 # Subtest: quota and login expiration are deterministic failure fixtures
 ok 13 - quota and login expiration are deterministic failure fixtures
   ---
-  duration_ms: 11.365776
+  duration_ms: 10.36138
   type: 'test'
   ...
 # Subtest: mock tool payload contains nested JSON and echoes a requested framing nonce
 ok 14 - mock tool payload contains nested JSON and echoes a requested framing nonce
   ---
-  duration_ms: 0.367597
+  duration_ms: 0.309516
   type: 'test'
   ...
 # Subtest: static: trusted commands scoped to the main webview, not its window
 ok 15 - static: trusted commands scoped to the main webview, not its window
   ---
-  duration_ms: 3.779127
+  duration_ms: 8.585066
   type: 'test'
   ...
 # Subtest: static: remote capability has only bounded observation permission
 ok 16 - static: remote capability has only bounded observation permission
   ---
-  duration_ms: 0.768335
+  duration_ms: 0.541656
   type: 'test'
   ...
 # Subtest: static: host events target main webview explicitly
 ok 17 - static: host events target main webview explicitly
   ---
-  duration_ms: 0.79749
+  duration_ms: 0.459612
   type: 'test'
   ...
 # Subtest: static: production entry points remain in Zag and no preview backend exists
 ok 18 - static: production entry points remain in Zag and no preview backend exists
   ---
-  duration_ms: 0.661606
+  duration_ms: 0.362717
   type: 'test'
   ...
 # Subtest: static: sidecar packaging and least-privilege CSP configured
 ok 19 - static: sidecar packaging and least-privilege CSP configured
   ---
-  duration_ms: 0.538556
+  duration_ms: 10.353369
   type: 'test'
   ...
 # Subtest: static: all Zag imports resolve inside the package
 ok 20 - static: all Zag imports resolve inside the package
   ---
-  duration_ms: 7.414707
+  duration_ms: 21.277066
   type: 'test'
   ...
 # Subtest: static: seven real Svelte screens exist and unknowns are explicit
 ok 21 - static: seven real Svelte screens exist and unknowns are explicit
   ---
-  duration_ms: 0.726496
+  duration_ms: 0.5514
   type: 'test'
   ...
 # Subtest: static: provider execution code has no credential extraction or shell calls
 ok 22 - static: provider execution code has no credential extraction or shell calls
   ---
-  duration_ms: 0.741775
+  duration_ms: 0.443708
   type: 'test'
   ...
 # Subtest: static: every custom command is declared in AppManifest for capability enforcement
 ok 23 - static: every custom command is declared in AppManifest for capability enforcement
   ---
-  duration_ms: 0.717249
+  duration_ms: 0.408565
   type: 'test'
   ...
 # Subtest: static: synthetic-file broker is Zag-only, one-use, expiry and exact-path bound
 ok 24 - static: synthetic-file broker is Zag-only, one-use, expiry and exact-path bound
   ---
-  duration_ms: 1.453985
+  duration_ms: 13.360396
   type: 'test'
   ...
 # Subtest: static: tab activity includes manual generation and no polling-based fake activity
 ok 25 - static: tab activity includes manual generation and no polling-based fake activity
   ---
-  duration_ms: 0.475969
+  duration_ms: 0.280442
   type: 'test'
   ...
 1..25
@@ -161,4 +161,4 @@ ok 25 - static: tab activity includes manual generation and no polling-based fak
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 245.107188
+# duration_ms 466.504625

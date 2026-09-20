@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import pathlib
+import re
 import subprocess
 import zipfile
 
@@ -36,23 +37,36 @@ def main():
         except (OSError,subprocess.CalledProcessError):return None
     ui=load('tests/evidence/ui-browser.json')
     dom=load('tests/evidence/browser-dom-tests.json')
-    local=load('tests/evidence/file-permission-probe.json')
+    chrome=load('tests/evidence/single-tab-ui.json')
+    codemax=load('tests/evidence/codemax-ui.json')
+    tap=(ROOT/'tests/evidence/node-current.log').read_text()
+    def tap_count(name):
+        matches=re.findall(r'^# '+name+r' (\d+)\s*$',tap,re.MULTILINE)
+        if len(matches)!=1:raise ValueError('Missing or ambiguous Node test summary: '+name)
+        return int(matches[0])
+    if tap_count('fail') or any(row['status']!='PASS' for row in ui['results']) or chrome['failed'] or codemax['failed']:
+        raise SystemExit('Refusing to package a revision with failed UI/Node evidence.')
     metadata={
-        'name':'Desktop AI Bridge','version':load('package.json')['version'],
+        'name':'Codemax','version':load('package.json')['version'],
+        'revision':'single-tab-browser-ux',
         'kind':'desktop-source-plus-compiled-svelte-ui','local_commit':head(),
         'native_installer_included':False,'full_masterplan_complete':False,'release_qualified':False,
         'file_count_excluding_packaging_metadata':len(content),
         'compiled_ui':load('tests/evidence/frontend-build.json'),
-        'ui_test_cases':len(ui['results']),
-        'node_tests':{'passed':20,'failed':0,'evidence':'tests/evidence/node-tests.log'},
+        'compiled_ui_suites':{
+            'application':{'passed':len(ui['results']),'failed':0,'evidence':'tests/evidence/ui-browser.json'},
+            'discovery_mcp':{'passed':codemax['passed'],'failed':codemax['failed'],'evidence':'tests/evidence/codemax-ui.json'},
+            'single_tab':{'passed':chrome['passed'],'failed':chrome['failed'],'evidence':'tests/evidence/single-tab-ui.json'},
+            'scope':'Compiled Svelte with native-host/website test doubles; no native execution.',
+        },
+        'node_tests':{'passed':tap_count('pass'),'failed':tap_count('fail'),'evidence':'tests/evidence/node-current.log'},
         'browser_test_cases':len(dom.get('tests',[])),
-        'local_reference_permission_cases':len(local['results']),
-        'local_reference_client_language':'Python test only; not production Zag',
-        'zag_static_audit':load('tests/evidence/zag-static-contracts.json'),
-        'native_build':'BLOCKED_COMPILER_ABSENT','native_tauri_build':'NOT_RUN_TOOLCHAIN_ABSENT',
-        'live_website_tool_shaped_output':'PASS',
-        'live_new_session_relay':'FAILED_CONTEXT_CONTINUITY',
-        'live_native_end_to_end':'NOT_VERIFIED','real_coding_harness':'NOT_RUN',
+        'browser_evidence':'tests/evidence/browser-dom-tests.json',
+        'native_zag_build':'NOT_RUN_THIS_UI_REVISION','native_tauri_build':'NOT_RUN_THIS_UI_REVISION',
+        'normal_vite_and_svelte_check':'NOT_VERIFIED',
+        'live_website_and_mcp_tests':'NOT_RUN_THIS_UI_REVISION','real_coding_harness':'NOT_RUN',
+        'prior_closeout':'docs/history/discovery-mcp-closeout.md',
+        'unchanged_native_source':load('tests/evidence/native-source-unchanged.json'),
         'manifest_sha256':hashlib.sha256(manifest.encode()).hexdigest(),
         'manifest_excludes':sorted(PACKAGING),
         'compiler_pin':'abed8aa170ef1bc33e5aca68b99fcdd905a4545f',

@@ -18,7 +18,7 @@ The synthetic file diagnostic now lives under Tools & MCP → Advanced. It is no
 
 ## Desktop workspace
 
-Tabs and address bar surround native provider webviews. The UI includes back/forward/reload, find, zoom, keyboard shortcuts, a command palette, reorderable tabs, collapsible/resizable panes, light/dark themes and reduced motion. Spinning rings indicate loading/generation; stationary rings indicate idle/sleeping or attention states, with accessible labels. Automatic submission preserves unsent drafts and refuses a composer changed by the user.
+A single top tab strip and address bar surround native provider webviews. There is no second website list or permanent workspace sidebar. Providers, Tools and Connect are toolbar utilities; the Codemax menu contains the remaining management pages. The optional connection inspector starts closed and its preference persists. The UI includes back/forward/reload, find, zoom, keyboard shortcuts, a command palette, reorderable tabs, an optional resizable inspector, light/dark themes and reduced motion. Spinning rings indicate loading/generation; stationary rings indicate idle/sleeping or attention states, with accessible labels. Automatic submission preserves unsent drafts and refuses a composer changed by the user.
 
 Limits include 16 origin-isolated profiles, one provider conversation per profile, 32 models per profile, four external generations, and one built-in MCP task at a time. The product does not claim full Chromium parity, arbitrary extensions, multiple simultaneous same-origin conversations, universal provider compatibility or cross-platform qualification.
 
@@ -52,13 +52,14 @@ npm test
 npm run build
 python3 tests/ui_browser.py
 python3 tests/codemax_ui.py
+python3 tests/chrome_ui.py
 python3 tests/browser_dom.py
 bash scripts/test-native.sh
 ```
 
 The last command requires the real Zag compiler. It includes discovery/MCP native unit tests and a stdio/synthetic-file round trip through the actual compiled backend, with explicit test browser/transport fixtures. That native suite has not run in this environment.
 
-This round actually ran: Svelte compilation (27 modules, zero warnings), 27 compiled-UI scenarios across two suites, 26 browser-agent scenarios, and 25 Node/helper/HTTP/static tests. Browser/UI fixtures do not establish native Tauri/WebKit, live model, MCP or harness correctness. See EXECUTION_REPORT.md and docs/release-gates.json.
+This round actually ran: Svelte compilation (27 modules, zero warnings), 41 compiled-UI scenarios across three suites, 26 browser-agent scenarios, and 25 Node/helper/HTTP/static tests. Browser/UI fixtures do not establish native Tauri/WebKit, live model, MCP or harness correctness. See EXECUTION_REPORT.md and docs/release-gates.json.
 
 ## Documentation
 

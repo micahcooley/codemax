@@ -1,15 +1,15 @@
 import type {Route,Snapshot,HostStatus,Provider,Mapping,Preferences} from '../types/bridge';
 import * as bridge from '../api/bridge';
-export type Popup='add'|'commands'|'rotate-key'|'clear-profile'|'remove-provider'|'close-provider'|'shortcuts'|null;
+export type Popup='add'|'commands'|'rotate-key'|'clear-profile'|'remove-provider'|'close-provider'|'shortcuts'|'menu'|'tab-actions'|null;
 const initial:Preferences={harness:'opencode',theme:'dark',compact:false,restore_tabs:true,auto_start:false,idle_minutes:30,logging:'INFO',fallback_enabled:false,fallback_model:'',default_model:'',raw_capture:false,developer_mode:false};
 class Application {
   route=$state<Route>('browser');snapshot=$state<Snapshot|null>(null);host=$state<HostStatus>({state:'STARTING',code:null});
   selectedProvider=$state<number|null>(null);popup=$state<Popup>(null);popupProvider=$state<number|null>(null);
-  error=$state('');notification=$state('');pending=$state(0);sidebarWidth=$state(212);inspectorWidth=$state(272);
-  sidebarVisible=$state(true);inspectorVisible=$state(true);inspectorTab=$state<'connection'|'browser'>('connection');
+  error=$state('');notification=$state('');pending=$state(0);inspectorWidth=$state(272);
+  inspectorVisible=$state(false);inspectorTab=$state<'connection'|'browser'>('connection');
   focusAddress=$state(0);findVisible=$state(false);zoom=$state(100);liveOrigins=$state<Record<number,string>>({});
   loading=$state<Record<number,boolean>>({});
-  contextMenu=$state<{id:number;y:number}|null>(null);tabOrder=$state<number[]>([]);secret=$state('');
+  contextMenu=$state<{id:number;x:number;y:number}|null>(null);tabOrder=$state<number[]>([]);secret=$state('');
   preferences=$derived(this.snapshot?.settings??initial);
   providers=$derived(this.snapshot?.providers??[]);
   tabs=$derived(this.providers.filter(p=>p.open_tab).sort((a,b)=>{
@@ -34,18 +34,19 @@ class Application {
   }
   navigate(route:Route):void{this.route=route;this.popup=null;this.contextMenu=null;this.secret='';}
   async openProvider(id:number):Promise<void>{
-    this.selectedProvider=id;this.route='browser';this.contextMenu=null;this.zoom=100;
+    this.selectedProvider=id;this.route='browser';this.popup=null;this.contextMenu=null;this.zoom=100;
     await this.perform('provider.open',{provider_id:id});await this.perform('workspace.focus',{provider_id:id});
   }
   async closeProvider(id:number,confirmed=false):Promise<void>{
     const p=this.providers.find(p=>p.id===id);if(!p)return;
     if(p.active&&!confirmed){await this.showPopup('close-provider',id);return;}
-    const next=this.tabs.find(p=>p.id!==id);
+    const index=this.tabs.findIndex(p=>p.id===id);
+    const next=index<0?undefined:(this.tabs[index+1]??this.tabs[index-1]);
     if(await this.perform('provider.close',{provider_id:id})!==undefined){
       this.loading={...this.loading,[id]:false};this.popup=null;if(this.selectedProvider===id){this.selectedProvider=next?.id??null;if(next)await this.openProvider(next.id);}
     }
   }
-  newTab():void{this.selectedProvider=null;this.route='browser';this.findVisible=false;this.focusAddress++;void this.perform('workspace.focus',{provider_id:0});}
+  newTab():void{this.popup=null;this.contextMenu=null;this.selectedProvider=null;this.route='browser';this.findVisible=false;this.focusAddress++;void this.perform('workspace.focus',{provider_id:0});}
   address(input:string):URL{const text=input.trim();if(!text)throw Error('EMPTY_ADDRESS');
     if(text.includes('://')){const url=new URL(text);if(!['https:','http:'].includes(url.protocol))throw Error('UNSAFE_ADDRESS');return url;}
     if(!/\s/.test(text)&&(/^[\w.-]+\.[a-z]{2,}(?::\d+)?(?:[/?#]|$)/i.test(text)||/^localhost(?::\d+)?(?:[/?#]|$)/.test(text)||/^127\.0\.0\.1/.test(text)))return new URL(`https://${text}`);
@@ -80,12 +81,35 @@ class Application {
   async export(name:string,data:unknown):Promise<void>{try{if(await bridge.exportDocument(name,data))this.notification='Export saved.';}catch(error){this.error=String(error);}}
   async resume(id:string):Promise<void>{const result=await this.perform<{provider_id:number}>('session.resume',{session_id:id});if(result){this.selectedProvider=result.provider_id;this.route='browser';}}
   async cancel(id:string):Promise<void>{await this.perform('session.cancel',{session_id:id});}
-  saveLayout():void{try{localStorage.setItem('bridge.layout.v1',JSON.stringify({sidebar:this.sidebarWidth,inspector:this.inspectorWidth,left:this.sidebarVisible,right:this.inspectorVisible,order:this.tabOrder}));}catch{}}
-  restoreLayout():void{try{const value=JSON.parse(localStorage.getItem('bridge.layout.v1')||'{}');
-    if(Number.isFinite(value.sidebar))this.sidebarWidth=Math.max(180,Math.min(320,value.sidebar));
-    if(Number.isFinite(value.inspector))this.inspectorWidth=Math.max(240,Math.min(380,value.inspector));
-    if(typeof value.left==='boolean')this.sidebarVisible=value.left;if(typeof value.right==='boolean')this.inspectorVisible=value.right;
-    if(Array.isArray(value.order))this.tabOrder=value.order.filter((n:unknown)=>Number.isInteger(n)).slice(0,16);
-  }catch{}}
+  async showTabMenu(id:number,x:number,y:number):Promise<void>{
+    try{
+      await bridge.hideProviders();this.popupProvider=id;this.contextMenu={id,x,y};this.popup='tab-actions';
+    }catch(error){this.error=String(error);}
+  }
+  moveTab(id:number,offset:-1|1):void{
+    const ids=this.tabs.map(p=>p.id),index=ids.indexOf(id),next=index+offset;
+    if(index<0||next<0||next>=ids.length)return;
+    [ids[index],ids[next]]=[ids[next],ids[index]];
+    this.tabOrder=ids;this.saveLayout();
+  }
+  saveLayout():void{
+    try{localStorage.setItem('bridge.layout.v2',JSON.stringify({
+      inspector:this.inspectorWidth,right:this.inspectorVisible,order:this.tabOrder
+    }));}catch{/* Local presentation persistence may be disabled by the host. */}
+  }
+  restoreLayout():void{
+    try{
+      const saved=localStorage.getItem('bridge.layout.v2');
+      const value=JSON.parse(saved||localStorage.getItem('bridge.layout.v1')||'{}');
+      if(!value||typeof value!=='object')return;
+      if(Number.isFinite(value.inspector))this.inspectorWidth=Math.max(240,Math.min(380,value.inspector));
+      // v1 shipped both panes open. Migrate to the new unobstructed default;
+      // preserve explicit inspector choices made under the single-tab layout.
+      this.inspectorVisible=!!saved&&value.right===true;
+      if(Array.isArray(value.order))this.tabOrder=[...new Set<number>(
+        value.order.filter((n:unknown):n is number=>typeof n==='number'&&Number.isInteger(n)&&n>0)
+      )].slice(0,16);
+    }catch{/* Invalid presentation settings must not prevent browsing. */}
+  }
 }
 export const app=new Application();

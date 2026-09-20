@@ -21,6 +21,7 @@
 <div class="browser-surface" bind:this={element} data-native-surface={provider.id}>
   <div class="browser-awaiting">
     {#if !app.ready}<Icon name="globe" size={27}/><h2>Reconnect the browser</h2><p>The native host or Zag gateway is not connected. Your website profile is preserved.</p><button class="secondary" onclick={()=>app.navigate('settings')}>Open runtime settings</button>
+    {:else if app.popup}<Icon name="globe" size={27}/><h2>{provider.label} is still open</h2><p>Close the menu to return to the website. Its session stays connected.</p>
     {:else}<div class="spinner"></div><h2>Opening {provider.label}</h2><p>The website opens here in its own persistent, native browser view.</p><button class="text-button" onclick={()=>app.openProvider(provider.id)}><Icon name="refresh" size={14}/>Reopen website</button>{/if}
   </div>
 </div>

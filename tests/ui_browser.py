@@ -27,14 +27,17 @@ with sync_playwright() as pw:
  page.evaluate('''(modules)=>{const imports={};for(const [key,code] of Object.entries(modules))imports[key]=URL.createObjectURL(new Blob([code],{type:'text/javascript'}));const map=document.createElement('script');map.type='importmap';map.textContent=JSON.stringify({imports});document.head.append(map);}''',modules)
  page.add_script_tag(type='module',content="import 'bridge/src/main.js';")
  page.wait_for_selector('.app-shell',timeout=20000)
- def route(label):page.locator('.workspace-nav button').filter(has_text=label).click();page.wait_for_timeout(120)
+ def route(label):
+  page.get_by_role('button',name='Codemax menu',exact=True).click()
+  page.get_by_role('menuitem',name=label,exact=True).click()
+  page.wait_for_timeout(120)
  try:
   record('compiled Svelte startup, real runes and native-transport handshake',lambda:page.get_by_role('heading',name='Open a website.',exact=False).wait_for())
   def open_provider():
-   page.locator('.site-row').first.click();page.wait_for_function('window.__uiFixture.bounds.visible===true');page.wait_for_timeout(180)
-   r=page.locator('#__fixture_provider').bounding_box();assert r and r['width']>850 and r['height']>700,r
+   page.locator('.tab-open').first.click();page.wait_for_function('window.__uiFixture.bounds.visible===true');page.wait_for_timeout(180)
+   r=page.locator('#__fixture_provider').bounding_box();assert r and r['width']>1450 and r['height']>700 and r['x']==0,r
    assert len(page.locator('iframe').all())==1
-   assert page.locator('.inspector').is_visible()
+   assert not page.locator('.inspector').count()
   record('browser-first layout with separately positioned provider surface',open_provider)
   page.screenshot(animations='disabled',path=str(SHOTS/'01-browser-workspace.png'))
   def keyboard():
@@ -88,7 +91,7 @@ with sync_playwright() as pw:
    assert not page.get_by_role('button',name='Allow one read and run',exact=True).count()
   record('website-first client setup, explicit one-file consent, deny/revoke and state rendering',file_permissions)
   def tab_activity():
-   page.locator('.site-row').first.click()
+   page.locator('.tab-open').first.click()
    ring=page.locator('.browser-tab').first.locator('.tab-activity')
    arc=ring.locator('.activity-ring')
    page.wait_for_function("document.querySelector('.browser-tab .tab-activity').dataset.state==='idle'")
@@ -130,7 +133,7 @@ with sync_playwright() as pw:
   if page.get_by_role('button',name='Dismiss notification').count():page.get_by_role('button',name='Dismiss notification').click()
   page.screenshot(animations='disabled',path=str(SHOTS/'02-model-registry.png'))
   def settings():
-   page.locator('.sidebar-bottom button').filter(has_text='Settings').click();page.get_by_role('button',name='light theme').click();page.wait_for_function("document.documentElement.dataset.theme==='light'")
+   route('Settings');page.get_by_role('button',name='light theme').click();page.wait_for_function("document.documentElement.dataset.theme==='light'")
    page.get_by_role('switch',name='Compact density',exact=True).click();page.wait_for_function("document.querySelector('.app-shell').classList.contains('compact')")
    page.get_by_role('button',name='dark theme').click();page.get_by_role('switch',name='Compact density',exact=True).click()
    page.locator('.preferences-nav button').filter(has_text='Local gateway').click();page.get_by_role('spinbutton',name='Gateway port').fill('7450');page.get_by_role('button',name='Apply',exact=True).click();page.wait_for_function('window.__uiFixture.snapshot.api.port===7450')
@@ -155,16 +158,17 @@ with sync_playwright() as pw:
    handle=page.get_by_role('slider',name='Inspector width');before=float(handle.get_attribute('aria-valuenow'));handle.focus();page.keyboard.press('ArrowLeft');assert float(handle.get_attribute('aria-valuenow'))==before+16
    page.get_by_role('button',name='Close inspector',exact=True).click();assert not page.locator('.inspector').count()
    page.get_by_role('button',name='Toggle connection inspector').click();assert page.locator('.inspector').is_visible()
-   page.get_by_role('button',name='Toggle sidebar').click();page.wait_for_function("document.querySelector('.workspace-sidebar').getBoundingClientRect().width===54")
-   page.get_by_role('button',name='Toggle sidebar').click()
+   assert not page.locator('.workspace-sidebar').count()
+   page.get_by_role('button',name='Close inspector',exact=True).click()
+   page.wait_for_function('window.__uiFixture.bounds.width===innerWidth')
   record('keyboard-resizable panes and collapse/restore bounds',resizing)
   def tabs():
    page.keyboard.press('Control+t');page.get_by_role('heading',name='Open a website.',exact=False).wait_for();page.get_by_role('textbox',name='Website to open').fill('https://chat.example.test');page.get_by_role('button',name='Open website',exact=True).click();page.wait_for_function('window.__uiFixture.snapshot.providers.length===4')
    page.get_by_role('button',name='Close example.test tab').click();page.wait_for_function("window.__uiFixture.snapshot.providers[3].open_tab===false")
-   page.locator('.site-row').first.click()
+   page.locator('.tab-open').first.click()
   record('new website workflow, tab creation and close operation',tabs)
   def context_menu():
-   page.locator('.site-row').first.click(button='right');page.get_by_role('menu').wait_for();page.get_by_role('menuitem',name='Clear local profile').click();page.get_by_role('dialog').wait_for();assert not page.evaluate('window.__uiFixture.bounds.visible')
+   page.locator('.tab-open').first.click(button='right');page.get_by_role('menu').wait_for();page.get_by_role('menuitem',name='Clear local profile').click();page.get_by_role('dialog').wait_for();assert not page.evaluate('window.__uiFixture.bounds.visible')
    page.get_by_role('button',name='Cancel',exact=True).click();page.wait_for_function('window.__uiFixture.bounds.visible===true')
   record('profile context menu and destructive-action confirmation with surface hiding',context_menu)
   def reduced_motion():

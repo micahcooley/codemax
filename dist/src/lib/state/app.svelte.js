@@ -108,16 +108,6 @@ class Application {
 		$.set(this.#pending, value, true);
 	}
 
-	#sidebarWidth = $.state(212);
-
-	get sidebarWidth() {
-		return $.get(this.#sidebarWidth);
-	}
-
-	set sidebarWidth(value) {
-		$.set(this.#sidebarWidth, value, true);
-	}
-
 	#inspectorWidth = $.state(272);
 
 	get inspectorWidth() {
@@ -128,17 +118,7 @@ class Application {
 		$.set(this.#inspectorWidth, value, true);
 	}
 
-	#sidebarVisible = $.state(true);
-
-	get sidebarVisible() {
-		return $.get(this.#sidebarVisible);
-	}
-
-	set sidebarVisible(value) {
-		$.set(this.#sidebarVisible, value, true);
-	}
-
-	#inspectorVisible = $.state(true);
+	#inspectorVisible = $.state(false);
 
 	get inspectorVisible() {
 		return $.get(this.#inspectorVisible);
@@ -385,6 +365,7 @@ class Application {
 	async openProvider(id) {
 		this.selectedProvider = id;
 		this.route = 'browser';
+		this.popup = null;
 		this.contextMenu = null;
 		this.zoom = 100;
 		await this.perform('provider.open', { provider_id: id });
@@ -402,7 +383,11 @@ class Application {
 			return;
 		}
 
-		const next = this.tabs.find((p) => p.id !== id);
+		const index = this.tabs.findIndex((p) => p.id === id);
+
+		const next = index < 0
+			? undefined
+			: this.tabs[index + 1] ?? this.tabs[index - 1];
 
 		if (await this.perform('provider.close', { provider_id: id }) !== undefined) {
 			this.loading = { ...this.loading, [id]: false };
@@ -417,6 +402,8 @@ class Application {
 	}
 
 	newTab() {
+		this.popup = null;
+		this.contextMenu = null;
 		this.selectedProvider = null;
 		this.route = 'browser';
 		this.findVisible = false;
@@ -551,28 +538,59 @@ class Application {
 		await this.perform('session.cancel', { session_id: id });
 	}
 
+	async showTabMenu(id, x, y) {
+		try {
+			await bridge.hideProviders();
+			this.popupProvider = id;
+			this.contextMenu = { id, x, y };
+			this.popup = 'tab-actions';
+		} catch(error) {
+			this.error = String(error);
+		}
+	}
+
+	moveTab(id, offset) {
+		const ids = this.tabs.map((p) => p.id),
+			index = ids.indexOf(id),
+			next = index + offset;
+
+		if (index < 0 || next < 0 || next >= ids.length) return;
+
+		[ids[index], ids[next]] = [ids[next], ids[index]];
+		this.tabOrder = ids;
+		this.saveLayout();
+	}
+
 	saveLayout() {
 		try {
-			localStorage.setItem('bridge.layout.v1', JSON.stringify({
-				sidebar: this.sidebarWidth,
+			localStorage.setItem('bridge.layout.v2', JSON.stringify({
 				inspector: this.inspectorWidth,
-				left: this.sidebarVisible,
 				right: this.inspectorVisible,
 				order: this.tabOrder
 			}));
-		} catch {}
+		} catch {
+			/* Local presentation persistence may be disabled by the host. */
+		}
 	}
 
 	restoreLayout() {
 		try {
-			const value = JSON.parse(localStorage.getItem('bridge.layout.v1') || '{}');
+			const saved = localStorage.getItem('bridge.layout.v2');
+			const value = JSON.parse(saved || localStorage.getItem('bridge.layout.v1') || '{}');
 
-			if (Number.isFinite(value.sidebar)) this.sidebarWidth = Math.max(180, Math.min(320, value.sidebar));
+			if (!value || typeof value !== 'object') return;
 			if (Number.isFinite(value.inspector)) this.inspectorWidth = Math.max(240, Math.min(380, value.inspector));
-			if (typeof value.left === 'boolean') this.sidebarVisible = value.left;
-			if (typeof value.right === 'boolean') this.inspectorVisible = value.right;
-			if (Array.isArray(value.order)) this.tabOrder = value.order.filter((n) => Number.isInteger(n)).slice(0, 16);
-		} catch {}
+
+			// v1 shipped both panes open. Migrate to the new unobstructed default;
+			// preserve explicit inspector choices made under the single-tab layout.
+			this.inspectorVisible = !!saved && value.right === true;
+
+			if (Array.isArray(value.order)) this.tabOrder = [
+				...new Set(value.order.filter((n) => typeof n === 'number' && Number.isInteger(n) && n > 0))
+			].slice(0, 16);
+		} catch {
+			/* Invalid presentation settings must not prevent browsing. */
+		}
 	}
 }
 

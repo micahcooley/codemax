@@ -7,7 +7,7 @@ import Icon from '../lib/components/Icon.svelte.js';
 
 var root_1 = $.from_html(`<button> </button>`);
 var root_3 = $.from_html(`<button><!> </button>`);
-var root_2 = $.from_html(`<section class="section"><h2>Appearance</h2><div class="setting-row"><div><strong>Color theme</strong><p>Use a light workspace, a dark workspace, or follow your system.</p></div><div class="segmented"></div></div><div class="setting-row"><div><strong>Compact density</strong><p>Reduce spacing in tables, website rows, and settings.</p></div><button class="toggle" role="switch" aria-label="Compact density"></button></div><div class="setting-row"><div><strong>Provider sidebar</strong><p>Keep names visible or use the narrow icon rail.</p></div><button class="toggle" role="switch" aria-label="Provider sidebar"></button></div><div class="setting-row"><div><strong>Connection inspector</strong><p>Show mappings and session details beside the website.</p></div><button class="toggle" role="switch" aria-label="Connection inspector"></button></div></section><section class="section"><h2>Startup & tabs</h2><div class="setting-row"><div><strong>Restore website tabs</strong><p>Reopen your previous website tabs when the application starts. Their isolated login profiles are retained either way.</p></div><button class="toggle" role="switch" aria-label="Restore website tabs"></button></div><div class="setting-row"><div><strong>Launch at login</strong><p>Register this application in your Linux desktop’s user autostart directory.</p></div><button class="toggle" role="switch" aria-label="Launch at login"></button></div><div class="setting-row"><div><strong>Sleep inactive websites</strong><p>Unload idle background webviews. Active requests, the current tab, and pinned websites stay awake.</p></div><select aria-label="Idle website timeout"><option>Never</option><option>After 5 minutes</option><option>After 15 minutes</option><option>After 30 minutes</option><option>After 1 hour</option><option>After 2 hours</option></select></div></section>`, 1);
+var root_2 = $.from_html(`<section class="section"><h2>Appearance</h2><div class="setting-row"><div><strong>Color theme</strong><p>Use a light workspace, a dark workspace, or follow your system.</p></div><div class="segmented"></div></div><div class="setting-row"><div><strong>Compact density</strong><p>Reduce spacing in tables and settings.</p></div><button class="toggle" role="switch" aria-label="Compact density"></button></div><div class="setting-row"><div><strong>Connection inspector</strong><p>Show mappings and session details beside the website.</p></div><button class="toggle" role="switch" aria-label="Connection inspector"></button></div></section><section class="section"><h2>Startup & tabs</h2><div class="setting-row"><div><strong>Restore website tabs</strong><p>Reopen your previous website tabs when the application starts. Their isolated login profiles are retained either way.</p></div><button class="toggle" role="switch" aria-label="Restore website tabs"></button></div><div class="setting-row"><div><strong>Launch at login</strong><p>Register this application in your Linux desktop’s user autostart directory.</p></div><button class="toggle" role="switch" aria-label="Launch at login"></button></div><div class="setting-row"><div><strong>Sleep inactive websites</strong><p>Unload idle background webviews. Active requests, the current tab, and pinned websites stay awake.</p></div><select aria-label="Idle website timeout"><option>Never</option><option>After 5 minutes</option><option>After 15 minutes</option><option>After 30 minutes</option><option>After 1 hour</option><option>After 2 hours</option></select></div></section>`, 1);
 var root_6 = $.from_html(`<option> </option>`);
 var root_7 = $.from_html(`<option> </option>`);
 var root_5 = $.from_html(`<section class="section"><h2>Local gateway</h2><div class="setting-row"><div><strong>Accept client connections</strong><p>Stop cancels active inference and closes the local HTTP listener. The desktop browser remains usable.</p></div><button class="toggle" role="switch" aria-label="Accept client connections"></button></div><div class="setting-row"><div><strong>Listening port</strong><p>Only 127.0.0.1 is allowed. Changing ports preserves existing requests until they finish.</p></div><form class="inline"><input type="number" aria-label="Gateway port" min="1024" max="65535" required/><button class="secondary">Apply</button></form></div><div class="setting-row"><div><strong>Local API key</strong><p>Regeneration revokes the old key and terminates connected clients. Website credentials are unaffected.</p></div><button class="secondary"><!>Regenerate</button></div><div class="setting-row"><div><strong>Default model alias</strong><p>Requests for <code>bridge/default</code> route to this explicitly selected model.</p></div><select aria-label="Default gateway model"><option>No default selected</option><!></select></div></section> <section class="section"><h2>Explicit fallback</h2><div class="setting-row"><div><strong>Fallback model</strong><p>Choose another available model for new sessions only. Existing conversations are never silently moved between websites.</p></div><select aria-label="Fallback model"><option>No fallback selected</option><!></select></div><div class="setting-row"><div><strong>Allow fallback before dispatch</strong><p>Only before a prompt is submitted, when the selected website reports a limit or is unavailable. No retry after generation begins.</p></div><button class="toggle" role="switch" aria-label="Allow fallback"></button></div><div class="note"><!><span>Fallback follows your explicit routing policy; it does not bypass a provider’s quota or create additional accounts.</span></div></section>`, 1);
@@ -138,38 +138,28 @@ export default function Settings($$anchor, $$props) {
 			var button_3 = $.sibling($.child(div_6));
 
 			button_3.__click = () => {
-				app.sidebarVisible = !app.sidebarVisible;
-				app.saveLayout();
-			};
-
-			$.reset(div_6);
-
-			var div_7 = $.sibling(div_6);
-			var button_4 = $.sibling($.child(div_7));
-
-			button_4.__click = () => {
 				app.inspectorVisible = !app.inspectorVisible;
 				app.saveLayout();
 			};
 
-			$.reset(div_7);
+			$.reset(div_6);
 			$.reset(section_2);
 
 			var section_3 = $.sibling(section_2);
-			var div_8 = $.sibling($.child(section_3));
+			var div_7 = $.sibling($.child(section_3));
+			var button_4 = $.sibling($.child(div_7));
+
+			button_4.__click = () => app.settings({ restore_tabs: !app.preferences.restore_tabs });
+			$.reset(div_7);
+
+			var div_8 = $.sibling(div_7);
 			var button_5 = $.sibling($.child(div_8));
 
-			button_5.__click = () => app.settings({ restore_tabs: !app.preferences.restore_tabs });
+			button_5.__click = () => app.settings({ auto_start: !app.preferences.auto_start });
 			$.reset(div_8);
 
 			var div_9 = $.sibling(div_8);
-			var button_6 = $.sibling($.child(div_9));
-
-			button_6.__click = () => app.settings({ auto_start: !app.preferences.auto_start });
-			$.reset(div_9);
-
-			var div_10 = $.sibling(div_9);
-			var select = $.sibling($.child(div_10));
+			var select = $.sibling($.child(div_9));
 
 			select.__change = (event) => app.settings({ idle_minutes: Number(event.currentTarget.value) });
 
@@ -201,18 +191,17 @@ export default function Settings($$anchor, $$props) {
 			var select_value;
 
 			$.init_select(select);
-			$.reset(div_10);
+			$.reset(div_9);
 			$.reset(section_3);
 
 			$.template_effect(() => {
 				$.set_attribute(button_2, 'aria-checked', app.preferences.compact);
 				button_2.disabled = !app.ready;
-				$.set_attribute(button_3, 'aria-checked', app.sidebarVisible);
-				$.set_attribute(button_4, 'aria-checked', app.inspectorVisible);
-				$.set_attribute(button_5, 'aria-checked', app.preferences.restore_tabs);
+				$.set_attribute(button_3, 'aria-checked', app.inspectorVisible);
+				$.set_attribute(button_4, 'aria-checked', app.preferences.restore_tabs);
+				button_4.disabled = !app.ready;
+				$.set_attribute(button_5, 'aria-checked', app.preferences.auto_start);
 				button_5.disabled = !app.ready;
-				$.set_attribute(button_6, 'aria-checked', app.preferences.auto_start);
-				button_6.disabled = !app.ready;
 				select.disabled = !app.ready;
 
 				if (select_value !== (select_value = app.preferences.idle_minutes)) {
@@ -234,38 +223,38 @@ export default function Settings($$anchor, $$props) {
 				var consequent_1 = ($$anchor) => {
 					var fragment_2 = root_5();
 					var section_4 = $.first_child(fragment_2);
-					var div_11 = $.sibling($.child(section_4));
-					var button_7 = $.sibling($.child(div_11));
+					var div_10 = $.sibling($.child(section_4));
+					var button_6 = $.sibling($.child(div_10));
 
-					button_7.__click = () => app.perform(app.snapshot?.api.running ? 'api.stop' : 'api.start');
-					$.reset(div_11);
+					button_6.__click = () => app.perform(app.snapshot?.api.running ? 'api.stop' : 'api.start');
+					$.reset(div_10);
 
-					var div_12 = $.sibling(div_11);
-					var form = $.sibling($.child(div_12));
+					var div_11 = $.sibling(div_10);
+					var form = $.sibling($.child(div_11));
 					var input = $.child(form);
 
 					$.remove_input_defaults(input);
 					input.__input = (event) => $.set(port, event.currentTarget.value, true);
 
-					var button_8 = $.sibling(input);
+					var button_7 = $.sibling(input);
 
 					$.reset(form);
-					$.reset(div_12);
+					$.reset(div_11);
 
-					var div_13 = $.sibling(div_12);
-					var button_9 = $.sibling($.child(div_13));
+					var div_12 = $.sibling(div_11);
+					var button_8 = $.sibling($.child(div_12));
 
-					button_9.__click = () => app.showPopup('rotate-key');
+					button_8.__click = () => app.showPopup('rotate-key');
 
-					var node_3 = $.child(button_9);
+					var node_3 = $.child(button_8);
 
 					Icon(node_3, { name: 'key', size: 14 });
 					$.next();
-					$.reset(button_9);
-					$.reset(div_13);
+					$.reset(button_8);
+					$.reset(div_12);
 
-					var div_14 = $.sibling(div_13);
-					var select_1 = $.sibling($.child(div_14));
+					var div_13 = $.sibling(div_12);
+					var select_1 = $.sibling($.child(div_13));
 
 					select_1.__change = (event) => app.settings({ default_model: event.currentTarget.value });
 
@@ -299,12 +288,12 @@ export default function Settings($$anchor, $$props) {
 					var select_1_value;
 
 					$.init_select(select_1);
-					$.reset(div_14);
+					$.reset(div_13);
 					$.reset(section_4);
 
 					var section_5 = $.sibling(section_4, 2);
-					var div_15 = $.sibling($.child(section_5));
-					var select_2 = $.sibling($.child(div_15));
+					var div_14 = $.sibling($.child(section_5));
+					var select_2 = $.sibling($.child(div_14));
 
 					select_2.__change = (event) => app.settings({
 						fallback_model: event.currentTarget.value,
@@ -341,28 +330,28 @@ export default function Settings($$anchor, $$props) {
 					var select_2_value;
 
 					$.init_select(select_2);
+					$.reset(div_14);
+
+					var div_15 = $.sibling(div_14);
+					var button_9 = $.sibling($.child(div_15));
+
+					button_9.__click = () => app.settings({ fallback_enabled: !app.preferences.fallback_enabled });
 					$.reset(div_15);
 
 					var div_16 = $.sibling(div_15);
-					var button_10 = $.sibling($.child(div_16));
-
-					button_10.__click = () => app.settings({ fallback_enabled: !app.preferences.fallback_enabled });
-					$.reset(div_16);
-
-					var div_17 = $.sibling(div_16);
-					var node_6 = $.child(div_17);
+					var node_6 = $.child(div_16);
 
 					Icon(node_6, { name: 'shield', size: 15 });
 					$.next();
-					$.reset(div_17);
+					$.reset(div_16);
 					$.reset(section_5);
 
 					$.template_effect(() => {
-						$.set_attribute(button_7, 'aria-checked', app.snapshot?.api.running ?? false);
-						button_7.disabled = !app.ready;
+						$.set_attribute(button_6, 'aria-checked', app.snapshot?.api.running ?? false);
+						button_6.disabled = !app.ready;
 						$.set_value(input, $.get(port) || app.snapshot?.api.port || 7331);
-						button_8.disabled = !app.ready || !$.get(port);
-						button_9.disabled = !app.ready;
+						button_7.disabled = !app.ready || !$.get(port);
+						button_8.disabled = !app.ready;
 						select_1.disabled = !app.ready;
 
 						if (select_1_value !== (select_1_value = app.preferences.default_model)) {
@@ -381,8 +370,8 @@ export default function Settings($$anchor, $$props) {
 							);
 						}
 
-						$.set_attribute(button_10, 'aria-checked', app.preferences.fallback_enabled);
-						button_10.disabled = !app.ready || !app.preferences.fallback_model;
+						$.set_attribute(button_9, 'aria-checked', app.preferences.fallback_enabled);
+						button_9.disabled = !app.ready || !app.preferences.fallback_model;
 					});
 
 					$.event('submit', form, (event) => {
@@ -400,19 +389,19 @@ export default function Settings($$anchor, $$props) {
 					{
 						var consequent_3 = ($$anchor) => {
 							var section_6 = root_9();
-							var div_18 = $.child(section_6);
-							var button_11 = $.sibling($.child(div_18));
+							var div_17 = $.child(section_6);
+							var button_10 = $.sibling($.child(div_17));
 
-							button_11.__click = () => app.showPopup('add');
+							button_10.__click = () => app.showPopup('add');
 
-							var node_8 = $.child(button_11);
+							var node_8 = $.child(button_10);
 
 							Icon(node_8, { name: 'plus', size: 13 });
 							$.next();
-							$.reset(button_11);
-							$.reset(div_18);
+							$.reset(button_10);
+							$.reset(div_17);
 
-							var label = $.sibling(div_18);
+							var label = $.sibling(div_17);
 							var select_3 = $.sibling($.child(label));
 
 							select_3.__change = (event) => $.set(selectedProfile, event.currentTarget.value, true);
@@ -454,57 +443,57 @@ export default function Settings($$anchor, $$props) {
 							{
 								var consequent_2 = ($$anchor) => {
 									var fragment_4 = root_11();
-									var div_19 = $.first_child(fragment_4);
-									var div_20 = $.child(div_19);
-									var p_1 = $.sibling($.child(div_20));
+									var div_18 = $.first_child(fragment_4);
+									var div_19 = $.child(div_18);
+									var p_1 = $.sibling($.child(div_19));
 									var text_5 = $.child(p_1, true);
 
 									$.reset(p_1);
-									$.reset(div_20);
+									$.reset(div_19);
 
-									var input_1 = $.sibling(div_20);
+									var input_1 = $.sibling(div_19);
 
 									$.remove_input_defaults(input_1);
 									input_1.__change = (event) => updateProfile('label', event.currentTarget.value);
-									$.reset(div_19);
+									$.reset(div_18);
 
-									var div_21 = $.sibling(div_19);
-									var button_12 = $.sibling($.child(div_21));
+									var div_20 = $.sibling(div_18);
+									var button_11 = $.sibling($.child(div_20));
 
-									button_12.__click = () => updateProfile('pinned', !$.get(profile).pinned);
-									$.reset(div_21);
+									button_11.__click = () => updateProfile('pinned', !$.get(profile).pinned);
+									$.reset(div_20);
 
-									var div_22 = $.sibling(div_21);
-									var input_2 = $.sibling($.child(div_22));
+									var div_21 = $.sibling(div_20);
+									var input_2 = $.sibling($.child(div_21));
 
 									$.remove_input_defaults(input_2);
 									input_2.__change = (event) => updateProfile('context_hint', Number(event.currentTarget.value));
-									$.reset(div_22);
+									$.reset(div_21);
 
-									var div_23 = $.sibling(div_22);
-									var input_3 = $.sibling($.child(div_23));
+									var div_22 = $.sibling(div_21);
+									var input_3 = $.sibling($.child(div_22));
 
 									$.remove_input_defaults(input_3);
 									input_3.__change = (event) => updateProfile('reasoning_value', event.currentTarget.value);
+									$.reset(div_22);
+
+									var div_23 = $.sibling(div_22);
+									var button_12 = $.sibling($.child(div_23));
+
+									button_12.__click = () => app.showPopup('clear-profile', $.get(profile).id);
 									$.reset(div_23);
 
 									var div_24 = $.sibling(div_23);
 									var button_13 = $.sibling($.child(div_24));
 
-									button_13.__click = () => app.showPopup('clear-profile', $.get(profile).id);
+									button_13.__click = () => app.showPopup('remove-provider', $.get(profile).id);
 									$.reset(div_24);
-
-									var div_25 = $.sibling(div_24);
-									var button_14 = $.sibling($.child(div_25));
-
-									button_14.__click = () => app.showPopup('remove-provider', $.get(profile).id);
-									$.reset(div_25);
 
 									$.template_effect(() => {
 										$.set_text(text_5, $.get(profile).origin);
 										$.set_value(input_1, $.get(profile).label);
 										input_1.disabled = $.get(profile).active;
-										$.set_attribute(button_12, 'aria-checked', $.get(profile).pinned);
+										$.set_attribute(button_11, 'aria-checked', $.get(profile).pinned);
 										$.set_value(input_2, $.get(profile).context_hint);
 										input_2.disabled = $.get(profile).active;
 										$.set_value(input_3, $.get(profile).reasoning_value);
@@ -528,7 +517,7 @@ export default function Settings($$anchor, $$props) {
 							$.reset(section_6);
 
 							$.template_effect(() => {
-								button_11.disabled = !app.ready;
+								button_10.disabled = !app.ready;
 
 								if (select_3_value !== (select_3_value = $.get(profile)?.id ?? '')) {
 									(
@@ -549,17 +538,17 @@ export default function Settings($$anchor, $$props) {
 								var consequent_4 = ($$anchor) => {
 									var fragment_6 = root_14();
 									var section_7 = $.first_child(fragment_6);
-									var div_26 = $.sibling($.child(section_7));
-									var node_12 = $.sibling($.child(div_26));
+									var div_25 = $.sibling($.child(section_7));
+									var node_12 = $.sibling($.child(div_25));
 
 									Icon(node_12, { name: 'lock', size: 17 });
-									$.reset(div_26);
+									$.reset(div_25);
 									$.next(2);
 									$.reset(section_7);
 
 									var section_8 = $.sibling(section_7);
-									var div_27 = $.sibling($.child(section_8));
-									var select_4 = $.sibling($.child(div_27));
+									var div_26 = $.sibling($.child(section_8));
+									var select_4 = $.sibling($.child(div_26));
 
 									select_4.__change = (event) => app.settings({ logging: event.currentTarget.value });
 
@@ -587,19 +576,19 @@ export default function Settings($$anchor, $$props) {
 									var select_4_value;
 
 									$.init_select(select_4);
+									$.reset(div_26);
+
+									var div_27 = $.sibling(div_26);
+									var button_14 = $.sibling($.child(div_27));
+
+									button_14.__click = () => app.settings({ developer_mode: !app.preferences.developer_mode });
 									$.reset(div_27);
 
 									var div_28 = $.sibling(div_27);
 									var button_15 = $.sibling($.child(div_28));
 
-									button_15.__click = () => app.settings({ developer_mode: !app.preferences.developer_mode });
+									button_15.__click = () => app.perform('logs.clear');
 									$.reset(div_28);
-
-									var div_29 = $.sibling(div_28);
-									var button_16 = $.sibling($.child(div_29));
-
-									button_16.__click = () => app.perform('logs.clear');
-									$.reset(div_29);
 									$.reset(section_8);
 
 									$.template_effect(() => {
@@ -610,9 +599,9 @@ export default function Settings($$anchor, $$props) {
 											);
 										}
 
-										$.set_attribute(button_15, 'aria-checked', app.preferences.developer_mode);
-										button_15.disabled = !app.ready;
-										button_16.disabled = !app.events.length;
+										$.set_attribute(button_14, 'aria-checked', app.preferences.developer_mode);
+										button_14.disabled = !app.ready;
+										button_15.disabled = !app.events.length;
 									});
 
 									$.append($$anchor, fragment_6);
@@ -621,49 +610,49 @@ export default function Settings($$anchor, $$props) {
 								var alternate_1 = ($$anchor) => {
 									var fragment_7 = root_16();
 									var section_9 = $.first_child(fragment_7);
-									var div_30 = $.sibling($.child(section_9));
-									var div_31 = $.child(div_30);
-									var p_3 = $.sibling($.child(div_31));
+									var div_29 = $.sibling($.child(section_9));
+									var div_30 = $.child(div_29);
+									var p_3 = $.sibling($.child(div_30));
 									var text_7 = $.child(p_3, true);
 
 									$.reset(p_3);
-									$.reset(div_31);
+									$.reset(div_30);
 
-									var span = $.sibling(div_31);
+									var span = $.sibling(div_30);
 									let classes_2;
 									var span_1 = $.child(span);
 									let classes_3;
 									var text_8 = $.sibling(span_1, 1, true);
 
 									$.reset(span);
-									$.reset(div_30);
+									$.reset(div_29);
 
-									var div_32 = $.sibling(div_30);
-									var code = $.sibling($.child(div_32));
+									var div_31 = $.sibling(div_29);
+									var code = $.sibling($.child(div_31));
 									var text_9 = $.child(code, true);
 
 									$.reset(code);
-									$.reset(div_32);
+									$.reset(div_31);
 
-									var div_33 = $.sibling(div_32);
-									var button_17 = $.sibling($.child(div_33));
+									var div_32 = $.sibling(div_31);
+									var button_16 = $.sibling($.child(div_32));
 
-									button_17.__click = restart;
+									button_16.__click = restart;
 
-									var node_13 = $.child(button_17);
+									var node_13 = $.child(button_16);
 
 									Icon(node_13, { name: 'refresh', size: 14 });
 
 									var text_10 = $.sibling(node_13, 1, true);
 
-									$.reset(button_17);
+									$.reset(button_16);
+									$.reset(div_32);
+
+									var div_33 = $.sibling(div_32);
+									var button_17 = $.sibling($.child(div_33));
+
+									button_17.__click = () => app.showPopup('shortcuts');
 									$.reset(div_33);
-
-									var div_34 = $.sibling(div_33);
-									var button_18 = $.sibling($.child(div_34));
-
-									button_18.__click = () => app.showPopup('shortcuts');
-									$.reset(div_34);
 									$.reset(section_9);
 
 									var section_10 = $.sibling(section_9);
@@ -672,12 +661,12 @@ export default function Settings($$anchor, $$props) {
 
 									$.reset(p_4);
 
-									var div_35 = $.sibling(p_4);
-									var node_14 = $.child(div_35);
+									var div_34 = $.sibling(p_4);
+									var node_14 = $.child(div_34);
 
 									Icon(node_14, { name: 'shield', size: 16 });
 									$.next();
-									$.reset(div_35);
+									$.reset(div_34);
 									$.reset(section_10);
 
 									$.template_effect(() => {
@@ -686,7 +675,7 @@ export default function Settings($$anchor, $$props) {
 										classes_3 = $.set_class(span_1, 1, 'dot', null, classes_3, { online: app.host.state === 'READY' });
 										$.set_text(text_8, app.host.state);
 										$.set_text(text_9, app.snapshot?.version || 'Not connected');
-										button_17.disabled = $.get(restarting);
+										button_16.disabled = $.get(restarting);
 										$.set_text(text_10, $.get(restarting) ? 'Restarting…' : 'Restart Zag');
 										$.set_text(text_11, app.snapshot?.detector.reason || 'No qualified TNN artifact is loaded. Symbolic discovery remains authoritative.');
 									});

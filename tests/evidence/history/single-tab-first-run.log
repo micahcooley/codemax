@@ -1,0 +1,71 @@
+PASS One top tab strip; no sidebar; full-width website; legacy layout migrates closed
+PASS Providers, Tools and Connect are utilities; websites retain one set of tabs
+PASS App menu has keyboard navigation, restores focus and hides untrusted native surface
+PASS Ctrl-W closes a utility page without closing the selected website
+PASS Every existing management screen remains reachable from the app menu
+PASS Arrow, Home, End, Ctrl-Tab and reverse tab navigation use the single tab strip
+PASS Top-tab context menu supports reorder, keyboard access and confirmed profile clearing
+FAIL Drag-and-drop tab ordering remains available without the sidebar
+Traceback (most recent call last):
+  File "/mnt/data/codemax-single-tabs/desktop-ai-bridge/tests/chrome_ui.py", line 168, in <module>
+    record('Drag-and-drop tab ordering remains available without the sidebar', drag_reorder)
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/data/codemax-single-tabs/desktop-ai-bridge/tests/chrome_ui.py", line 25, in record
+    fn()
+    ~~^^
+  File "/mnt/data/codemax-single-tabs/desktop-ai-bridge/tests/chrome_ui.py", line 165, in drag_reorder
+    assert page.locator('[data-provider-id]').last.get_attribute('data-provider-id')=='1'
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+{
+  "scope": "Actual compiled Svelte UI in Chromium; Tauri/native-provider test doubles only.",
+  "native_tauri_executed": false,
+  "zag_executed": false,
+  "live_provider_contacted": false,
+  "passed": 7,
+  "failed": 1,
+  "tests": [
+    {
+      "name": "One top tab strip; no sidebar; full-width website; legacy layout migrates closed",
+      "status": "PASS",
+      "seconds": 0.423
+    },
+    {
+      "name": "Providers, Tools and Connect are utilities; websites retain one set of tabs",
+      "status": "PASS",
+      "seconds": 0.348
+    },
+    {
+      "name": "App menu has keyboard navigation, restores focus and hides untrusted native surface",
+      "status": "PASS",
+      "seconds": 0.133
+    },
+    {
+      "name": "Ctrl-W closes a utility page without closing the selected website",
+      "status": "PASS",
+      "seconds": 0.355
+    },
+    {
+      "name": "Every existing management screen remains reachable from the app menu",
+      "status": "PASS",
+      "seconds": 2.587
+    },
+    {
+      "name": "Arrow, Home, End, Ctrl-Tab and reverse tab navigation use the single tab strip",
+      "status": "PASS",
+      "seconds": 0.071
+    },
+    {
+      "name": "Top-tab context menu supports reorder, keyboard access and confirmed profile clearing",
+      "status": "PASS",
+      "seconds": 1.147
+    },
+    {
+      "name": "Drag-and-drop tab ordering remains available without the sidebar",
+      "status": "FAIL",
+      "error": ""
+    }
+  ],
+  "runtime_errors": [],
+  "chromium": "144.0.7559.96"
+}

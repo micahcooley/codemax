@@ -14,6 +14,8 @@ if(!runtime||!fs.existsSync(path.join(runtime,'svelte_compiler.js')))throw new E
 const compiler=await import(pathToFileURL(path.join(runtime,'svelte_compiler.js')).href);
 let ts;try{ts=require('typescript');}catch{const {execFileSync}=require('node:child_process');ts=require(path.join(execFileSync('npm',['root','-g'],{encoding:'utf8'}).trim(),'typescript/lib/typescript.js'));}
 const out=path.join(root,'dist');fs.mkdirSync(out,{recursive:true});
+// Removed/renamed source modules must not linger in a new distribution.
+fs.rmSync(path.join(out,'src'),{recursive:true,force:true});
 const warnings=[],modules=[];let css=fs.readFileSync(path.join(root,'src/lib/design/app.css'),'utf8');
 const all=[];function walk(dir){for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const p=path.join(dir,entry.name);if(entry.isDirectory())walk(p);else all.push(p);}}
 walk(path.join(root,'src'));
@@ -61,7 +63,7 @@ if(process.exitCode)process.exit(process.exitCode);
 fs.mkdirSync(path.join(out,'runtime'),{recursive:true});
 for(const name of fs.readdirSync(runtime).filter(n=>n.endsWith('.js')&&!n.includes('compiler'))){fs.copyFileSync(path.join(runtime,name),path.join(out,'runtime',name));modules.push('runtime/'+name);}
 fs.writeFileSync(path.join(out,'ui.css'),css);
-fs.writeFileSync(path.join(out,'index.html'),'<!doctype html>\n<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="dark light"><title>Bridge — AI browser workspace</title><link rel="stylesheet" href="./ui.css"></head><body><div id="app"></div><script type="module" src="./src/main.js"></script></body></html>\n');
+fs.writeFileSync(path.join(out,'index.html'),'<!doctype html>\n<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="dark light"><title>Codemax — Browser</title><link rel="stylesheet" href="./ui.css"></head><body><div id="app"></div><script type="module" src="./src/main.js"></script></body></html>\n');
 const report={compiler:'Svelte',version:compiler.VERSION,typescript:ts.version,compiled_modules:modules.filter(m=>m.startsWith('src/')).length,warnings,fixture_code_in_distribution:false,entry:'src/main.js'};
 fs.mkdirSync(path.join(root,'tests/evidence'),{recursive:true});fs.writeFileSync(path.join(root,'tests/evidence/frontend-build.json'),JSON.stringify(report,null,2)+'\n');
 console.log(JSON.stringify(report,null,2));
