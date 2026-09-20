@@ -39,16 +39,20 @@ def main():
     dom=load('tests/evidence/browser-dom-tests.json')
     chrome=load('tests/evidence/single-tab-ui.json')
     codemax=load('tests/evidence/codemax-ui.json')
+    audit=load('tests/evidence/ux-audit.json')
     tap=(ROOT/'tests/evidence/node-current.log').read_text()
     def tap_count(name):
         matches=re.findall(r'^# '+name+r' (\d+)\s*$',tap,re.MULTILINE)
         if len(matches)!=1:raise ValueError('Missing or ambiguous Node test summary: '+name)
         return int(matches[0])
-    if tap_count('fail') or any(row['status']!='PASS' for row in ui['results']) or chrome['failed'] or codemax['failed']:
+    if (tap_count('fail') or any(row['status']!='PASS' for row in ui['results'])
+        or chrome['failed'] or codemax['failed'] or audit['failed'] or audit.get('runtime_errors')
+        or chrome.get('runtime_errors') or codemax.get('runtime_errors')
+        or any(row['status']!='PASS' for row in dom.get('tests',[]))):
         raise SystemExit('Refusing to package a revision with failed UI/Node evidence.')
     metadata={
         'name':'Codemax','version':load('package.json')['version'],
-        'revision':'single-tab-browser-ux',
+        'revision':'whole-interface-ux-audit',
         'kind':'desktop-source-plus-compiled-svelte-ui','local_commit':head(),
         'native_installer_included':False,'full_masterplan_complete':False,'release_qualified':False,
         'file_count_excluding_packaging_metadata':len(content),
@@ -57,6 +61,8 @@ def main():
             'application':{'passed':len(ui['results']),'failed':0,'evidence':'tests/evidence/ui-browser.json'},
             'discovery_mcp':{'passed':codemax['passed'],'failed':codemax['failed'],'evidence':'tests/evidence/codemax-ui.json'},
             'single_tab':{'passed':chrome['passed'],'failed':chrome['failed'],'evidence':'tests/evidence/single-tab-ui.json'},
+            'whole_interface_ux':{'passed':audit['passed'],'failed':audit['failed'],'evidence':'tests/evidence/ux-audit.json'},
+            'total_passed':len(ui['results'])+chrome['passed']+codemax['passed']+audit['passed'],
             'scope':'Compiled Svelte with native-host/website test doubles; no native execution.',
         },
         'node_tests':{'passed':tap_count('pass'),'failed':tap_count('fail'),'evidence':'tests/evidence/node-current.log'},
@@ -65,8 +71,10 @@ def main():
         'native_zag_build':'NOT_RUN_THIS_UI_REVISION','native_tauri_build':'NOT_RUN_THIS_UI_REVISION',
         'normal_vite_and_svelte_check':'NOT_VERIFIED',
         'live_website_and_mcp_tests':'NOT_RUN_THIS_UI_REVISION','real_coding_harness':'NOT_RUN',
-        'prior_closeout':'docs/history/discovery-mcp-closeout.md',
+        'prior_closeout':'docs/history/single-tab-closeout.md',
         'unchanged_native_source':load('tests/evidence/native-source-unchanged.json'),
+        'prerequisite_check':load('tests/evidence/ux-prerequisites.json'),
+        'ux_audit_document':'docs/UX_AUDIT.md',
         'manifest_sha256':hashlib.sha256(manifest.encode()).hexdigest(),
         'manifest_excludes':sorted(PACKAGING),
         'compiler_pin':'abed8aa170ef1bc33e5aca68b99fcdd905a4545f',

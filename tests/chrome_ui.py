@@ -174,7 +174,7 @@ with sync_playwright() as pw:
             route('Providers')
             expect(page.locator('.provider-choice')).to_have_count(1)
             assert 'Local test provider' in page.locator('.provider-choice').inner_text()
-            page.get_by_role('button',name='Open tab',exact=True).click()
+            page.get_by_role('button',name='Reopen website',exact=True).click()
             page.wait_for_function('window.__uiFixture.bounds.visible&&window.__uiFixture.bounds.provider_id===1')
             expect(page.get_by_role('tab',name='Local test provider',exact=True)).to_have_count(1)
         record('Closing a top tab preserves its detected provider and reopening does not duplicate it', preserved_registry)

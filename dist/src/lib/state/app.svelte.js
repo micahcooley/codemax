@@ -78,6 +78,26 @@ class Application {
 		$.set(this.#popupProvider, value, true);
 	}
 
+	#confirmation = $.state(null);
+
+	get confirmation() {
+		return $.get(this.#confirmation);
+	}
+
+	set confirmation(value) {
+		$.set(this.#confirmation, value, true);
+	}
+
+	#confirming = $.state(false);
+
+	get confirming() {
+		return $.get(this.#confirming);
+	}
+
+	set confirming(value) {
+		$.set(this.#confirming, value, true);
+	}
+
 	#error = $.state('');
 
 	get error() {
@@ -86,6 +106,16 @@ class Application {
 
 	set error(value) {
 		$.set(this.#error, value, true);
+	}
+
+	#popupError = $.state('');
+
+	get popupError() {
+		return $.get(this.#popupError);
+	}
+
+	set popupError(value) {
+		$.set(this.#popupError, value, true);
 	}
 
 	#notification = $.state('');
@@ -148,6 +178,16 @@ class Application {
 		$.set(this.#focusAddress, value, true);
 	}
 
+	#focusFind = $.state(0);
+
+	get focusFind() {
+		return $.get(this.#focusFind);
+	}
+
+	set focusFind(value) {
+		$.set(this.#focusFind, value, true);
+	}
+
 	#findVisible = $.state(false);
 
 	get findVisible() {
@@ -166,6 +206,16 @@ class Application {
 
 	set zoom(value) {
 		$.set(this.#zoom, value, true);
+	}
+
+	#zoomByProvider = $.state($.proxy({}));
+
+	get zoomByProvider() {
+		return $.get(this.#zoomByProvider);
+	}
+
+	set zoomByProvider(value) {
+		$.set(this.#zoomByProvider, value, true);
 	}
 
 	#liveOrigins = $.state($.proxy({}));
@@ -216,6 +266,124 @@ class Application {
 
 	set secret(value) {
 		$.set(this.#secret, value, true);
+	}
+
+	#settingsSection = $.state('appearance');
+
+	get settingsSection() {
+		return $.get(this.#settingsSection);
+	}
+
+	set settingsSection(value) {
+		$.set(this.#settingsSection, value, true);
+	}
+
+	#providerSelection = $.state(null);
+
+	get providerSelection() {
+		return $.get(this.#providerSelection);
+	}
+
+	set providerSelection(value) {
+		$.set(this.#providerSelection, value, true);
+	}
+
+	#clientModel = $.state('');
+
+	get clientModel() {
+		return $.get(this.#clientModel);
+	}
+
+	set clientModel(value) {
+		$.set(this.#clientModel, value, true);
+	}
+
+	#providerDrafts = $.state($.proxy({}));
+
+	get providerDrafts() {
+		return $.get(this.#providerDrafts);
+	}
+
+	set providerDrafts(value) {
+		$.set(this.#providerDrafts, value, true);
+	}
+
+	#toolDraft = $.state($.proxy({
+		adding: false,
+		label: '',
+		command: '',
+		argv: '[]',
+		task: '',
+		chosen: '',
+		automatic: true
+	}));
+
+	get toolDraft() {
+		return $.get(this.#toolDraft);
+	}
+
+	set toolDraft(value) {
+		$.set(this.#toolDraft, value, true);
+	}
+
+	#modelFilters = $.state($.proxy({
+		query: '',
+		provider: 'all',
+		status: 'all',
+		sort: 'provider',
+		descending: false
+	}));
+
+	get modelFilters() {
+		return $.get(this.#modelFilters);
+	}
+
+	set modelFilters(value) {
+		$.set(this.#modelFilters, value, true);
+	}
+
+	#sessionFilters = $.state($.proxy({ query: '', status: 'all' }));
+
+	get sessionFilters() {
+		return $.get(this.#sessionFilters);
+	}
+
+	set sessionFilters(value) {
+		$.set(this.#sessionFilters, value, true);
+	}
+
+	#pendingKeys = $.state($.proxy([]));
+
+	get pendingKeys() {
+		return $.get(this.#pendingKeys);
+	}
+
+	set pendingKeys(value) {
+		$.set(this.#pendingKeys, value, true);
+	}
+
+	requests = new Map();
+	activation = 0;
+	routeHistory = ['browser'];
+	routeIndex = 0;
+	#canGoBack = $.state(false);
+
+	get canGoBack() {
+		return $.get(this.#canGoBack);
+	}
+
+	set canGoBack(value) {
+		$.set(this.#canGoBack, value, true);
+	}
+
+	#canGoForward = $.state(false);
+
+	get canGoForward() {
+		return $.get(this.#canGoForward);
+	}
+
+	set canGoForward(value) {
+		$.set(this.#canGoForward, value, true);
 	}
 
 	#preferences = $.derived(() => this.snapshot?.settings ?? initial);
@@ -323,30 +491,79 @@ class Application {
 		$.set(this.#events, value);
 	}
 
+	#activeTask = $.derived(() => this.snapshot?.mcp_run && [
+		'GENERATING',
+		'PERMISSION_REQUIRED',
+		'EXECUTING_TOOL',
+		'RESULT_READY'
+	].includes(this.snapshot.mcp_run.state) ? this.snapshot.mcp_run : null);
+
+	get activeTask() {
+		return $.get(this.#activeTask);
+	}
+
+	set activeTask(value) {
+		$.set(this.#activeTask, value);
+	}
+
 	get origin() {
 		return this.selectedProvider === null
 			? ''
 			: this.liveOrigins[this.selectedProvider] || this.provider?.origin || '';
 	}
 
-	async perform(op, params = {}) {
-		this.pending++;
-		this.error = '';
+	get pageUrl() {
+		const p = this.provider;
 
-		try {
-			return await bridge.request(op, params);
-		} catch(error) {
-			this.error = error instanceof Error ? error.message : String(error);
+		return p
+			? this.origin && this.origin !== p.origin ? this.origin : p.current_url || p.url
+			: '';
+	}
+
+	busy(op) {
+		return this.pendingKeys.some((key) => key.startsWith(op + '|'));
+	}
+
+	async perform(op, params = {}) {
+		if (!this.ready && op !== 'state.get') {
+			this.error = 'BACKEND_UNAVAILABLE';
 
 			return undefined;
-		} finally {
-			this.pending--;
 		}
+
+		const key = op + '|' + JSON.stringify(params);
+		const existing = this.requests.get(key);
+
+		if (existing) return existing;
+
+		this.pending++;
+		this.pendingKeys = [...this.pendingKeys, key];
+
+		const work = (async () => {
+			try {
+				return await bridge.request(op, params);
+			} catch(error) {
+				this.error = error instanceof Error ? error.message : String(error);
+
+				if (this.popup) this.popupError = this.error;
+
+				return undefined;
+			} finally {
+				this.pending--;
+				this.requests.delete(key);
+				this.pendingKeys = this.pendingKeys.filter((k) => k !== key);
+			}
+		})();
+
+		this.requests.set(key, work);
+
+		return work;
 	}
 
 	async showPopup(popup, providerId = this.selectedProvider) {
 		try {
 			await bridge.hideProviders();
+			this.popupError = '';
 			this.popupProvider = providerId;
 			this.popup = popup;
 			this.contextMenu = null;
@@ -355,20 +572,92 @@ class Application {
 		}
 	}
 
-	navigate(route) {
+	async ask(title, description, label, action, danger = true) {
+		this.confirmation = { title, description, label, action, danger };
+		await this.showPopup('confirm');
+	}
+
+	async acceptConfirmation() {
+		const item = this.confirmation;
+
+		if (!item || this.confirming) return;
+
+		this.confirming = true;
+
+		try {
+			const result = await item.action();
+
+			if (result !== undefined && this.confirmation === item) {
+				this.popup = null;
+				this.confirmation = null;
+			}
+		} catch(error) {
+			this.error = String(error);
+		} finally {
+			this.confirming = false;
+		}
+	}
+
+	setRoute(route) {
+		this.activation++;
 		this.route = route;
 		this.popup = null;
 		this.contextMenu = null;
 		this.secret = '';
+		this.findVisible = false;
+	}
+
+	navigate(route) {
+		if (route !== this.route) {
+			this.routeHistory = this.routeHistory.slice(0, this.routeIndex + 1);
+			this.routeHistory.push(route);
+
+			if (this.routeHistory.length > 40) this.routeHistory.shift();
+
+			this.routeIndex = this.routeHistory.length - 1;
+		}
+
+		this.setRoute(route);
+		this.canGoBack = this.routeIndex > 0;
+		this.canGoForward = this.routeIndex < this.routeHistory.length - 1;
+	}
+
+	settingsPage(section) {
+		this.settingsSection = section;
+		this.navigate('settings');
+	}
+
+	async back() {
+		if (this.route === 'browser') {
+			await this.control('back');
+
+			return;
+		}
+
+		if (this.routeIndex > 0) {
+			this.setRoute(this.routeHistory[--this.routeIndex]);
+			this.canGoBack = this.routeIndex > 0;
+			this.canGoForward = true;
+		} else this.navigate('browser');
+	}
+
+	async forward() {
+		if (this.canGoForward) {
+			this.setRoute(this.routeHistory[++this.routeIndex]);
+			this.canGoBack = true;
+			this.canGoForward = this.routeIndex < this.routeHistory.length - 1;
+		} else if (this.route === 'browser') await this.control('forward');
 	}
 
 	async openProvider(id) {
+		const ticket = ++this.activation;
+		const opened = await this.perform('provider.open', { provider_id: id });
+
+		if (opened === undefined || ticket !== this.activation) return;
+
 		this.selectedProvider = id;
-		this.route = 'browser';
-		this.popup = null;
-		this.contextMenu = null;
-		this.zoom = 100;
-		await this.perform('provider.open', { provider_id: id });
+		this.navigate('browser');
+		this.zoom = this.zoomByProvider[id] ?? 100;
 		await this.perform('workspace.focus', { provider_id: id });
 	}
 
@@ -377,12 +666,13 @@ class Application {
 
 		if (!p) return;
 
-		if (p.active && !confirmed) {
+		if ((p.active || p.browser_busy || this.activeTask?.provider_id === id) && !confirmed) {
 			await this.showPopup('close-provider', id);
 
 			return;
 		}
 
+		const ticket = this.activation;
 		const index = this.tabs.findIndex((p) => p.id === id);
 
 		const next = index < 0
@@ -396,19 +686,19 @@ class Application {
 			if (this.selectedProvider === id) {
 				this.selectedProvider = next?.id ?? null;
 
-				if (next) await this.openProvider(next.id);
+				if (this.route === 'browser' && ticket === this.activation) {
+					if (next) await this.openProvider(next.id); else this.newTab();
+				}
 			}
 		}
 	}
 
 	newTab() {
-		this.popup = null;
-		this.contextMenu = null;
 		this.selectedProvider = null;
-		this.route = 'browser';
-		this.findVisible = false;
+		this.navigate('browser');
 		this.focusAddress++;
-		void this.perform('workspace.focus', { provider_id: 0 });
+
+		if (this.ready) void this.perform('workspace.focus', { provider_id: 0 });
 	}
 
 	address(input) {
@@ -416,15 +706,16 @@ class Application {
 
 		if (!text) throw Error('EMPTY_ADDRESS');
 
-		if (text.includes('://')) {
+		if ((/^[a-z][a-z\d+.-]*:/i).test(text) && !(/^(?:localhost|(?:[a-z\d-]+\.)+[a-z]+):\d/i).test(text)) {
 			const url = new URL(text);
 
 			if (!['https:', 'http:'].includes(url.protocol)) throw Error('UNSAFE_ADDRESS');
+			if (url.username || url.password) throw Error('ADDRESS_HAS_CREDENTIALS');
 
 			return url;
 		}
 
-		if (!(/\s/).test(text) && ((/^[\w.-]+\.[a-z]{2,}(?::\d+)?(?:[/?#]|$)/i).test(text) || (/^localhost(?::\d+)?(?:[/?#]|$)/).test(text) || (/^127\.0\.0\.1/).test(text))) return new URL(`https://${text}`);
+		if (!(/\s/).test(text) && ((/^[\w.-]+\.[a-z]{2,}(?::\d+)?(?:[/?#]|$)/i).test(text) || (/^localhost(?::\d+)?(?:[/?#]|$)/).test(text) || (/^127\.0\.0\.1(?::\d+)?(?:[/?#]|$)/).test(text))) return new URL(`${(/^(localhost|127\.0\.0\.1)(:|\/|$)/).test(text) ? 'http' : 'https'}://${text}`);
 
 		return new URL(`https://www.google.com/search?q=${encodeURIComponent(text)}`);
 	}
@@ -434,8 +725,8 @@ class Application {
 
 		try {
 			parsed = this.address(url);
-		} catch {
-			this.error = 'INVALID_PROVIDER_URL';
+		} catch(error) {
+			this.error = error instanceof Error ? error.message : 'INVALID_PROVIDER_URL';
 
 			return false;
 		}
@@ -443,7 +734,13 @@ class Application {
 		const existing = this.providers.find((p) => p.origin === parsed.origin);
 
 		if (existing) {
-			this.popup = null;
+			// One isolated profile per origin. Never discard the path the user entered.
+			if ((existing.current_url || existing.url) !== parsed.href) {
+				if (await this.perform('provider.navigate', { provider_id: existing.id, url: parsed.href }) === undefined) return false;
+
+				this.liveOrigins = { ...this.liveOrigins, [existing.id]: parsed.href };
+			}
+
 			await this.openProvider(existing.id);
 
 			return true;
@@ -456,7 +753,6 @@ class Application {
 
 		if (!result) return false;
 
-		this.popup = null;
 		await this.openProvider(result.provider_id);
 
 		return true;
@@ -467,45 +763,59 @@ class Application {
 
 		try {
 			parsed = this.address(url);
-		} catch {
-			this.error = 'INVALID_PROVIDER_URL';
+		} catch(error) {
+			this.error = error instanceof Error ? error.message : 'INVALID_PROVIDER_URL';
 
 			return;
 		}
 
 		if (this.provider && parsed.origin === this.provider.origin) {
-			await this.perform('provider.navigate', { provider_id: this.provider.id, url: parsed.href });
+			if (await this.perform('provider.navigate', { provider_id: this.provider.id, url: parsed.href }) !== undefined) this.liveOrigins = { ...this.liveOrigins, [this.provider.id]: parsed.href };
 		} else await this.addWebsite(parsed.href);
 	}
 
 	async control(action) {
-		if (!this.provider) return;
+		if (!this.provider || !this.ready) return;
+
+		const id = this.provider.id;
 
 		try {
-			await bridge.browserControl(this.provider.id, action);
+			await bridge.browserControl(id, action);
 
-			if (action.startsWith('zoom')) this.zoom = action === 'zoom_reset'
-				? 100
-				: Math.max(50, Math.min(200, this.zoom + (action === 'zoom_in' ? 10 : -10)));
+			if (action.startsWith('zoom')) {
+				this.zoom = action === 'zoom_reset'
+					? 100
+					: Math.max(50, Math.min(200, this.zoom + (action === 'zoom_in' ? 10 : -10)));
 
-			if (action === 'popup_once') this.notification = 'One sign-in popup allowed for 60 seconds. Open the website’s sign-in button now.';
-			if (action === 'download_once') this.notification = 'One download allowed for 60 seconds. It will be saved in Downloads; it will not run.';
+				this.zoomByProvider = { ...this.zoomByProvider, [id]: this.zoom };
+			}
+
+			if (action === 'popup_once') this.notification = 'One sign-in popup allowed for 60 seconds. Try the sign-in button again.';
+			if (action === 'download_once') this.notification = 'One download allowed for 60 seconds. Saved files will not run automatically.';
 		} catch(error) {
 			this.error = String(error);
 		}
 	}
 
+	showFind() {
+		this.findVisible = true;
+		this.focusFind++;
+	}
+
 	async pick(role) {
 		if (!this.provider) return;
 
-		this.route = 'browser';
-		this.popup = null;
+		this.navigate('browser');
 		this.inspectorVisible = true;
 		await this.perform('connector.pick', { provider_id: this.provider.id, mapping: role });
 	}
 
 	async settings(patch) {
-		await this.perform('settings.update', patch);
+		if (await this.perform('settings.update', patch) === undefined) return false;
+
+		this.notification = 'Settings saved.';
+
+		return true;
 	}
 
 	async clipboard(text) {
@@ -530,7 +840,8 @@ class Application {
 
 		if (result) {
 			this.selectedProvider = result.provider_id;
-			this.route = 'browser';
+			this.navigate('browser');
+			await this.perform('workspace.focus', { provider_id: result.provider_id });
 		}
 	}
 
@@ -569,7 +880,7 @@ class Application {
 				order: this.tabOrder
 			}));
 		} catch {
-			/* Local presentation persistence may be disabled by the host. */
+			/* Noncritical presentation preferences. */
 		}
 	}
 
@@ -581,15 +892,13 @@ class Application {
 			if (!value || typeof value !== 'object') return;
 			if (Number.isFinite(value.inspector)) this.inspectorWidth = Math.max(240, Math.min(380, value.inspector));
 
-			// v1 shipped both panes open. Migrate to the new unobstructed default;
-			// preserve explicit inspector choices made under the single-tab layout.
 			this.inspectorVisible = !!saved && value.right === true;
 
 			if (Array.isArray(value.order)) this.tabOrder = [
 				...new Set(value.order.filter((n) => typeof n === 'number' && Number.isInteger(n) && n > 0))
 			].slice(0, 16);
 		} catch {
-			/* Invalid presentation settings must not prevent browsing. */
+			/* Invalid layout must not prevent browsing. */
 		}
 	}
 }

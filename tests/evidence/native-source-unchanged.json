@@ -1,8 +1,9 @@
 {
-  "basis": "Codemax-browser-discovery-mcp-2026-09-19.zip",
-  "comparison": "byte-for-byte",
+  "basis": "Codemax-single-tab-UX.zip",
+  "comparison": "fresh byte-for-byte comparison against the supplied previous revision",
   "files": 51,
   "status": "PASS",
+  "differences": [],
   "entries": [
     {
       "path": "backend/app.zag",

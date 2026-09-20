@@ -47,13 +47,18 @@ with sync_playwright() as pw:
   record('Ctrl-L address focus and keyboard command palette with provider hiding',keyboard)
   page.screenshot(animations='disabled',path=str(SHOTS/'03-client-setup.png'))
   def client_controls():
+   page.get_by_text('Manual connection details · endpoint and local access token',exact=True).click()
    page.get_by_role('button',name='Copy API endpoint').click();page.wait_for_function("window.__clipboard==='http://127.0.0.1:7331/v1'")
    page.get_by_role('button',name='Reveal API key').click();page.get_by_text('sk-local-ui-fixture-not-a-real-key',exact=True).wait_for()
    page.get_by_role('button',name='Hide API key').click();assert not page.get_by_text('sk-local-ui-fixture-not-a-real-key',exact=True).count()
    page.get_by_role('button',name='Copy API key',exact=True).click();page.wait_for_function("window.__clipboard==='sk-local-ui-fixture-not-a-real-key'")
    page.get_by_role('button',name='Save config').click();page.wait_for_function("window.__lastExport.name==='opencode.json'")
    value=json.loads(page.evaluate('window.__lastExport.content'));assert value['provider']['bridge']['npm']=='@ai-sdk/openai-compatible'
-   for label in ['Claude Code','Chat API','Responses API','Messages API','OpenCode']:page.locator('.segmented button').filter(has_text=label).click()
+   page.get_by_text('Other clients · protocol examples',exact=True).click()
+   for label in ['Claude Code','Chat API','Responses API','Messages API','OpenCode']:
+    button=page.locator('.segmented button').filter(has_text=label)
+    if not button.is_visible():page.get_by_text('Other clients · protocol examples',exact=True).click()
+    button.click()
   record('endpoint/key controls and all five client configuration formats',client_controls)
   def file_permissions():
    route('Tools & MCP');page.get_by_text('Advanced · synthetic file permission diagnostic',exact=True).click()
@@ -137,7 +142,7 @@ with sync_playwright() as pw:
    page.get_by_role('switch',name='Compact density',exact=True).click();page.wait_for_function("document.querySelector('.app-shell').classList.contains('compact')")
    page.get_by_role('button',name='dark theme').click();page.get_by_role('switch',name='Compact density',exact=True).click()
    page.locator('.preferences-nav button').filter(has_text='Local gateway').click();page.get_by_role('spinbutton',name='Gateway port').fill('7450');page.get_by_role('button',name='Apply',exact=True).click();page.wait_for_function('window.__uiFixture.snapshot.api.port===7450')
-   page.get_by_role('switch',name='Accept client connections').click();page.wait_for_function('window.__uiFixture.snapshot.api.running===false');page.get_by_role('switch',name='Accept client connections').click()
+   page.get_by_role('switch',name='Accept client connections').click();page.get_by_role('button',name='Stop gateway',exact=True).click();page.wait_for_function('window.__uiFixture.snapshot.api.running===false');page.get_by_role('switch',name='Accept client connections').click()
    page.get_by_role('spinbutton',name='Gateway port').fill('7331');page.get_by_role('button',name='Apply',exact=True).click()
    page.locator('.preferences-nav button').filter(has_text='Privacy & diagnostics').click();page.get_by_role('switch',name='Developer diagnostics').click();page.wait_for_function('window.__uiFixture.snapshot.developer_mode===true')
   record('theme, density, API port, listener control and developer setting round trips',settings)

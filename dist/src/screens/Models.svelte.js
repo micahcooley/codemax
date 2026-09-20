@@ -1,26 +1,47 @@
 import '../../runtime/svelte_internal_disclose-version.js';
 import * as $ from '../../runtime/svelte_internal_client.js';
 import { app } from '../lib/state/app.svelte.js';
-import { initials, number, providerText } from '../lib/format.js';
+import { initials, number, providerText, modelReady, modelStatus } from '../lib/format.js';
 import Icon from '../lib/components/Icon.svelte.js';
 
 var root_1 = $.from_html(`<option> </option>`);
 var root_3 = $.from_html(`<span class="count">DEFAULT</span>`);
 var root_2 = $.from_html(`<tr><td><div class="inline"><span class="model-letter"> </span><div><span class="primary-line"> <!></span><span class="secondary-line mono"> </span></div></div></td><td><button class="text-button" style="padding:0;font-size:12px"> </button></td><td><span> </span><span class="secondary-line"> </span></td><td> <span class="secondary-line"> </span></td><td>Text bridge<span class="secondary-line"> </span></td><td><span><span></span> </span></td><td><div class="row-actions"><button class="icon-button" title="Copy model ID"><!></button><button title="Use as the bridge/default model"><!></button></div></td></tr>`);
-var root_4 = $.from_html(`<div class="empty-state"><!><h2> </h2><p> </p><button class="secondary">Open browser<!></button></div>`);
-var root = $.from_html(`<section class="screen"><div class="screen-inner"><header class="screen-head"><div><div class="breadcrumb">Workspace / Registry</div><h1>Models</h1><p>The models your websites expose, with evidence—not assumed specifications.</p></div><button class="secondary"><!>Add website</button></header> <div class="filterbar"><label class="search-field"><!><input aria-label="Search models" placeholder="Find a model or provider…"/></label><span class="spacer"></span><select aria-label="Filter by provider"><option>All detected providers</option><!></select><select aria-label="Filter by availability"><option>Any status</option><option>Ready</option><option>Rate limited</option><option>Sign in required</option></select></div> <div class="table-scroll"><table><thead><tr><th><button>MODEL <!></button></th><th><button>WEBSITE <!></button></th><th>REASONING</th><th>CONTEXT</th><th>TOOLS</th><th>STATUS</th><th></th></tr></thead><tbody></tbody></table></div> <!> <div class="table-foot"><span> </span><span>Unknown values are never filled with guesses.</span></div> <div class="note"><!><span>Website model names are labels, not verified model identities. Context and usage estimates are explicitly marked. Tool calls use the bridge’s framed text protocol unless the website provides an observed native capability.</span></div></div></section>`);
+var root_5 = $.from_html(`<button class="secondary">Clear filters</button>`);
+var root_6 = $.from_html(`<button class="secondary">Open browser<!></button>`);
+var root_4 = $.from_html(`<div class="empty-state"><!><h2> </h2><p> </p><!></div>`);
+var root = $.from_html(`<section class="screen"><div class="screen-inner"><header class="screen-head"><div><div class="breadcrumb">Workspace / Registry</div><h1>Models</h1><p>The models your websites expose, with evidence—not assumed specifications.</p></div><button class="secondary"><!>Add website</button></header> <div class="filterbar"><label class="search-field"><!><input aria-label="Search models" placeholder="Find a model or provider…"/></label><span class="spacer"></span><select aria-label="Filter by provider"><option>All detected providers</option><!></select><select aria-label="Filter by availability"><option>Any status</option><option>Ready to use</option><option>Disabled</option><option>Rate limited</option><option>Sign in required</option></select></div> <div class="table-scroll"><table><thead><tr><th><button>MODEL <!></button></th><th><button>WEBSITE <!></button></th><th>REASONING</th><th>CONTEXT</th><th>TOOLS</th><th>STATUS</th><th></th></tr></thead><tbody></tbody></table></div> <!> <div class="table-foot"><span> </span><span>Unknown values are never filled with guesses.</span></div> <div class="note"><!><span>Names and capabilities come from website evidence. Unknown limits stay unknown; estimates are never exact token counts.</span></div></div></section>`);
 
 export default function Models($$anchor, $$props) {
 	$.push($$props, true);
 
-	let query = $.state('');
-	let provider = $.state('all');
-	let state = $.state('all');
-	let sort = $.state('provider');
+	const filters = $.derived(() => app.modelFilters);
 
-	const visible = $.derived(() => app.models.filter((m) => ($.get(provider) === 'all' || m.provider.id === Number($.get(provider))) && ($.get(state) === 'all' || m.provider.state === $.get(state)) && `${m.display_name} ${m.id} ${m.provider.label}`.toLowerCase().includes($.get(query).toLowerCase())).sort((a, b) => $.get(sort) === 'provider'
+	const visible = $.derived(() => app.models.filter((m) => ($.get(filters).provider === 'all' || m.provider.id === Number($.get(filters).provider)) && ($.get(filters).status === 'all' || ($.get(filters).status === 'READY'
+		? modelReady(m, m.provider)
+		: $.get(filters).status === 'DISABLED'
+			? !m.enabled || !m.provider.exposed
+			: m.provider.state === $.get(filters).status)) && `${m.display_name} ${m.id} ${m.provider.label}`.toLowerCase().includes($.get(filters).query.toLowerCase())).sort((a, b) => ($.get(filters).sort === 'provider'
 		? a.provider.label.localeCompare(b.provider.label) || a.display_name.localeCompare(b.display_name)
-		: a.display_name.localeCompare(b.display_name)));
+		: a.display_name.localeCompare(b.display_name)) * ($.get(filters).descending ? -1 : 1)));
+
+	function order(sort) {
+		app.modelFilters = {
+			...$.get(filters),
+			sort,
+			descending: $.get(filters).sort === sort ? !$.get(filters).descending : false
+		};
+	}
+
+	function clear() {
+		app.modelFilters = {
+			query: '',
+			provider: 'all',
+			status: 'all',
+			sort: 'provider',
+			descending: false
+		};
+	}
 
 	var section = root();
 	var div = $.child(section);
@@ -86,11 +107,15 @@ export default function Models($$anchor, $$props) {
 
 	var option_4 = $.sibling(option_3);
 
-	option_4.value = option_4.__value = 'RATE_LIMITED';
+	option_4.value = option_4.__value = 'DISABLED';
 
 	var option_5 = $.sibling(option_4);
 
-	option_5.value = option_5.__value = 'LOGIN_REQUIRED';
+	option_5.value = option_5.__value = 'RATE_LIMITED';
+
+	var option_6 = $.sibling(option_5);
+
+	option_6.value = option_6.__value = 'LOGIN_REQUIRED';
 	$.reset(select_1);
 	$.reset(div_1);
 
@@ -101,7 +126,7 @@ export default function Models($$anchor, $$props) {
 	var th = $.child(tr);
 	var button_1 = $.child(th);
 
-	button_1.__click = () => $.set(sort, 'model');
+	button_1.__click = () => order('model');
 
 	var node_3 = $.sibling($.child(button_1));
 
@@ -112,7 +137,7 @@ export default function Models($$anchor, $$props) {
 	var th_1 = $.sibling(th);
 	var button_2 = $.child(th_1);
 
-	button_2.__click = () => $.set(sort, 'provider');
+	button_2.__click = () => order('provider');
 
 	var node_4 = $.sibling($.child(button_2));
 
@@ -232,7 +257,7 @@ export default function Models($$anchor, $$props) {
 		$.reset(tr_1);
 
 		$.template_effect(
-			($0, $1, $2) => {
+			($0, $1, $2, $3, $4, $5) => {
 				$.set_text(text_1, $0);
 				$.set_text(text_2, $.get(model).display_name);
 				$.set_text(text_3, $.get(model).id);
@@ -246,28 +271,30 @@ export default function Models($$anchor, $$props) {
 					: $.get(model).context.nominal ? 'Provider reported' : 'No limit exposed');
 
 				$.set_text(text_9, $.get(model).vision === true ? 'Vision observed' : 'Vision unknown');
-
-				classes = $.set_class(span_8, 1, 'tag', null, classes, {
-					ready: $.get(model).provider.state === 'READY',
-					attention: $.get(model).provider.state === 'RATE_LIMITED'
-				});
-
-				classes_1 = $.set_class(span_9, 1, 'dot', null, classes_1, {
-					online: $.get(model).provider.state === 'READY',
-					warn: $.get(model).provider.state === 'RATE_LIMITED'
-				});
-
-				$.set_text(text_10, $2);
+				classes = $.set_class(span_8, 1, 'tag', null, classes, $2);
+				classes_1 = $.set_class(span_9, 1, 'dot', null, classes_1, $3);
+				$.set_text(text_10, $4);
 				$.set_attribute(button_4, 'aria-label', `Copy ${$.get(model).display_name} model ID`);
 				$.set_attribute(button_5, 'aria-label', `Set ${$.get(model).display_name} as default`);
-				button_5.disabled = app.preferences.default_model === $.get(model).id;
+				button_5.disabled = $5;
 			},
 			[
 				() => initials($.get(model).display_name).slice(0, 2),
 				() => $.get(model).provider.context_hint
 					? number($.get(model).provider.context_hint)
 					: $.get(model).context.nominal ? number($.get(model).context.nominal) : 'Unknown',
-				() => providerText($.get(model).provider)
+
+				() => ({
+					ready: modelReady($.get(model), $.get(model).provider),
+					attention: $.get(model).provider.state === 'RATE_LIMITED'
+				}),
+
+				() => ({
+					online: modelReady($.get(model), $.get(model).provider),
+					warn: $.get(model).provider.state === 'RATE_LIMITED'
+				}),
+				() => modelStatus($.get(model), $.get(model).provider),
+				() => !app.ready || !modelReady($.get(model), $.get(model).provider) || app.preferences.default_model === $.get(model).id || app.busy('settings.update')
 			]
 		);
 
@@ -281,7 +308,7 @@ export default function Models($$anchor, $$props) {
 	var node_8 = $.sibling(div_2, 2);
 
 	{
-		var consequent_1 = ($$anchor) => {
+		var consequent_2 = ($$anchor) => {
 			var div_6 = root_4();
 			var node_9 = $.child(div_6);
 
@@ -297,14 +324,33 @@ export default function Models($$anchor, $$props) {
 
 			$.reset(p_1);
 
-			var button_6 = $.sibling(p_1);
+			var node_10 = $.sibling(p_1);
 
-			button_6.__click = () => app.navigate('browser');
+			{
+				var consequent_1 = ($$anchor) => {
+					var button_6 = root_5();
 
-			var node_10 = $.sibling($.child(button_6));
+					button_6.__click = clear;
+					$.append($$anchor, button_6);
+				};
 
-			Icon(node_10, { name: 'arrow', size: 14 });
-			$.reset(button_6);
+				var alternate = ($$anchor) => {
+					var button_7 = root_6();
+
+					button_7.__click = () => app.newTab();
+
+					var node_11 = $.sibling($.child(button_7));
+
+					Icon(node_11, { name: 'arrow', size: 14 });
+					$.reset(button_7);
+					$.append($$anchor, button_7);
+				};
+
+				$.if(node_10, ($$render) => {
+					if (app.models.length) $$render(consequent_1); else $$render(alternate, false);
+				});
+			}
+
 			$.reset(div_6);
 
 			$.template_effect(() => {
@@ -321,7 +367,7 @@ export default function Models($$anchor, $$props) {
 		};
 
 		$.if(node_8, ($$render) => {
-			if (!$.get(visible).length) $$render(consequent_1);
+			if (!$.get(visible).length) $$render(consequent_2);
 		});
 	}
 
@@ -334,9 +380,9 @@ export default function Models($$anchor, $$props) {
 	$.reset(div_7);
 
 	var div_8 = $.sibling(div_7, 2);
-	var node_11 = $.child(div_8);
+	var node_12 = $.child(div_8);
 
-	Icon(node_11, { name: 'shield', size: 16 });
+	Icon(node_12, { name: 'shield', size: 16 });
 	$.next();
 	$.reset(div_8);
 	$.reset(div);
@@ -344,12 +390,21 @@ export default function Models($$anchor, $$props) {
 
 	$.template_effect(() => {
 		button.disabled = !app.ready;
+
+		$.set_attribute(th, 'aria-sort', $.get(filters).sort === 'model'
+			? $.get(filters).descending ? 'descending' : 'ascending'
+			: 'none');
+
+		$.set_attribute(th_1, 'aria-sort', $.get(filters).sort === 'provider'
+			? $.get(filters).descending ? 'descending' : 'ascending'
+			: 'none');
+
 		$.set_text(text_13, `${$.get(visible).length ?? ''} of ${app.models.length ?? ''} models · Updates from the Zag registry`);
 	});
 
-	$.bind_value(input, () => $.get(query), ($$value) => $.set(query, $$value));
-	$.bind_select_value(select, () => $.get(provider), ($$value) => $.set(provider, $$value));
-	$.bind_select_value(select_1, () => $.get(state), ($$value) => $.set(state, $$value));
+	$.bind_value(input, () => app.modelFilters.query, ($$value) => app.modelFilters.query = $$value);
+	$.bind_select_value(select, () => app.modelFilters.provider, ($$value) => app.modelFilters.provider = $$value);
+	$.bind_select_value(select_1, () => app.modelFilters.status, ($$value) => app.modelFilters.status = $$value);
 	$.append($$anchor, section);
 	$.pop();
 }

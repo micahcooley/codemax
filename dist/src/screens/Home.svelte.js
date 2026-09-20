@@ -6,7 +6,9 @@ import { dateTime, number } from '../lib/format.js';
 import Icon from '../lib/components/Icon.svelte.js';
 
 var root_1 = $.from_html(`<div class="log-row"><span class="faint"> </span><span> </span><code> </code><span class="log-detail"> </span></div>`);
-var root_2 = $.from_html(`<div class="empty-state"><!><h2>No retained events</h2><p>Gateway and connector events will appear here. Debug-level browser metadata requires an explicit logging setting.</p><button class="text-button">Logging settings<!></button></div>`);
+var root_3 = $.from_html(`<button class="secondary">Show all levels</button>`);
+var root_4 = $.from_html(`<button class="text-button">Logging settings<!></button>`);
+var root_2 = $.from_html(`<div class="empty-state"><!><h2> </h2><p>Gateway and connector events will appear here. Debug-level browser metadata requires an explicit logging setting.</p><!></div>`);
 var root = $.from_html(`<section class="screen"><div class="screen-inner"><header class="screen-head"><div><div class="breadcrumb">Workspace / Diagnostics</div><h1>Activity</h1><p>A bounded, redacted view of what the local gateway is doing.</p></div><div class="button-group"><button class="secondary"><!>Export diagnostics</button></div></header> <div class="metric-strip"><div><span class="label">Ready providers</span><strong> <span class="muted" style="font-size:16px;letter-spacing:0"> </span></strong><small>Independent browser profiles</small></div><div><span class="label">Available models</span><strong> </strong><small>Observed or user supplied</small></div><div><span class="label">Completed requests</span><strong> </strong><small>During this backend process</small></div><div><span class="label">Failed requests</span><strong> </strong><small>No silent automatic retries</small></div></div> <div class="section-title"><h2>Gateway events</h2><span class="tag"><span></span>Push updates</span></div><div class="filterbar"><span class="muted" style="font-size:11px"> </span><span class="spacer"></span><select aria-label="Event severity"><option>All levels</option><option>Errors</option><option>Warnings</option><option>Information</option><option>Debug</option></select><button class="text-button"><!>Clear</button></div> <!> <!> <div class="note"><!><span>No prompts, response bodies, authentication headers, or cookies are written to the diagnostic event ring. Export only diagnostics you intend to share.</span></div></div></section>`);
 
 export default function Home($$anchor, $$props) {
@@ -113,7 +115,7 @@ export default function Home($$anchor, $$props) {
 
 	var button_1 = $.sibling(select);
 
-	button_1.__click = () => app.perform('logs.clear');
+	button_1.__click = () => app.ask('Clear retained diagnostics?', 'This clears the local diagnostic event list. Export any events you need first.', 'Clear diagnostics', () => app.perform('logs.clear'));
 
 	var node_1 = $.child(button_1);
 
@@ -170,33 +172,58 @@ export default function Home($$anchor, $$props) {
 	var node_3 = $.sibling(node_2, 2);
 
 	{
-		var consequent = ($$anchor) => {
+		var consequent_1 = ($$anchor) => {
 			var div_10 = root_2();
 			var node_4 = $.child(div_10);
 
 			Icon(node_4, { name: 'activity', size: 26 });
 
-			var button_2 = $.sibling(node_4, 3);
+			var h2 = $.sibling(node_4);
+			var text_10 = $.child(h2, true);
 
-			button_2.__click = () => app.navigate('settings');
+			$.reset(h2);
 
-			var node_5 = $.sibling($.child(button_2));
+			var node_5 = $.sibling(h2, 2);
 
-			Icon(node_5, { name: 'arrow', size: 13 });
-			$.reset(button_2);
+			{
+				var consequent = ($$anchor) => {
+					var button_2 = root_3();
+
+					button_2.__click = () => $.set(level, 'all');
+					$.append($$anchor, button_2);
+				};
+
+				var alternate = ($$anchor) => {
+					var button_3 = root_4();
+
+					button_3.__click = () => app.settingsPage('privacy');
+
+					var node_6 = $.sibling($.child(button_3));
+
+					Icon(node_6, { name: 'arrow', size: 13 });
+					$.reset(button_3);
+					$.append($$anchor, button_3);
+				};
+
+				$.if(node_5, ($$render) => {
+					if (app.events.length) $$render(consequent); else $$render(alternate, false);
+				});
+			}
+
 			$.reset(div_10);
+			$.template_effect(() => $.set_text(text_10, app.events.length ? 'No events at this level' : 'No retained events'));
 			$.append($$anchor, div_10);
 		};
 
 		$.if(node_3, ($$render) => {
-			if (!$.get(events).length) $$render(consequent);
+			if (!$.get(events).length) $$render(consequent_1);
 		});
 	}
 
 	var div_11 = $.sibling(node_3, 2);
-	var node_6 = $.child(div_11);
+	var node_7 = $.child(div_11);
 
-	Icon(node_6, { name: 'shield', size: 15 });
+	Icon(node_7, { name: 'shield', size: 15 });
 	$.next();
 	$.reset(div_11);
 	$.reset(div);

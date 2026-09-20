@@ -4,7 +4,7 @@ import { onMount, tick } from '../runtime/svelte_svelte.js';
 import * as bridge from './lib/api/bridge.js';
 import { app } from './lib/state/app.svelte.js';
 import { routes } from './lib/types/bridge.js';
-import { initials, errorText } from './lib/format.js';
+import { initials, errorText, recoveryAction } from './lib/format.js';
 import TabActivity from './lib/components/TabActivity.svelte.js';
 import Icon from './lib/components/Icon.svelte.js';
 import Dialog from './lib/components/Dialog.svelte.js';
@@ -23,19 +23,28 @@ var root_1 = $.from_html(`<div draggable="true" role="presentation"><button clas
 var root_2 = $.from_html(`<div class="browser-tab active"><button class="tab-open" role="tab" aria-selected="true"><span class="tab-initial"><!></span><span>New tab</span></button></div>`);
 var root_4 = $.from_html(`<div class="browser-tab active utility-tab"><button class="tab-open" role="tab" aria-selected="true"><span class="tab-initial"><!></span><span class="truncate"> </span></button><button class="tab-close" aria-label="Return to browser"><!></button></div>`);
 var root_5 = $.from_html(`<button class="icon-button" style="width:23px;height:23px;min-width:23px;min-height:23px" type="button" aria-label="Copy website URL"><!></button>`);
-var root_6 = $.from_html(`<form class="findbar"><!><input aria-label="Find on page" placeholder="Find on this page" maxlength="256"/><small>Enter to find next</small><button type="button" class="icon-button" aria-label="Previous match"><!></button><button class="icon-button" aria-label="Next match"><!></button><button type="button" class="icon-button" aria-label="Close find"><!></button></form>`);
-var root_7 = $.from_html(`<div><!><span> </span><button class="text-button">Runtime settings</button></div>`);
-var root_8 = $.from_html(`<div class="layout-notice error" role="alert"><!><span> </span><button class="icon-button" aria-label="Dismiss error"><!></button></div>`);
-var root_9 = $.from_html(`<div class="layout-notice" role="status"><!><span> </span><button class="icon-button" aria-label="Dismiss notification"><!></button></div>`);
-var root_29 = $.from_html(`<form><p class="dialog-description">Open the public chat page, then sign in on the website. Its browser profile is kept separate from your other providers.</p><label class="field">Website address<input required maxlength="2048" placeholder="https://chat.example.com" autocomplete="url" spellcheck="false"/></label><label class="field">Name in your workspace <span class="faint">Optional</span><input maxlength="120" placeholder="Use the website’s name" autocomplete="off"/></label><div class="dialog-notice"><!><span>Use an HTTPS chat URL, not a sign-in callback or a link containing credentials. Website quotas still apply.</span></div><div class="dialog-actions"><button type="button" class="secondary">Cancel</button><button class="primary">Open website<!></button></div></form>`);
-var root_34 = $.from_html(`<kbd>↵</kbd>`);
-var root_33 = $.from_html(`<button><!><span><strong> </strong><small> </small></span><!></button>`);
-var root_35 = $.from_html(`<p class="muted" style="padding:20px 5px">No matching commands.</p>`);
-var root_32 = $.from_html(`<label class="command-search"><!><input aria-label="Search commands" placeholder="Search pages, websites, and actions…" autocomplete="off"/></label><div class="command-results"><!><!></div><div class="command-footer">↑ ↓ to navigate <span style="margin-left:15px">Enter to open</span><span style="float:right">Esc to close</span></div>`, 1);
-var root_39 = $.from_html(`<div class="shortcut-row"><span> </span><kbd> </kbd></div>`);
-var root_38 = $.from_html(`<!><p class="field-hint" style="margin-top:18px">Address and command shortcuts also work while a provider page has focus. Other shortcuts may be handled by the website.</p>`, 1);
-var root_42 = $.from_html(`<p class="dialog-description"> </p><div class="dialog-actions"><button class="secondary">Cancel</button><button class="primary danger"> </button></div>`, 1);
-var root = $.from_html(`<div><header class="titlebar"><button class="title-brand" aria-label="Codemax menu" aria-haspopup="menu" title="Codemax menu"><span class="brand-glyph"><!></span><span class="brand-name">CODEMAX</span><!></button> <div class="title-tabs" aria-label="Website tabs" role="tablist"><!> <!> <button class="icon-button new-tab" aria-label="New tab" title="New tab · Ctrl T"><!></button></div> <div class="drag-zone" role="presentation"></div> <div class="window-controls"><button aria-label="Minimize window"><!></button><button><!></button><button aria-label="Close application"><!></button></div></header> <div class="toolbar"><div class="navigation-buttons"><button class="icon-button" aria-label="Back"><!></button><button class="icon-button" aria-label="Forward"><!></button><button class="icon-button" aria-label="Reload website"><!></button></div> <form class="address-form"><!><input aria-label="Address bar" spellcheck="false" autocomplete="off" placeholder="Enter a website address" maxlength="2048"/><kbd>Ctrl L</kbd><!></form> <nav class="chrome-shortcuts" aria-label="Codemax tools"><button aria-label="Providers" title="Detected providers and exposed models"><!><span>Providers</span></button> <button aria-label="Tools &amp; MCP" title="Tools and permissions"><!><span>Tools</span></button> <button aria-label="Connect a client"><span></span><span>Connect</span></button></nav> <span class="divider"></span> <div class="toolbar-tail"><button class="icon-button" title="Connection inspector" aria-label="Toggle connection inspector"><!></button><button class="icon-button" title="Browser controls" aria-label="Browser controls"><!></button></div></div> <!> <div class="workspace"><main class="workspace-content"><!> <!> <!> <!></main></div> <footer class="statusbar"><span></span><button class="mono"> </button><span class="divider"></span><span> </span><span class="divider"></span><button> </button><span class="spacer"></span><span> </span><span class="divider"></span><!><span>Local only</span></footer></div> <!>`, 1);
+var root_6 = $.from_html(`<span class="attention-count" aria-label="1 tool approval waiting">1</span>`);
+var root_7 = $.from_html(`<form class="findbar"><!><input aria-label="Find on page" placeholder="Find on this page" maxlength="256"/><small>Enter to find next</small><button type="button" class="icon-button" aria-label="Previous match"><!></button><button class="icon-button" aria-label="Next match"><!></button><button type="button" class="icon-button" aria-label="Close find"><!></button></form>`);
+var root_8 = $.from_html(`<div><!><span> </span><button class="text-button">Runtime settings</button></div>`);
+var root_10 = $.from_html(`<button class="text-button"> </button>`);
+var root_9 = $.from_html(`<div class="layout-notice error" role="alert"><!><span> </span><!><button class="icon-button" aria-label="Dismiss error"><!></button></div>`);
+var root_11 = $.from_html(`<div class="stale-notice" role="status">Last known state · reconnect to save changes or run requests.</div>`);
+var root_12 = $.from_html(`<div role="status"><!><span> </span><button class="secondary"> </button></div>`);
+var root_13 = $.from_html(`<div class="empty-state"><!><h2> </h2><p>No provider or session data has been received. This is not an empty account.</p><button class="secondary">Runtime settings</button></div>`);
+var root_31 = $.from_html(`<!><span> </span><button aria-label="Dismiss notification"><!></button>`, 1);
+var root_33 = $.from_html(`<span>Applying changes…</span>`);
+var root_36 = $.from_html(`<p class="dialog-error" role="alert"> </p>`);
+var root_35 = $.from_html(`<p class="dialog-description"> </p><!><div class="dialog-actions"><button data-initial-focus="" class="secondary">Cancel</button><button> </button></div>`, 1);
+var root_41 = $.from_html(`<form><p class="dialog-description">Open the public chat page, then sign in on the website. Its browser profile is kept separate from your other providers.</p><label class="field">Website address<input required maxlength="2048" placeholder="https://chat.example.com" autocomplete="url" spellcheck="false"/></label><label class="field">Name in your workspace <span class="faint">Optional</span><input maxlength="120" placeholder="Use the website’s name" autocomplete="off"/></label><div class="dialog-notice"><!><span>Use an HTTPS chat URL, not a sign-in callback or a link containing credentials. Website quotas still apply.</span></div><div class="dialog-actions"><button type="button" class="secondary">Cancel</button><button class="primary">Open website<!></button></div></form>`);
+var root_46 = $.from_html(`<kbd>↵</kbd>`);
+var root_45 = $.from_html(`<button><!><span><strong> </strong><small> </small></span><!></button>`);
+var root_47 = $.from_html(`<p class="muted" style="padding:20px 5px">No matching commands.</p>`);
+var root_44 = $.from_html(`<label class="command-search"><!><input aria-label="Search commands" placeholder="Search pages, websites, and actions…" autocomplete="off"/></label><div class="command-results"><!><!></div><div class="command-footer">↑ ↓ to navigate <span style="margin-left:15px">Enter to open</span><span style="float:right">Esc to close</span></div>`, 1);
+var root_51 = $.from_html(`<div class="shortcut-row"><span> </span><kbd> </kbd></div>`);
+var root_50 = $.from_html(`<!><p class="field-hint" style="margin-top:18px">Address and command shortcuts also work while a provider page has focus. Other shortcuts may be handled by the website.</p>`, 1);
+var root_55 = $.from_html(`<p class="dialog-error" role="alert"> </p>`);
+var root_54 = $.from_html(`<!><p class="dialog-description"> </p><div class="dialog-actions"><button data-initial-focus="" class="secondary">Cancel</button><button class="primary danger"> </button></div>`, 1);
+var root = $.from_html(`<div><header class="titlebar"><button class="title-brand" aria-label="Codemax menu" aria-haspopup="menu" title="Codemax menu"><span class="brand-glyph"><!></span><span class="brand-name">CODEMAX</span><!></button> <div class="title-tabs" aria-label="Website tabs" role="tablist"><!> <!> <button class="icon-button new-tab" aria-label="New tab" title="New tab · Ctrl T"><!></button></div> <div class="drag-zone" role="presentation"></div> <div class="window-controls"><button aria-label="Minimize window"><!></button><button><!></button><button aria-label="Close application"><!></button></div></header> <div class="toolbar"><div class="navigation-buttons"><button class="icon-button" aria-label="Back"><!></button><button class="icon-button" aria-label="Forward"><!></button><button class="icon-button" aria-label="Reload website"><!></button></div> <form class="address-form"><!><input aria-label="Address bar" spellcheck="false" autocomplete="off" placeholder="Enter a website address" maxlength="2048"/><kbd>Ctrl L</kbd><!></form> <nav class="chrome-shortcuts" aria-label="Codemax tools"><button aria-label="Providers" title="Detected providers and exposed models"><!><span>Providers</span></button> <button aria-label="Tools &amp; MCP" title="Tools and permissions"><!><span>Tools</span><!></button> <button aria-label="Connect a client"><span></span><span>Connect</span></button></nav> <span class="divider"></span> <div class="toolbar-tail"><button class="icon-button" title="Connection inspector" aria-label="Toggle connection inspector"><!></button><button class="icon-button" title="Browser controls" aria-label="Browser controls"><!></button></div></div> <!> <div class="workspace"><main class="workspace-content"><!> <!> <!> <!> <!></main></div> <footer class="statusbar"><span></span><button title="Manage the local client connection"> </button><span class="divider"></span><button title="Models currently exposed and available"> </button><span class="divider"></span><button> </button><div class="footer-feedback" role="status" aria-live="polite"><!></div><span class="spacer"></span><span class="gateway-scope" title="The client gateway listens on your computer. Prompts and approved tool results go to the selected website."><!>Local gateway · websites online</span></footer></div> <!>`, 1);
 
 export default function App($$anchor, $$props) {
 	$.push($$props, true);
@@ -43,6 +52,7 @@ export default function App($$anchor, $$props) {
 	let address = $.state('');
 	let addressEditing = $.state(false);
 	let addressInput;
+	let findInput = $.state(void 0);
 	let addUrl = $.state('');
 	let addLabel = $.state('');
 	let query = $.state('');
@@ -87,7 +97,7 @@ export default function App($$anchor, $$props) {
 			description: 'Show or hide page controls and model details',
 			icon: 'scan',
 			action: () => {
-				app.popup = null;
+				app.navigate('browser');
 				app.inspectorVisible = !app.inspectorVisible;
 				app.saveLayout();
 			}
@@ -139,8 +149,71 @@ export default function App($$anchor, $$props) {
 	});
 
 	$.user_effect(() => {
-		if (app.route !== 'browser') void bridge.hideProviders().catch((error) => app.error = String(error));
+		const route = app.route;
+
+		if (route !== 'browser') {
+			void bridge.hideProviders().catch((error) => app.error = String(error));
+
+			void tick().then(() => {
+				const heading = document.querySelector('.screen h1');
+
+				if (heading) {
+					heading.tabIndex = -1;
+					heading.focus({ preventScroll: true });
+				}
+			});
+		}
 	});
+
+	$.user_effect(() => {
+		void app.focusFind;
+
+		if (app.findVisible) void tick().then(() => {
+			$.get(findInput)?.focus();
+			$.get(findInput)?.select();
+		});
+	});
+
+	$.user_effect(() => {
+		const text = app.notification;
+
+		if (!text) return;
+
+		const timer = setTimeout(
+			() => {
+				if (app.notification === text) app.notification = '';
+			},
+			5000
+		);
+
+		return () => clearTimeout(timer);
+	});
+
+	$.user_effect(() => {
+		void $.get(commandIndex);
+
+		if (app.popup === 'commands') void tick().then(() => document.querySelector('.command-results .selected')?.scrollIntoView({ block: 'nearest' }));
+	});
+
+	const errorRecovery = $.derived(() => recoveryAction(app.error));
+
+	function recover() {
+		if ($.get(errorRecovery) === 'runtime' || $.get(errorRecovery) === 'gateway') app.settingsPage($.get(errorRecovery)); else if ($.get(errorRecovery) === 'popup' || $.get(errorRecovery) === 'download') {
+			app.navigate('browser');
+			app.inspectorVisible = true;
+			app.inspectorTab = 'browser';
+		} else if ($.get(errorRecovery) === 'mapping') app.navigate('detector');
+	}
+
+	async function closeApplication() {
+		if (app.sessions.some((s) => s.status === 'ACTIVE') || app.activeTask || app.providers.some((p) => p.active || p.browser_busy)) {
+			await app.ask('Close Codemax and stop active work?', 'Running requests and tool tasks will be interrupted. Your website profiles are kept.', 'Stop work and close', async () => {
+				await bridge.windowControl('close');
+
+				return true;
+			});
+		} else await windowAction('close');
+	}
 
 	$.user_effect(() => {
 		void app.selectedProvider;
@@ -193,7 +266,7 @@ export default function App($$anchor, $$props) {
 				app.host = state;
 
 				if (state.state !== 'READY') {
-					app.snapshot = null;
+					app.secret = '';
 					app.loading = {};
 					void bridge.hideProviders().catch(() => {});
 				}
@@ -244,6 +317,26 @@ export default function App($$anchor, $$props) {
 			return;
 		}
 
+		if (app.popup) {
+			if (event.key === 'Escape' && !app.confirming) {
+				event.preventDefault();
+				app.popup = null;
+				app.contextMenu = null;
+			}
+
+			return;
+		}
+
+		if (event.key === 'Escape' && document.activeElement === addressInput) {
+			event.preventDefault();
+			$.set(addressEditing, false);
+			$.set(address, app.route === 'browser' ? app.pageUrl : `codemax://${app.route}`, true);
+			addressInput.blur();
+			document.querySelector('.title-tabs [aria-selected="true"]')?.focus();
+
+			return;
+		}
+
 		if (mod && key === 'k') {
 			event.preventDefault();
 			void app.showPopup(app.popup === 'commands' ? null : 'commands');
@@ -261,7 +354,7 @@ export default function App($$anchor, $$props) {
 			closeCurrentTab();
 		} else if (mod && key === 'f' && app.route === 'browser' && app.provider) {
 			event.preventDefault();
-			app.findVisible = !app.findVisible;
+			app.showFind();
 		} else if (mod && (/^[1-9]$/).test(key)) {
 			event.preventDefault();
 
@@ -273,12 +366,9 @@ export default function App($$anchor, $$props) {
 			void app.control(key === '0' ? 'zoom_reset' : key === '-' ? 'zoom_out' : 'zoom_in');
 		} else if (event.altKey && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
 			event.preventDefault();
-			void app.control(event.key === 'ArrowLeft' ? 'back' : 'forward');
-		} else if (event.key === 'Escape') {
-			app.contextMenu = null;
+			void (event.key === 'ArrowLeft' ? app.back() : app.forward());
+		} else if (event.key === 'Escape' && app.findVisible) {
 			app.findVisible = false;
-			app.notification = '';
-			app.popup = null;
 		}
 	}
 
@@ -475,12 +565,12 @@ export default function App($$anchor, $$props) {
 		button_1.__click = () => app.openProvider($.get(tab).id);
 
 		var span_1 = $.child(button_1);
-		var text = $.child(span_1, true);
+		var text_1 = $.child(span_1, true);
 
 		$.reset(span_1);
 
 		var span_2 = $.sibling(span_1);
-		var text_1 = $.child(span_2, true);
+		var text_2 = $.child(span_2, true);
 
 		$.reset(span_2);
 
@@ -527,8 +617,8 @@ export default function App($$anchor, $$props) {
 				$.set_attribute(button_1, 'aria-selected', app.selectedProvider === $.get(tab).id && app.route === 'browser');
 				$.set_attribute(button_1, 'tabindex', app.selectedProvider === $.get(tab).id && app.route === 'browser' ? 0 : -1);
 				$.set_attribute(button_1, 'title', `${$.get(tab).label} · ${$.get(tab).origin}`);
-				$.set_text(text, $0);
-				$.set_text(text_1, $.get(tab).label);
+				$.set_text(text_1, $0);
+				$.set_text(text_2, $.get(tab).label);
 				$.set_attribute(button_2, 'aria-label', `Close ${$.get(tab).label} tab`);
 			},
 			[() => initials($.get(tab).label).slice(0, 1)]
@@ -595,7 +685,7 @@ export default function App($$anchor, $$props) {
 					$.reset(span_4);
 
 					var span_5 = $.sibling(span_4);
-					var text_2 = $.child(span_5, true);
+					var text_3 = $.child(span_5, true);
 
 					$.reset(span_5);
 					$.reset(button_4);
@@ -613,7 +703,7 @@ export default function App($$anchor, $$props) {
 					$.template_effect(
 						($0, $1) => {
 							$.set_attribute(button_4, 'title', $0);
-							$.set_text(text_2, $1);
+							$.set_text(text_3, $1);
 						},
 						[
 							() => `Codemax · ${routes.find((r) => r.id === app.route)?.title}`,
@@ -680,7 +770,7 @@ export default function App($$anchor, $$props) {
 
 	var button_9 = $.sibling(button_8);
 
-	button_9.__click = () => windowAction('close');
+	button_9.__click = closeApplication;
 
 	var node_13 = $.child(button_9);
 
@@ -693,7 +783,7 @@ export default function App($$anchor, $$props) {
 	var div_8 = $.child(div_7);
 	var button_10 = $.child(div_8);
 
-	button_10.__click = () => app.control('back');
+	button_10.__click = () => app.back();
 
 	var node_14 = $.child(button_10);
 
@@ -702,7 +792,7 @@ export default function App($$anchor, $$props) {
 
 	var button_11 = $.sibling(button_10);
 
-	button_11.__click = () => app.control('forward');
+	button_11.__click = () => app.forward();
 
 	var node_15 = $.child(button_11);
 
@@ -748,7 +838,7 @@ export default function App($$anchor, $$props) {
 		var consequent_2 = ($$anchor) => {
 			var button_13 = root_5();
 
-			button_13.__click = () => app.clipboard($.get(address));
+			button_13.__click = () => app.clipboard(app.pageUrl);
 
 			var node_19 = $.child(button_13);
 
@@ -784,7 +874,21 @@ export default function App($$anchor, $$props) {
 	var node_21 = $.child(button_15);
 
 	Icon(node_21, { name: 'terminal', size: 15 });
-	$.next();
+
+	var node_22 = $.sibling(node_21, 2);
+
+	{
+		var consequent_3 = ($$anchor) => {
+			var span_6 = root_6();
+
+			$.append($$anchor, span_6);
+		};
+
+		$.if(node_22, ($$render) => {
+			if (app.activeTask?.state === 'PERMISSION_REQUIRED') $$render(consequent_3);
+		});
+	}
+
 	$.reset(button_15);
 
 	var button_16 = $.sibling(button_15, 2);
@@ -792,7 +896,7 @@ export default function App($$anchor, $$props) {
 
 	button_16.__click = () => app.navigate('harness');
 
-	var span_6 = $.child(button_16);
+	var span_7 = $.child(button_16);
 	let classes_5;
 
 	$.next();
@@ -810,9 +914,9 @@ export default function App($$anchor, $$props) {
 		app.saveLayout();
 	};
 
-	var node_22 = $.child(button_17);
+	var node_23 = $.child(button_17);
 
-	Icon(node_22, { name: 'panel', size: 17 });
+	Icon(node_23, { name: 'panel', size: 17 });
 	$.reset(button_17);
 
 	var button_18 = $.sibling(button_17);
@@ -824,48 +928,57 @@ export default function App($$anchor, $$props) {
 		app.saveLayout();
 	};
 
-	var node_23 = $.child(button_18);
+	var node_24 = $.child(button_18);
 
-	Icon(node_23, { name: 'more', size: 18 });
+	Icon(node_24, { name: 'more', size: 18 });
 	$.reset(button_18);
 	$.reset(div_9);
 	$.reset(div_7);
 
-	var node_24 = $.sibling(div_7, 2);
+	var node_25 = $.sibling(div_7, 2);
 
 	{
-		var consequent_3 = ($$anchor) => {
-			var form_1 = root_6();
-			var node_25 = $.child(form_1);
+		var consequent_4 = ($$anchor) => {
+			var form_1 = root_7();
+			var node_26 = $.child(form_1);
 
-			Icon(node_25, { name: 'search', size: 15 });
+			Icon(node_26, { name: 'search', size: 15 });
 
-			var input_1 = $.sibling(node_25);
+			var input_1 = $.sibling(node_26);
 
 			$.remove_input_defaults(input_1);
+
+			input_1.__keydown = (event) => {
+				if (event.key === 'Enter' && event.shiftKey) {
+					event.preventDefault();
+					void find(true);
+				}
+			};
+
+			$.bind_this(input_1, ($$value) => $.set(findInput, $$value), () => $.get(findInput));
 
 			var button_19 = $.sibling(input_1, 2);
 
 			button_19.__click = () => find(true);
 
-			var node_26 = $.child(button_19);
+			var node_27 = $.child(button_19);
 
-			Icon(node_26, { name: 'back', size: 13 });
+			Icon(node_27, { name: 'back', size: 13 });
 			$.reset(button_19);
 
 			var button_20 = $.sibling(button_19);
-			var node_27 = $.child(button_20);
+			var node_28 = $.child(button_20);
 
-			Icon(node_27, { name: 'arrow', size: 13 });
+			Icon(node_28, { name: 'arrow', size: 13 });
 			$.reset(button_20);
 
 			var button_21 = $.sibling(button_20);
 
 			button_21.__click = () => app.findVisible = false;
 
-			var node_28 = $.child(button_21);
+			var node_29 = $.child(button_21);
 
-			Icon(node_28, { name: 'close', size: 13 });
+			Icon(node_29, { name: 'close', size: 13 });
 			$.reset(button_21);
 			$.reset(form_1);
 
@@ -878,25 +991,25 @@ export default function App($$anchor, $$props) {
 			$.append($$anchor, form_1);
 		};
 
-		$.if(node_24, ($$render) => {
-			if (app.findVisible && app.provider && app.route === 'browser') $$render(consequent_3);
+		$.if(node_25, ($$render) => {
+			if (app.findVisible && app.provider && app.route === 'browser') $$render(consequent_4);
 		});
 	}
 
-	var div_10 = $.sibling(node_24, 2);
+	var div_10 = $.sibling(node_25, 2);
 	var main = $.child(div_10);
-	var node_29 = $.child(main);
+	var node_30 = $.child(main);
 
 	{
-		var consequent_4 = ($$anchor) => {
-			var div_11 = root_7();
+		var consequent_5 = ($$anchor) => {
+			var div_11 = root_8();
 			let classes_6;
-			var node_30 = $.child(div_11);
+			var node_31 = $.child(div_11);
 
 			{
 				let $0 = $.derived(() => app.host.state === 'STARTING' ? 'bolt' : 'alert');
 
-				Icon(node_30, {
+				Icon(node_31, {
 					get name() {
 						return $.get($0);
 					},
@@ -904,25 +1017,25 @@ export default function App($$anchor, $$props) {
 				});
 			}
 
-			var span_7 = $.sibling(node_30);
-			var text_3 = $.child(span_7, true);
+			var span_8 = $.sibling(node_31);
+			var text_4 = $.child(span_8, true);
 
-			$.reset(span_7);
+			$.reset(span_8);
 
-			var button_22 = $.sibling(span_7);
+			var button_22 = $.sibling(span_8);
 
-			button_22.__click = () => app.navigate('settings');
+			button_22.__click = () => app.settingsPage('runtime');
 			$.reset(div_11);
 
 			$.template_effect(
 				($0, $1) => {
 					classes_6 = $.set_class(div_11, 1, 'layout-notice', null, classes_6, $0);
-					$.set_text(text_3, $1);
+					$.set_text(text_4, $1);
 				},
 				[
 					() => ({ error: ['FAILED', 'LOST'].includes(app.host.state) }),
 					() => app.host.state === 'STARTING'
-						? 'Starting the native Zag gateway…'
+						? 'Starting Codemax… Your website profiles are being restored.'
 						: errorText(app.host.code || 'NATIVE_HOST_REQUIRED')
 				]
 			);
@@ -930,235 +1043,335 @@ export default function App($$anchor, $$props) {
 			$.append($$anchor, div_11);
 		};
 
-		$.if(node_29, ($$render) => {
-			if (app.host.state !== 'READY') $$render(consequent_4);
+		$.if(node_30, ($$render) => {
+			if (app.host.state !== 'READY') $$render(consequent_5);
 		});
 	}
 
-	var node_31 = $.sibling(node_29, 2);
+	var node_32 = $.sibling(node_30, 2);
 
 	{
-		var consequent_5 = ($$anchor) => {
-			var div_12 = root_8();
-			var node_32 = $.child(div_12);
+		var consequent_7 = ($$anchor) => {
+			var div_12 = root_9();
+			var node_33 = $.child(div_12);
 
-			Icon(node_32, { name: 'alert', size: 15 });
+			Icon(node_33, { name: 'alert', size: 15 });
 
-			var span_8 = $.sibling(node_32);
-			var text_4 = $.child(span_8, true);
-
-			$.reset(span_8);
-
-			var button_23 = $.sibling(span_8);
-
-			button_23.__click = () => app.error = '';
-
-			var node_33 = $.child(button_23);
-
-			Icon(node_33, { name: 'close', size: 13 });
-			$.reset(button_23);
-			$.reset(div_12);
-			$.template_effect(($0) => $.set_text(text_4, $0), [() => errorText(app.error)]);
-			$.append($$anchor, div_12);
-		};
-
-		$.if(node_31, ($$render) => {
-			if (app.error) $$render(consequent_5);
-		});
-	}
-
-	var node_34 = $.sibling(node_31, 2);
-
-	{
-		var consequent_6 = ($$anchor) => {
-			var div_13 = root_9();
-			var node_35 = $.child(div_13);
-
-			Icon(node_35, { name: 'check', size: 15 });
-
-			var span_9 = $.sibling(node_35);
+			var span_9 = $.sibling(node_33);
 			var text_5 = $.child(span_9, true);
 
 			$.reset(span_9);
 
-			var button_24 = $.sibling(span_9);
+			var node_34 = $.sibling(span_9);
 
-			button_24.__click = () => app.notification = '';
+			{
+				var consequent_6 = ($$anchor) => {
+					var button_23 = root_10();
 
-			var node_36 = $.child(button_24);
+					button_23.__click = recover;
 
-			Icon(node_36, { name: 'close', size: 13 });
+					var text_6 = $.child(button_23, true);
+
+					$.reset(button_23);
+
+					$.template_effect(() => $.set_text(text_6, $.get(errorRecovery) === 'runtime'
+						? 'Reconnect'
+						: $.get(errorRecovery) === 'gateway'
+							? 'Gateway settings'
+							: $.get(errorRecovery) === 'mapping' ? 'Repair mapping' : 'Review permission'));
+
+					$.append($$anchor, button_23);
+				};
+
+				$.if(node_34, ($$render) => {
+					if ($.get(errorRecovery)) $$render(consequent_6);
+				});
+			}
+
+			var button_24 = $.sibling(node_34);
+
+			button_24.__click = () => app.error = '';
+
+			var node_35 = $.child(button_24);
+
+			Icon(node_35, { name: 'close', size: 13 });
 			$.reset(button_24);
-			$.reset(div_13);
-			$.template_effect(() => $.set_text(text_5, app.notification));
-			$.append($$anchor, div_13);
+			$.reset(div_12);
+			$.template_effect(($0) => $.set_text(text_5, $0), [() => errorText(app.error)]);
+			$.append($$anchor, div_12);
 		};
 
-		$.if(node_34, ($$render) => {
-			if (app.notification) $$render(consequent_6);
+		$.if(node_32, ($$render) => {
+			if (app.error) $$render(consequent_7);
 		});
 	}
 
-	var node_37 = $.sibling(node_34, 2);
+	var node_36 = $.sibling(node_32, 2);
 
 	{
-		var consequent_7 = ($$anchor) => {
-			ProviderBrowser($$anchor, {});
+		var consequent_8 = ($$anchor) => {
+			var div_13 = root_11();
+
+			$.append($$anchor, div_13);
 		};
 
-		var alternate_8 = ($$anchor) => {
-			var fragment_3 = $.comment();
-			var node_38 = $.first_child(fragment_3);
+		$.if(node_36, ($$render) => {
+			if (!app.ready && app.snapshot) $$render(consequent_8);
+		});
+	}
+
+	var node_37 = $.sibling(node_36, 2);
+
+	{
+		var consequent_9 = ($$anchor) => {
+			var div_14 = root_12();
+			let classes_7;
+			var node_38 = $.child(div_14);
+
+			Icon(node_38, { name: 'shield', size: 15 });
+
+			var span_10 = $.sibling(node_38);
+			var text_7 = $.child(span_10, true);
+
+			$.reset(span_10);
+
+			var button_25 = $.sibling(span_10);
+
+			button_25.__click = () => app.navigate('tools');
+
+			var text_8 = $.child(button_25, true);
+
+			$.reset(button_25);
+			$.reset(div_14);
+
+			$.template_effect(
+				($0) => {
+					classes_7 = $.set_class(div_14, 1, 'task-status', null, classes_7, $0);
+
+					$.set_text(text_7, app.activeTask.state === 'PERMISSION_REQUIRED'
+						? 'A website task needs your approval. No tool will run until you review it.'
+						: app.activeTask.state === 'RESULT_READY'
+							? 'Tool result ready. Continue the conversation when you are ready.'
+							: 'Website tool task running. You can keep browsing.');
+
+					$.set_text(text_8, app.activeTask.state === 'PERMISSION_REQUIRED' ? 'Review tool call' : 'View task');
+				},
+				[
+					() => ({
+						attention: ['PERMISSION_REQUIRED', 'RESULT_READY'].includes(app.activeTask.state)
+					})
+				]
+			);
+
+			$.append($$anchor, div_14);
+		};
+
+		$.if(node_37, ($$render) => {
+			if (app.activeTask && app.route !== 'tools') $$render(consequent_9);
+		});
+	}
+
+	var node_39 = $.sibling(node_37, 2);
+
+	{
+		var consequent_10 = ($$anchor) => {
+			var div_15 = root_13();
+			var node_40 = $.child(div_15);
+
+			Icon(node_40, { name: 'activity', size: 28 });
+
+			var h2 = $.sibling(node_40);
+			var text_9 = $.child(h2, true);
+
+			$.reset(h2);
+
+			var button_26 = $.sibling(h2, 2);
+
+			button_26.__click = () => app.settingsPage('runtime');
+			$.reset(div_15);
+
+			$.template_effect(() => {
+				$.set_attribute(div_15, 'aria-busy', app.host.state === 'STARTING');
+				$.set_text(text_9, app.host.state === 'STARTING' ? 'Loading your workspace' : 'Workspace unavailable');
+			});
+
+			$.append($$anchor, div_15);
+		};
+
+		var alternate_9 = ($$anchor) => {
+			var fragment_2 = $.comment();
+			var node_41 = $.first_child(fragment_2);
 
 			{
-				var consequent_8 = ($$anchor) => {
-					Providers($$anchor, {});
+				var consequent_11 = ($$anchor) => {
+					ProviderBrowser($$anchor, {});
 				};
 
-				var alternate_7 = ($$anchor) => {
-					var fragment_5 = $.comment();
-					var node_39 = $.first_child(fragment_5);
+				var alternate_8 = ($$anchor) => {
+					var fragment_4 = $.comment();
+					var node_42 = $.first_child(fragment_4);
 
 					{
-						var consequent_9 = ($$anchor) => {
-							Tools($$anchor, {});
+						var consequent_12 = ($$anchor) => {
+							Providers($$anchor, {});
 						};
 
-						var alternate_6 = ($$anchor) => {
-							var fragment_7 = $.comment();
-							var node_40 = $.first_child(fragment_7);
+						var alternate_7 = ($$anchor) => {
+							var fragment_6 = $.comment();
+							var node_43 = $.first_child(fragment_6);
 
 							{
-								var consequent_10 = ($$anchor) => {
-									Models($$anchor, {});
+								var consequent_13 = ($$anchor) => {
+									Tools($$anchor, {});
 								};
 
-								var alternate_5 = ($$anchor) => {
-									var fragment_9 = $.comment();
-									var node_41 = $.first_child(fragment_9);
+								var alternate_6 = ($$anchor) => {
+									var fragment_8 = $.comment();
+									var node_44 = $.first_child(fragment_8);
 
 									{
-										var consequent_11 = ($$anchor) => {
-											Sessions($$anchor, {});
+										var consequent_14 = ($$anchor) => {
+											Models($$anchor, {});
 										};
 
-										var alternate_4 = ($$anchor) => {
-											var fragment_11 = $.comment();
-											var node_42 = $.first_child(fragment_11);
+										var alternate_5 = ($$anchor) => {
+											var fragment_10 = $.comment();
+											var node_45 = $.first_child(fragment_10);
 
 											{
-												var consequent_12 = ($$anchor) => {
-													Harness($$anchor, {});
+												var consequent_15 = ($$anchor) => {
+													Sessions($$anchor, {});
 												};
 
-												var alternate_3 = ($$anchor) => {
-													var fragment_13 = $.comment();
-													var node_43 = $.first_child(fragment_13);
+												var alternate_4 = ($$anchor) => {
+													var fragment_12 = $.comment();
+													var node_46 = $.first_child(fragment_12);
 
 													{
-														var consequent_13 = ($$anchor) => {
-															Detector($$anchor, {});
+														var consequent_16 = ($$anchor) => {
+															Harness($$anchor, {});
 														};
 
-														var alternate_2 = ($$anchor) => {
-															var fragment_15 = $.comment();
-															var node_44 = $.first_child(fragment_15);
+														var alternate_3 = ($$anchor) => {
+															var fragment_14 = $.comment();
+															var node_47 = $.first_child(fragment_14);
 
 															{
-																var consequent_14 = ($$anchor) => {
-																	Settings($$anchor, {});
+																var consequent_17 = ($$anchor) => {
+																	Detector($$anchor, {});
 																};
 
-																var alternate_1 = ($$anchor) => {
-																	Home($$anchor, {});
+																var alternate_2 = ($$anchor) => {
+																	var fragment_16 = $.comment();
+																	var node_48 = $.first_child(fragment_16);
+
+																	{
+																		var consequent_18 = ($$anchor) => {
+																			Settings($$anchor, {});
+																		};
+
+																		var alternate_1 = ($$anchor) => {
+																			Home($$anchor, {});
+																		};
+
+																		$.if(
+																			node_48,
+																			($$render) => {
+																				if (app.route === 'settings') $$render(consequent_18); else $$render(alternate_1, false);
+																			},
+																			true
+																		);
+																	}
+
+																	$.append($$anchor, fragment_16);
 																};
 
 																$.if(
-																	node_44,
+																	node_47,
 																	($$render) => {
-																		if (app.route === 'settings') $$render(consequent_14); else $$render(alternate_1, false);
+																		if (app.route === 'detector') $$render(consequent_17); else $$render(alternate_2, false);
 																	},
 																	true
 																);
 															}
 
-															$.append($$anchor, fragment_15);
+															$.append($$anchor, fragment_14);
 														};
 
 														$.if(
-															node_43,
+															node_46,
 															($$render) => {
-																if (app.route === 'detector') $$render(consequent_13); else $$render(alternate_2, false);
+																if (app.route === 'harness') $$render(consequent_16); else $$render(alternate_3, false);
 															},
 															true
 														);
 													}
 
-													$.append($$anchor, fragment_13);
+													$.append($$anchor, fragment_12);
 												};
 
 												$.if(
-													node_42,
+													node_45,
 													($$render) => {
-														if (app.route === 'harness') $$render(consequent_12); else $$render(alternate_3, false);
+														if (app.route === 'sessions') $$render(consequent_15); else $$render(alternate_4, false);
 													},
 													true
 												);
 											}
 
-											$.append($$anchor, fragment_11);
+											$.append($$anchor, fragment_10);
 										};
 
 										$.if(
-											node_41,
+											node_44,
 											($$render) => {
-												if (app.route === 'sessions') $$render(consequent_11); else $$render(alternate_4, false);
+												if (app.route === 'models') $$render(consequent_14); else $$render(alternate_5, false);
 											},
 											true
 										);
 									}
 
-									$.append($$anchor, fragment_9);
+									$.append($$anchor, fragment_8);
 								};
 
 								$.if(
-									node_40,
+									node_43,
 									($$render) => {
-										if (app.route === 'models') $$render(consequent_10); else $$render(alternate_5, false);
+										if (app.route === 'tools') $$render(consequent_13); else $$render(alternate_6, false);
 									},
 									true
 								);
 							}
 
-							$.append($$anchor, fragment_7);
+							$.append($$anchor, fragment_6);
 						};
 
 						$.if(
-							node_39,
+							node_42,
 							($$render) => {
-								if (app.route === 'tools') $$render(consequent_9); else $$render(alternate_6, false);
+								if (app.route === 'providers') $$render(consequent_12); else $$render(alternate_7, false);
 							},
 							true
 						);
 					}
 
-					$.append($$anchor, fragment_5);
+					$.append($$anchor, fragment_4);
 				};
 
 				$.if(
-					node_38,
+					node_41,
 					($$render) => {
-						if (app.route === 'providers') $$render(consequent_8); else $$render(alternate_7, false);
+						if (app.route === 'browser') $$render(consequent_11); else $$render(alternate_8, false);
 					},
 					true
 				);
 			}
 
-			$.append($$anchor, fragment_3);
+			$.append($$anchor, fragment_2);
 		};
 
-		$.if(node_37, ($$render) => {
-			if (app.route === 'browser') $$render(consequent_7); else $$render(alternate_8, false);
+		$.if(node_39, ($$render) => {
+			if (!app.snapshot && !['browser', 'settings'].includes(app.route)) $$render(consequent_10); else $$render(alternate_9, false);
 		});
 	}
 
@@ -1166,386 +1379,536 @@ export default function App($$anchor, $$props) {
 	$.reset(div_10);
 
 	var footer = $.sibling(div_10, 2);
-	var span_10 = $.child(footer);
-	let classes_7;
-	var button_25 = $.sibling(span_10);
+	var span_11 = $.child(footer);
+	let classes_8;
+	var button_27 = $.sibling(span_11);
 
-	button_25.__click = () => app.navigate('harness');
+	button_27.__click = () => app.navigate('harness');
 
-	var text_6 = $.child(button_25, true);
+	var text_10 = $.child(button_27, true);
 
-	$.reset(button_25);
+	$.reset(button_27);
 
-	var span_11 = $.sibling(button_25, 2);
-	var text_7 = $.child(span_11);
+	var button_28 = $.sibling(button_27, 2);
 
-	$.reset(span_11);
+	button_28.__click = () => app.navigate('providers');
 
-	var button_26 = $.sibling(span_11, 2);
+	var text_11 = $.child(button_28);
 
-	button_26.__click = () => app.navigate('sessions');
+	$.reset(button_28);
 
-	var text_8 = $.child(button_26);
+	var button_29 = $.sibling(button_28, 2);
 
-	$.reset(button_26);
+	button_29.__click = () => app.navigate('sessions');
 
-	var span_12 = $.sibling(button_26, 2);
-	var text_9 = $.child(span_12, true);
+	var text_12 = $.child(button_29);
 
-	$.reset(span_12);
+	$.reset(button_29);
 
-	var node_45 = $.sibling(span_12, 2);
-
-	Icon(node_45, { name: 'shield', size: 11 });
-	$.next();
-	$.reset(footer);
-	$.reset(div);
-
-	var node_46 = $.sibling(div, 2);
+	var div_16 = $.sibling(button_29);
+	var node_49 = $.child(div_16);
 
 	{
-		var consequent_15 = ($$anchor) => {
-			ChromeMenu($$anchor, {});
+		var consequent_19 = ($$anchor) => {
+			var fragment_19 = root_31();
+			var node_50 = $.first_child(fragment_19);
+
+			Icon(node_50, { name: 'check', size: 12 });
+
+			var span_12 = $.sibling(node_50);
+			var text_13 = $.child(span_12, true);
+
+			$.reset(span_12);
+
+			var button_30 = $.sibling(span_12);
+
+			button_30.__click = () => app.notification = '';
+
+			var node_51 = $.child(button_30);
+
+			Icon(node_51, { name: 'close', size: 12 });
+			$.reset(button_30);
+			$.template_effect(() => $.set_text(text_13, app.notification));
+			$.append($$anchor, fragment_19);
 		};
 
-		var alternate_12 = ($$anchor) => {
-			var fragment_19 = $.comment();
-			var node_47 = $.first_child(fragment_19);
+		var alternate_10 = ($$anchor) => {
+			var fragment_20 = $.comment();
+			var node_52 = $.first_child(fragment_20);
 
 			{
-				var consequent_16 = ($$anchor) => {
-					Dialog($$anchor, {
-						title: 'Add a website',
-						children: ($$anchor, $$slotProps) => {
-							var form_2 = root_29();
-							var label_1 = $.sibling($.child(form_2));
-							var input_2 = $.sibling($.child(label_1));
+				var consequent_20 = ($$anchor) => {
+					var span_13 = root_33();
 
-							$.remove_input_defaults(input_2);
-							$.reset(label_1);
-
-							var label_2 = $.sibling(label_1);
-							var input_3 = $.sibling($.child(label_2), 2);
-
-							$.remove_input_defaults(input_3);
-							$.reset(label_2);
-
-							var div_14 = $.sibling(label_2);
-							var node_48 = $.child(div_14);
-
-							Icon(node_48, { name: 'shield', size: 15 });
-							$.next();
-							$.reset(div_14);
-
-							var div_15 = $.sibling(div_14);
-							var button_27 = $.child(div_15);
-
-							button_27.__click = () => app.popup = null;
-
-							var button_28 = $.sibling(button_27);
-							var node_49 = $.sibling($.child(button_28));
-
-							Icon(node_49, { name: 'arrow', size: 14 });
-							$.reset(button_28);
-							$.reset(div_15);
-							$.reset(form_2);
-							$.template_effect(($0) => button_28.disabled = $0, [() => !app.ready || !$.get(addUrl).trim() || app.pending > 0]);
-							$.event('submit', form_2, add);
-							$.bind_value(input_2, () => $.get(addUrl), ($$value) => $.set(addUrl, $$value));
-							$.bind_value(input_3, () => $.get(addLabel), ($$value) => $.set(addLabel, $$value));
-							$.append($$anchor, form_2);
-						},
-						$$slots: { default: true }
-					});
-				};
-
-				var alternate_11 = ($$anchor) => {
-					var fragment_21 = $.comment();
-					var node_50 = $.first_child(fragment_21);
-
-					{
-						var consequent_19 = ($$anchor) => {
-							Dialog($$anchor, {
-								title: 'Go anywhere',
-								children: ($$anchor, $$slotProps) => {
-									var fragment_23 = root_32();
-									var label_3 = $.first_child(fragment_23);
-									var node_51 = $.child(label_3);
-
-									Icon(node_51, { name: 'search', size: 18 });
-
-									var input_4 = $.sibling(node_51);
-
-									$.remove_input_defaults(input_4);
-									$.reset(label_3);
-
-									var div_16 = $.sibling(label_3);
-									var node_52 = $.child(div_16);
-
-									$.each(node_52, 19, () => $.get(commands), (command) => command.id, ($$anchor, command, index) => {
-										var button_29 = root_33();
-
-										button_29.__click = function (...$$args) {
-											$.get(command).action?.apply(this, $$args);
-										};
-
-										let classes_8;
-										var node_53 = $.child(button_29);
-
-										Icon(node_53, {
-											get name() {
-												return $.get(command).icon;
-											},
-											size: 17
-										});
-
-										var span_13 = $.sibling(node_53);
-										var strong = $.child(span_13);
-										var text_10 = $.child(strong, true);
-
-										$.reset(strong);
-
-										var small = $.sibling(strong);
-										var text_11 = $.child(small, true);
-
-										$.reset(small);
-										$.reset(span_13);
-
-										var node_54 = $.sibling(span_13);
-
-										{
-											var consequent_17 = ($$anchor) => {
-												var kbd = root_34();
-
-												$.append($$anchor, kbd);
-											};
-
-											$.if(node_54, ($$render) => {
-												if ($.get(index) === $.get(commandIndex)) $$render(consequent_17);
-											});
-										}
-
-										$.reset(button_29);
-
-										$.template_effect(() => {
-											classes_8 = $.set_class(button_29, 1, '', null, classes_8, { selected: $.get(index) === $.get(commandIndex) });
-											$.set_text(text_10, $.get(command).title);
-											$.set_text(text_11, $.get(command).description);
-										});
-
-										$.append($$anchor, button_29);
-									});
-
-									var node_55 = $.sibling(node_52);
-
-									{
-										var consequent_18 = ($$anchor) => {
-											var p_1 = root_35();
-
-											$.append($$anchor, p_1);
-										};
-
-										$.if(node_55, ($$render) => {
-											if (!$.get(commands).length) $$render(consequent_18);
-										});
-									}
-
-									$.reset(div_16);
-									$.next();
-									$.bind_value(input_4, () => $.get(query), ($$value) => $.set(query, $$value));
-									$.append($$anchor, fragment_23);
-								},
-								$$slots: { default: true }
-							});
-						};
-
-						var alternate_10 = ($$anchor) => {
-							var fragment_24 = $.comment();
-							var node_56 = $.first_child(fragment_24);
-
-							{
-								var consequent_20 = ($$anchor) => {
-									Dialog($$anchor, {
-										title: 'Keyboard shortcuts',
-										children: ($$anchor, $$slotProps) => {
-											var fragment_26 = root_38();
-											var node_57 = $.first_child(fragment_26);
-
-											$.each(
-												node_57,
-												16,
-												() => [
-													['Address bar', 'Ctrl L'],
-													['Commands', 'Ctrl K'],
-													['New website tab', 'Ctrl T'],
-													['Close current tab', 'Ctrl W'],
-													['Next / previous tab', 'Ctrl Tab / Ctrl Shift Tab'],
-													['Switch website tabs', 'Ctrl 1–9'],
-													['Find on website', 'Ctrl F'],
-													['Back / forward', 'Alt ← / →'],
-													['Zoom in / out', 'Ctrl + / −'],
-													['Reset zoom', 'Ctrl 0']
-												],
-												$.index,
-												($$anchor, $$item) => {
-													var $$array = $.derived(() => $.to_array($$item, 2));
-													let label = () => $.get($$array)[0];
-													let key = () => $.get($$array)[1];
-													var div_17 = root_39();
-													var span_14 = $.child(div_17);
-													var text_12 = $.child(span_14, true);
-
-													$.reset(span_14);
-
-													var kbd_1 = $.sibling(span_14);
-													var text_13 = $.child(kbd_1, true);
-
-													$.reset(kbd_1);
-													$.reset(div_17);
-
-													$.template_effect(() => {
-														$.set_text(text_12, label());
-														$.set_text(text_13, key());
-													});
-
-													$.append($$anchor, div_17);
-												}
-											);
-
-											$.next();
-											$.append($$anchor, fragment_26);
-										},
-										$$slots: { default: true }
-									});
-								};
-
-								var alternate_9 = ($$anchor) => {
-									var fragment_27 = $.comment();
-									var node_58 = $.first_child(fragment_27);
-
-									{
-										var consequent_21 = ($$anchor) => {
-											{
-												let $0 = $.derived(() => app.popup === 'rotate-key'
-													? 'Create a new local API key?'
-													: app.popup === 'close-provider'
-														? 'Stop generation and close this tab?'
-														: app.popup === 'remove-provider'
-															? `Remove ${$.get(target)?.label || 'this website'}?`
-															: `Clear ${$.get(target)?.label || 'this website'}’s profile?`);
-
-												Dialog($$anchor, {
-													get title() {
-														return $.get($0);
-													},
-
-													children: ($$anchor, $$slotProps) => {
-														var fragment_29 = root_42();
-														var p_2 = $.first_child(fragment_29);
-														var text_14 = $.child(p_2, true);
-
-														$.reset(p_2);
-
-														var div_18 = $.sibling(p_2);
-														var button_30 = $.child(div_18);
-
-														button_30.__click = () => app.popup = null;
-
-														var button_31 = $.sibling(button_30);
-
-														button_31.__click = confirm;
-
-														var text_15 = $.child(button_31, true);
-
-														$.reset(button_31);
-														$.reset(div_18);
-
-														$.template_effect(() => {
-															$.set_text(text_14, app.popup === 'rotate-key'
-																? 'The current key will stop working and connected requests will be cancelled. Copy the new key into your clients. This does not change your website accounts.'
-																: app.popup === 'close-provider'
-																	? 'This website is currently generating a response. Closing it cancels that request. Its login profile is preserved.'
-																	: app.popup === 'remove-provider'
-																		? 'This removes the website, connector, and local browser storage from your workspace. Related sessions will be ended. Your remote account is not deleted.'
-																		: 'This deletes this website’s local cookies and storage and closes its tab. You will need to sign in again. Other website profiles are not affected.');
-
-															button_31.disabled = app.pending > 0;
-
-															$.set_text(text_15, app.popup === 'rotate-key'
-																? 'Regenerate key'
-																: app.popup === 'remove-provider'
-																	? 'Remove website'
-																	: app.popup === 'close-provider' ? 'Stop and close' : 'Clear local profile');
-														});
-
-														$.append($$anchor, fragment_29);
-													},
-													$$slots: { default: true }
-												});
-											}
-										};
-
-										$.if(
-											node_58,
-											($$render) => {
-												if (app.popup) $$render(consequent_21);
-											},
-											true
-										);
-									}
-
-									$.append($$anchor, fragment_27);
-								};
-
-								$.if(
-									node_56,
-									($$render) => {
-										if (app.popup === 'shortcuts') $$render(consequent_20); else $$render(alternate_9, false);
-									},
-									true
-								);
-							}
-
-							$.append($$anchor, fragment_24);
-						};
-
-						$.if(
-							node_50,
-							($$render) => {
-								if (app.popup === 'commands') $$render(consequent_19); else $$render(alternate_10, false);
-							},
-							true
-						);
-					}
-
-					$.append($$anchor, fragment_21);
+					$.append($$anchor, span_13);
 				};
 
 				$.if(
-					node_47,
+					node_52,
 					($$render) => {
-						if (app.popup === 'add') $$render(consequent_16); else $$render(alternate_11, false);
+						if (app.pending) $$render(consequent_20);
 					},
 					true
 				);
 			}
 
-			$.append($$anchor, fragment_19);
+			$.append($$anchor, fragment_20);
 		};
 
-		$.if(node_46, ($$render) => {
-			if (app.popup === 'menu' || app.popup === 'tab-actions') $$render(consequent_15); else $$render(alternate_12, false);
+		$.if(node_49, ($$render) => {
+			if (app.notification) $$render(consequent_19); else $$render(alternate_10, false);
+		});
+	}
+
+	$.reset(div_16);
+
+	var span_14 = $.sibling(div_16, 2);
+	var node_53 = $.child(span_14);
+
+	Icon(node_53, { name: 'shield', size: 11 });
+	$.next();
+	$.reset(span_14);
+	$.reset(footer);
+	$.reset(div);
+
+	var node_54 = $.sibling(div, 2);
+
+	{
+		var consequent_22 = ($$anchor) => {
+			Dialog($$anchor, {
+				get title() {
+					return app.confirmation.title;
+				},
+
+				children: ($$anchor, $$slotProps) => {
+					var fragment_22 = root_35();
+					var p_1 = $.first_child(fragment_22);
+					var text_14 = $.child(p_1, true);
+
+					$.reset(p_1);
+
+					var node_55 = $.sibling(p_1);
+
+					{
+						var consequent_21 = ($$anchor) => {
+							var p_2 = root_36();
+							var text_15 = $.child(p_2, true);
+
+							$.reset(p_2);
+							$.template_effect(($0) => $.set_text(text_15, $0), [() => errorText(app.popupError)]);
+							$.append($$anchor, p_2);
+						};
+
+						$.if(node_55, ($$render) => {
+							if (app.popupError) $$render(consequent_21);
+						});
+					}
+
+					var div_17 = $.sibling(node_55);
+					var button_31 = $.child(div_17);
+
+					button_31.__click = () => app.popup = null;
+
+					var button_32 = $.sibling(button_31);
+					let classes_9;
+
+					button_32.__click = () => app.acceptConfirmation();
+
+					var text_16 = $.child(button_32, true);
+
+					$.reset(button_32);
+					$.reset(div_17);
+
+					$.template_effect(() => {
+						$.set_text(text_14, app.confirmation.description);
+						button_31.disabled = app.confirming;
+						classes_9 = $.set_class(button_32, 1, 'primary', null, classes_9, { danger: app.confirmation.danger });
+						button_32.disabled = app.confirming;
+						$.set_text(text_16, app.confirming ? 'Working…' : app.confirmation.label);
+					});
+
+					$.append($$anchor, fragment_22);
+				},
+				$$slots: { default: true }
+			});
+		};
+
+		var alternate_15 = ($$anchor) => {
+			var fragment_23 = $.comment();
+			var node_56 = $.first_child(fragment_23);
+
+			{
+				var consequent_23 = ($$anchor) => {
+					ChromeMenu($$anchor, {});
+				};
+
+				var alternate_14 = ($$anchor) => {
+					var fragment_25 = $.comment();
+					var node_57 = $.first_child(fragment_25);
+
+					{
+						var consequent_24 = ($$anchor) => {
+							Dialog($$anchor, {
+								title: 'Add a website',
+								children: ($$anchor, $$slotProps) => {
+									var form_2 = root_41();
+									var label_1 = $.sibling($.child(form_2));
+									var input_2 = $.sibling($.child(label_1));
+
+									$.remove_input_defaults(input_2);
+									$.reset(label_1);
+
+									var label_2 = $.sibling(label_1);
+									var input_3 = $.sibling($.child(label_2), 2);
+
+									$.remove_input_defaults(input_3);
+									$.reset(label_2);
+
+									var div_18 = $.sibling(label_2);
+									var node_58 = $.child(div_18);
+
+									Icon(node_58, { name: 'shield', size: 15 });
+									$.next();
+									$.reset(div_18);
+
+									var div_19 = $.sibling(div_18);
+									var button_33 = $.child(div_19);
+
+									button_33.__click = () => app.popup = null;
+
+									var button_34 = $.sibling(button_33);
+									var node_59 = $.sibling($.child(button_34));
+
+									Icon(node_59, { name: 'arrow', size: 14 });
+									$.reset(button_34);
+									$.reset(div_19);
+									$.reset(form_2);
+									$.template_effect(($0) => button_34.disabled = $0, [() => !app.ready || !$.get(addUrl).trim() || app.pending > 0]);
+									$.event('submit', form_2, add);
+									$.bind_value(input_2, () => $.get(addUrl), ($$value) => $.set(addUrl, $$value));
+									$.bind_value(input_3, () => $.get(addLabel), ($$value) => $.set(addLabel, $$value));
+									$.append($$anchor, form_2);
+								},
+								$$slots: { default: true }
+							});
+						};
+
+						var alternate_13 = ($$anchor) => {
+							var fragment_27 = $.comment();
+							var node_60 = $.first_child(fragment_27);
+
+							{
+								var consequent_27 = ($$anchor) => {
+									Dialog($$anchor, {
+										title: 'Go anywhere',
+										children: ($$anchor, $$slotProps) => {
+											var fragment_29 = root_44();
+											var label_3 = $.first_child(fragment_29);
+											var node_61 = $.child(label_3);
+
+											Icon(node_61, { name: 'search', size: 18 });
+
+											var input_4 = $.sibling(node_61);
+
+											$.remove_input_defaults(input_4);
+											$.reset(label_3);
+
+											var div_20 = $.sibling(label_3);
+											var node_62 = $.child(div_20);
+
+											$.each(node_62, 19, () => $.get(commands), (command) => command.id, ($$anchor, command, index) => {
+												var button_35 = root_45();
+
+												button_35.__click = function (...$$args) {
+													$.get(command).action?.apply(this, $$args);
+												};
+
+												let classes_10;
+												var node_63 = $.child(button_35);
+
+												Icon(node_63, {
+													get name() {
+														return $.get(command).icon;
+													},
+													size: 17
+												});
+
+												var span_15 = $.sibling(node_63);
+												var strong = $.child(span_15);
+												var text_17 = $.child(strong, true);
+
+												$.reset(strong);
+
+												var small = $.sibling(strong);
+												var text_18 = $.child(small, true);
+
+												$.reset(small);
+												$.reset(span_15);
+
+												var node_64 = $.sibling(span_15);
+
+												{
+													var consequent_25 = ($$anchor) => {
+														var kbd = root_46();
+
+														$.append($$anchor, kbd);
+													};
+
+													$.if(node_64, ($$render) => {
+														if ($.get(index) === $.get(commandIndex)) $$render(consequent_25);
+													});
+												}
+
+												$.reset(button_35);
+
+												$.template_effect(() => {
+													classes_10 = $.set_class(button_35, 1, '', null, classes_10, { selected: $.get(index) === $.get(commandIndex) });
+													$.set_text(text_17, $.get(command).title);
+													$.set_text(text_18, $.get(command).description);
+												});
+
+												$.append($$anchor, button_35);
+											});
+
+											var node_65 = $.sibling(node_62);
+
+											{
+												var consequent_26 = ($$anchor) => {
+													var p_3 = root_47();
+
+													$.append($$anchor, p_3);
+												};
+
+												$.if(node_65, ($$render) => {
+													if (!$.get(commands).length) $$render(consequent_26);
+												});
+											}
+
+											$.reset(div_20);
+											$.next();
+											$.bind_value(input_4, () => $.get(query), ($$value) => $.set(query, $$value));
+											$.append($$anchor, fragment_29);
+										},
+										$$slots: { default: true }
+									});
+								};
+
+								var alternate_12 = ($$anchor) => {
+									var fragment_30 = $.comment();
+									var node_66 = $.first_child(fragment_30);
+
+									{
+										var consequent_28 = ($$anchor) => {
+											Dialog($$anchor, {
+												title: 'Keyboard shortcuts',
+												children: ($$anchor, $$slotProps) => {
+													var fragment_32 = root_50();
+													var node_67 = $.first_child(fragment_32);
+
+													$.each(
+														node_67,
+														16,
+														() => [
+															['Address bar', 'Ctrl L'],
+															['Commands', 'Ctrl K'],
+															['New website tab', 'Ctrl T'],
+															['Close current tab', 'Ctrl W'],
+															['Next / previous tab', 'Ctrl Tab / Ctrl Shift Tab'],
+															['Switch website tabs', 'Ctrl 1–9'],
+															['Find on website', 'Ctrl F'],
+															['Back / forward', 'Alt ← / →'],
+															['Zoom in / out', 'Ctrl + / −'],
+															['Reset zoom', 'Ctrl 0']
+														],
+														$.index,
+														($$anchor, $$item) => {
+															var $$array = $.derived(() => $.to_array($$item, 2));
+															let label = () => $.get($$array)[0];
+															let key = () => $.get($$array)[1];
+															var div_21 = root_51();
+															var span_16 = $.child(div_21);
+															var text_19 = $.child(span_16, true);
+
+															$.reset(span_16);
+
+															var kbd_1 = $.sibling(span_16);
+															var text_20 = $.child(kbd_1, true);
+
+															$.reset(kbd_1);
+															$.reset(div_21);
+
+															$.template_effect(() => {
+																$.set_text(text_19, label());
+																$.set_text(text_20, key());
+															});
+
+															$.append($$anchor, div_21);
+														}
+													);
+
+													$.next();
+													$.append($$anchor, fragment_32);
+												},
+												$$slots: { default: true }
+											});
+										};
+
+										var alternate_11 = ($$anchor) => {
+											var fragment_33 = $.comment();
+											var node_68 = $.first_child(fragment_33);
+
+											{
+												var consequent_30 = ($$anchor) => {
+													{
+														let $0 = $.derived(() => app.popup === 'rotate-key'
+															? 'Create a new local API key?'
+															: app.popup === 'close-provider'
+																? 'Stop generation and close this tab?'
+																: app.popup === 'remove-provider'
+																	? `Remove ${$.get(target)?.label || 'this website'}?`
+																	: `Clear ${$.get(target)?.label || 'this website'}’s profile?`);
+
+														Dialog($$anchor, {
+															get title() {
+																return $.get($0);
+															},
+
+															children: ($$anchor, $$slotProps) => {
+																var fragment_35 = root_54();
+																var node_69 = $.first_child(fragment_35);
+
+																{
+																	var consequent_29 = ($$anchor) => {
+																		var p_4 = root_55();
+																		var text_21 = $.child(p_4, true);
+
+																		$.reset(p_4);
+																		$.template_effect(($0) => $.set_text(text_21, $0), [() => errorText(app.popupError)]);
+																		$.append($$anchor, p_4);
+																	};
+
+																	$.if(node_69, ($$render) => {
+																		if (app.popupError) $$render(consequent_29);
+																	});
+																}
+
+																var p_5 = $.sibling(node_69);
+																var text_22 = $.child(p_5, true);
+
+																$.reset(p_5);
+
+																var div_22 = $.sibling(p_5);
+																var button_36 = $.child(div_22);
+
+																button_36.__click = () => app.popup = null;
+
+																var button_37 = $.sibling(button_36);
+
+																button_37.__click = confirm;
+
+																var text_23 = $.child(button_37, true);
+
+																$.reset(button_37);
+																$.reset(div_22);
+
+																$.template_effect(() => {
+																	$.set_text(text_22, app.popup === 'rotate-key'
+																		? 'The current key will stop working and connected requests will be cancelled. Copy the new key into your clients. This does not change your website accounts.'
+																		: app.popup === 'close-provider'
+																			? 'This website is currently generating a response. Closing it cancels that request. Its login profile is preserved.'
+																			: app.popup === 'remove-provider'
+																				? 'This removes the website, connector, and local browser storage from your workspace. Related sessions will be ended. Your remote account is not deleted.'
+																				: 'This deletes this website’s local cookies and storage and closes its tab. You will need to sign in again. Other website profiles are not affected.');
+
+																	button_37.disabled = app.pending > 0;
+
+																	$.set_text(text_23, app.popup === 'rotate-key'
+																		? 'Regenerate key'
+																		: app.popup === 'remove-provider'
+																			? 'Remove website'
+																			: app.popup === 'close-provider' ? 'Stop and close' : 'Clear local profile');
+																});
+
+																$.append($$anchor, fragment_35);
+															},
+															$$slots: { default: true }
+														});
+													}
+												};
+
+												$.if(
+													node_68,
+													($$render) => {
+														if (app.popup) $$render(consequent_30);
+													},
+													true
+												);
+											}
+
+											$.append($$anchor, fragment_33);
+										};
+
+										$.if(
+											node_66,
+											($$render) => {
+												if (app.popup === 'shortcuts') $$render(consequent_28); else $$render(alternate_11, false);
+											},
+											true
+										);
+									}
+
+									$.append($$anchor, fragment_30);
+								};
+
+								$.if(
+									node_60,
+									($$render) => {
+										if (app.popup === 'commands') $$render(consequent_27); else $$render(alternate_12, false);
+									},
+									true
+								);
+							}
+
+							$.append($$anchor, fragment_27);
+						};
+
+						$.if(
+							node_57,
+							($$render) => {
+								if (app.popup === 'add') $$render(consequent_24); else $$render(alternate_13, false);
+							},
+							true
+						);
+					}
+
+					$.append($$anchor, fragment_25);
+				};
+
+				$.if(
+					node_56,
+					($$render) => {
+						if (app.popup === 'menu' || app.popup === 'tab-actions') $$render(consequent_23); else $$render(alternate_14, false);
+					},
+					true
+				);
+			}
+
+			$.append($$anchor, fragment_23);
+		};
+
+		$.if(node_54, ($$render) => {
+			if (app.popup === 'confirm' && app.confirmation) $$render(consequent_22); else $$render(alternate_15, false);
 		});
 	}
 
 	$.template_effect(
-		($0) => {
+		($0, $1) => {
 			classes = $.set_class(div, 1, 'app-shell', null, classes, { compact: app.preferences.compact });
 			$.set_style(div, `--inspector:${app.inspectorWidth}px`);
 			$.set_attribute(button, 'aria-expanded', app.popup === 'menu');
 			$.set_attribute(button_8, 'aria-label', $.get(maximized) ? 'Restore window' : 'Maximize window');
-			button_10.disabled = !app.provider || app.route !== 'browser';
-			button_11.disabled = !app.provider || app.route !== 'browser';
+			button_10.disabled = app.route === 'browser' ? !app.provider : !app.canGoBack;
+			button_11.disabled = !app.canGoForward && (app.route !== 'browser' || !app.provider);
 			button_12.disabled = !app.provider || app.route !== 'browser';
 			$.set_attribute(button_14, 'aria-current', app.route === 'providers' ? 'page' : undefined);
 			classes_2 = $.set_class(button_14, 1, '', null, classes_2, { active: app.route === 'providers' });
@@ -1558,23 +1921,20 @@ export default function App($$anchor, $$props) {
 				? 'Local gateway ready · Connect a coding client'
 				: 'Connect a coding client · Gateway offline');
 
-			classes_5 = $.set_class(span_6, 1, 'dot', null, classes_5, { online: $.get(online) });
+			classes_5 = $.set_class(span_7, 1, 'dot', null, classes_5, { online: $.get(online) });
 			$.set_attribute(button_17, 'aria-pressed', app.route === 'browser' && app.inspectorVisible);
-			classes_7 = $.set_class(span_10, 1, 'dot', null, classes_7, { online: $.get(online) });
+			classes_8 = $.set_class(span_11, 1, 'dot', null, classes_8, { online: $.get(online) });
 
-			$.set_text(text_6, app.snapshot
-				? `127.0.0.1:${app.snapshot.api.port}`
-				: 'Gateway offline');
+			$.set_text(text_10, !app.ready
+				? 'Gateway offline'
+				: $.get(online) ? 'Gateway ready' : 'Gateway stopped');
 
-			$.set_text(text_7, `${app.models.length ?? ''} models`);
-			$.set_text(text_8, `${$0 ?? ''} active sessions`);
-
-			$.set_text(text_9, app.pending
-				? 'Applying changes…'
-				: app.provider?.active ? 'Forwarding stream' : 'Symbolic discovery');
+			$.set_text(text_11, `${(app.ready ? app.exposedModels.length : '—') ?? ''} ready ${app.ready && app.exposedModels.length === 1 ? 'model' : 'models'}`);
+			$.set_text(text_12, `${$0 ?? ''} active ${$1 ?? ''}`);
 		},
 		[
-			() => app.sessions.filter((s) => s.status === 'ACTIVE').length
+			() => app.sessions.filter((s) => s.status === 'ACTIVE').length,
+			() => app.sessions.filter((s) => s.status === 'ACTIVE').length === 1 ? 'session' : 'sessions'
 		]
 	);
 

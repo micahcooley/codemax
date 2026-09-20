@@ -82,7 +82,7 @@ export default function BrowserPane($$anchor, $$props) {
 
 			var button = $.sibling(node_1, 3);
 
-			button.__click = () => app.navigate('settings');
+			button.__click = () => app.settingsPage('runtime');
 			$.append($$anchor, fragment);
 		};
 

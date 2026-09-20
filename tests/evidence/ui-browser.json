@@ -8,72 +8,72 @@
     {
       "name": "compiled Svelte startup, real runes and native-transport handshake",
       "status": "PASS",
-      "seconds": 0.016
+      "seconds": 0.022
     },
     {
       "name": "browser-first layout with separately positioned provider surface",
       "status": "PASS",
-      "seconds": 0.524
+      "seconds": 0.449
     },
     {
       "name": "Ctrl-L address focus and keyboard command palette with provider hiding",
       "status": "PASS",
-      "seconds": 0.194
+      "seconds": 0.199
     },
     {
       "name": "endpoint/key controls and all five client configuration formats",
       "status": "PASS",
-      "seconds": 0.523
+      "seconds": 0.738
     },
     {
       "name": "website-first client setup, explicit one-file consent, deny/revoke and state rendering",
       "status": "PASS",
-      "seconds": 1.232
+      "seconds": 1.521
     },
     {
       "name": "real CSS spinner, manual generation, idle ring, limit state and reduced motion",
       "status": "PASS",
-      "seconds": 2.454
+      "seconds": 2.524
     },
     {
       "name": "model filtering, exact identifier copy and backend-driven default selection",
       "status": "PASS",
-      "seconds": 0.596
+      "seconds": 0.567
     },
     {
       "name": "theme, density, API port, listener control and developer setting round trips",
       "status": "PASS",
-      "seconds": 1.079
+      "seconds": 1.264
     },
     {
       "name": "session rename, retained title, search and context provenance",
       "status": "PASS",
-      "seconds": 0.506
+      "seconds": 0.454
     },
     {
       "name": "evidence inspection, connector import/export and page-picker action wiring",
       "status": "PASS",
-      "seconds": 0.602
+      "seconds": 0.537
     },
     {
       "name": "keyboard-resizable panes and collapse/restore bounds",
       "status": "PASS",
-      "seconds": 0.219
+      "seconds": 0.218
     },
     {
       "name": "new website workflow, tab creation and close operation",
       "status": "PASS",
-      "seconds": 0.175
+      "seconds": 0.14
     },
     {
       "name": "profile context menu and destructive-action confirmation with surface hiding",
       "status": "PASS",
-      "seconds": 0.574
+      "seconds": 0.575
     },
     {
       "name": "reduced motion and compact-window overflow checks",
       "status": "PASS",
-      "seconds": 0.187
+      "seconds": 0.182
     },
     {
       "name": "no browser JavaScript runtime errors",
@@ -83,19 +83,25 @@
   ],
   "runtime_errors": [],
   "screenshots": [
-    "14-single-tab-providers.png",
-    "03-client-setup.png",
-    "11-mcp-permission.png",
     "09-provider-settings.png",
+    "03-client-setup.png",
     "12-single-tab-browser.png",
-    "04-settings.png",
-    "10-harness-setup.png",
-    "07-active-idle-tabs.png",
-    "05-file-permission.png",
-    "02-model-registry.png",
-    "06-tool-in-progress.png",
+    "21-ux-connect.png",
     "13-single-tab-working.png",
-    "01-browser-workspace.png"
+    "02-model-registry.png",
+    "04-settings.png",
+    "07-active-idle-tabs.png",
+    "23-ux-browser-approval.png",
+    "24-ux-providers-light.png",
+    "20-ux-providers.png",
+    "11-mcp-permission.png",
+    "14-single-tab-providers.png",
+    "22-ux-permission.png",
+    "05-file-permission.png",
+    "01-browser-workspace.png",
+    "10-harness-setup.png",
+    "06-tool-in-progress.png",
+    "25-ux-compact.png"
   ],
   "fixture_code_shipped_in_production_dist": false
 }

@@ -1,6 +1,6 @@
 import '../../../runtime/svelte_internal_disclose-version.js';
 import * as $ from '../../../runtime/svelte_internal_client.js';
-import { onMount } from '../../../runtime/svelte_svelte.js';
+import { onMount, tick } from '../../../runtime/svelte_svelte.js';
 import { app } from '../state/app.svelte.js';
 import Icon from './Icon.svelte.js';
 
@@ -16,7 +16,16 @@ export default function Dialog($$anchor, $$props) {
 
 		dialog.showModal();
 
-		return () => previous?.focus();
+		void tick().then(() => {
+			// Cancel is the safe first target in confirmations; forms focus the first field.
+			const target = dialog.querySelector('[data-initial-focus],input:not(:disabled),textarea:not(:disabled)');
+
+			target?.focus();
+		});
+
+		return () => {
+			if (previous?.isConnected) previous.focus(); else document.querySelector('.title-tabs [aria-selected="true"]')?.focus();
+		};
 	});
 
 	var dialog_1 = root();
@@ -45,10 +54,15 @@ export default function Dialog($$anchor, $$props) {
 	$.template_effect(() => {
 		$.set_attribute(dialog_1, 'aria-label', $$props.title);
 		$.set_text(text, $$props.title);
+		button.disabled = app.confirming;
 	});
 
-	$.event('cancel', dialog_1, () => app.popup = null);
-	$.event('close', dialog_1, () => app.popup = null);
+	$.event('cancel', dialog_1, (event) => {
+		event.preventDefault();
+
+		if (!app.confirming) app.popup = null;
+	});
+
 	$.append($$anchor, dialog_1);
 	$.pop();
 }

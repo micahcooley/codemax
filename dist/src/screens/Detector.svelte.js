@@ -311,7 +311,7 @@ export default function Detector($$anchor, $$props) {
 			var div_6 = $.child(section_2);
 			var button_6 = $.sibling($.child(div_6));
 
-			button_6.__click = () => app.perform('connector.reset', { provider_id: $.get(p).id, confirmed: true });
+			button_6.__click = () => app.ask('Reset recorded controls?', `This removes manually recorded controls for ${$.get(p).label}. Automatic discovery will run again without sending a prompt.`, 'Reset controls', () => app.perform('connector.reset', { provider_id: $.get(p).id, confirmed: true }));
 			$.reset(div_6);
 			$.next();
 			$.reset(section_2);

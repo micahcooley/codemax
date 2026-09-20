@@ -363,7 +363,7 @@ export default function Inspector($$anchor, $$props) {
 					var button_12 = $.sibling(button_11);
 
 					button_12.__click = () => {
-						app.findVisible = true;
+						app.showFind();
 					};
 
 					var node_15 = $.child(button_12);
@@ -374,7 +374,7 @@ export default function Inspector($$anchor, $$props) {
 
 					var button_13 = $.sibling(button_12);
 
-					button_13.__click = () => app.clipboard($.get(p).current_url || $.get(p).url);
+					button_13.__click = () => app.clipboard(app.pageUrl);
 
 					var node_16 = $.child(button_13);
 

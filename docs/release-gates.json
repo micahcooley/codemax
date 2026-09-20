@@ -115,6 +115,12 @@
       "description": "Single tablist, menu, utility-close semantics and bounds using compiled UI/native doubles",
       "status": "VERIFIED",
       "evidence": "tests/evidence/single-tab-ui.json"
+    },
+    {
+      "id": "whole_interface_ux",
+      "description": "38 interaction, error-recovery, consent and responsive-layout scenarios using compiled Svelte with native-host doubles",
+      "status": "VERIFIED",
+      "evidence": "tests/evidence/ux-audit.json"
     }
   ]
 }

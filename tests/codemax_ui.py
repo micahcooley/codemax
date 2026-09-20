@@ -45,7 +45,7 @@ with sync_playwright() as pw:
    v=json.loads(page.evaluate('window.__lastExport.content'));assert 'p1/mock-coder' not in v['provider']['bridge']['models']
    route('Providers');page.get_by_role('checkbox',name='Expose provider to harness',exact=True).uncheck()
    route('Connect a client');expect(page.get_by_role('button',name='Save config')).to_be_disabled()
-   assert page.get_by_text('No ready models are exposed yet.',exact=False).count()
+   assert page.get_by_text('There are no ready, enabled models yet.',exact=False).count()
    route('Providers');page.get_by_role('checkbox',name='Expose provider to harness',exact=True).check();page.get_by_role('checkbox',name='Expose Mock Coder',exact=True).check()
   record('Per-model and per-provider exposure changes actual generated harness config',exposure)
   def policy():
@@ -58,6 +58,7 @@ with sync_playwright() as pw:
    page.get_by_role('checkbox',name='Expose provider to harness',exact=True).check()
   record('Pause, exclusion and resume controls send scoped policies without onboarding wizard',policy)
   def metadata():
+   page.get_by_text('Detected capabilities · model, reasoning, and context',exact=True).click()
    page.evaluate("Object.assign(window.__uiFixture.snapshot.providers[0].models[1].context,{nominal:65536,source:'PROVIDER_METADATA'});window.__uiFixture.snapshot.providers[0].models[1].tokenizer.name='fixture-tokenizer';window.__uiFixture.push()")
    page.get_by_text('65,536 · website reported',exact=True).wait_for()
    assert page.get_by_text('Unknown',exact=True).count()>=2
@@ -65,6 +66,7 @@ with sync_playwright() as pw:
   record('Provider-reported context separated from unknown limits and tokenizer execution',metadata)
   def harness():
    route('Connect a client');page.locator('.segmented button').filter(has_text='Claude Code').click()
+   page.get_by_text('Manual connection details · endpoint and local access token',exact=True).click()
    page.get_by_role('button',name='Copy API endpoint').click();page.wait_for_function("window.__clipboard==='http://127.0.0.1:7331'")
    route('Providers');route('Connect a client');expect(page.locator('.segmented button.active')).to_have_text('Claude Code')
    page.locator('.segmented button').filter(has_text='OpenCode').click()

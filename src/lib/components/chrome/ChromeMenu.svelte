@@ -42,7 +42,7 @@
   <div role="menu" aria-label={provider?`${provider.label} actions`:'Codemax pages and actions'}>
     {#if provider}
       <button role="menuitem" onclick={()=>app.openProvider(provider.id)}><Icon name="globe" size={15}/><span>Open website</span></button>
-      <button role="menuitem" onclick={togglePinned}><Icon name="pin" size={15}/><span>{provider.pinned?'Unpin website':'Keep website awake'}</span></button>
+      <button role="menuitem" onclick={togglePinned}><Icon name="pin" size={15}/><span>{provider.pinned?'Allow website to sleep':'Keep website awake'}</span></button>
       <button role="menuitem" disabled={position<=0} onclick={()=>move(-1)}><Icon name="back" size={15}/><span>Move tab left</span></button>
       <button role="menuitem" disabled={position<0||position>=app.tabs.length-1} onclick={()=>move(1)}><Icon name="arrow" size={15}/><span>Move tab right</span></button>
       <button role="menuitem" onclick={()=>{app.selectedProvider=provider.id;app.navigate('detector');}}><Icon name="scan" size={15}/><span>Inspect connector</span></button>

@@ -50,3 +50,40 @@ execution authority. Working/idle/attention rings remain in the top strip.
 Regression evidence: `tests/evidence/single-tab-ui.json` and the two existing
 compiled-UI suites. These execute compiled Svelte with native-host doubles.
 They do not qualify native Tauri/WebKit behavior or live provider execution.
+
+
+## Whole-interface UX audit
+
+The single top tab strip remains. This revision audits Browser, Providers, Models,
+Sessions, Connect, Tools & MCP, Detector, Activity and Settings, including the five
+Settings sections. The observed problems and test mapping are in docs/UX_AUDIT.md.
+
+- Internal navigation is independent of native website history. Opening a saved
+  session calls session.resume for its recorded conversation; ordinary provider
+  opening is not a substitute. Existing-origin address navigation retains path,
+  query and fragment.
+- Frontend drafts and filters are ephemeral presentation state. Backend snapshots
+  remain authoritative. Save/Reset are explicit where multiple fields are edited.
+  A failed action is not reported as success and unrelated successes do not hide
+  its error. Duplicate identical in-flight requests are coalesced.
+- New destructive confirmations protect client-session end, connector reset,
+  diagnostic clear, MCP server removal, gateway stop, active-work exposure changes,
+  active-tab close and the custom application close control. Safe Cancel receives
+  focus; Escape cannot half-dismiss a modal during an in-flight operation.
+- Tool-call arguments and result destination are visible before approval. The
+  optional broader task grant resets on a changed call. A toolbar count and compact
+  task strip keep waiting approval visible on other pages without granting it.
+- Client setup provides Start, Check, Stop and configuration on one page. Detailed
+  local endpoint/token/protocol controls are collapsed. The health-check label says
+  exactly what was verified and unavailable explicit model choices are not silently
+  replaced. Revealed secrets are cleared on departure and after 30 seconds.
+- Readiness derives from backend availability/exposure state, not discovery alone.
+  Offline snapshots are marked stale, not replaced with onboarding emptiness.
+- Small notices occupy a reserved footer and expire. Error recovery actions open
+  the relevant setting or permission control. Metadata contrast, focus targets,
+  long-name wrapping and bounded code/table scrolling are improved.
+
+Compiled-layout checks cover 1500 × 980, the native minimum 1000 × 680, and an
+extra 800 × 640 stress viewport. The latter does not change the configured native
+minimum. These are Chromium/component checks, not native screen-reader, OS-window
+manager, native webview or live-provider qualification.

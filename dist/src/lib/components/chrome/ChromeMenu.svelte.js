@@ -217,7 +217,7 @@ export default function ChromeMenu($$anchor, $$props) {
 			$.reset(button_7);
 
 			$.template_effect(() => {
-				$.set_text(text_2, $.get(provider).pinned ? 'Unpin website' : 'Keep website awake');
+				$.set_text(text_2, $.get(provider).pinned ? 'Allow website to sleep' : 'Keep website awake');
 				button_2.disabled = $.get(position) <= 0;
 				button_3.disabled = $.get(position) < 0 || $.get(position) >= app.tabs.length - 1;
 			});

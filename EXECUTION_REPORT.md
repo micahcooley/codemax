@@ -1,70 +1,113 @@
-# Codemax — single-tab browser UX correction
+# Codemax — whole-interface UX audit and correction
 
 ## Completed
 
-The duplicated vertical website list and permanent workspace navigation rail
-were removed from source and the compiled frontend, not merely collapsed.
-Browser tabs have one home: the top tab strip. The website occupies the full
-content width by default. Providers, Tools and Connect are compact toolbar
-utilities; other management views are in the Codemax menu and command palette.
-The connection inspector is still available, closed by default and resizable.
+The tab-only fix was followed by a source-and-interaction audit across all nine
+surfaces: Browser, Providers, Models, Sessions, Connect a client, Tools & MCP,
+Detector, Activity, and Settings. The single top browser tab strip is retained.
 
-Right-click / Shift-F10 on a top tab retains pin/keep-awake, reorder, close,
-connector inspection, profile clearing and removal. Destructive confirmations
-are unchanged. Keyboard tab navigation, single selected-tab state and active-tab
-scrolling are implemented. Internal pages display `codemax://...`; Ctrl-W closes
-the internal page rather than the underlying website. Closing the selected site
-selects its neighboring tab. Closed profiles remain in the provider registry.
+| Audit finding | Implemented correction |
+|---|---|
+| Client configuration had no inline gateway start/check path. | Choose a client, Start/Check the local connection, copy its configuration on the same page. Technical protocol/endpoint/token controls remain collapsed. |
+| An unavailable chosen model could fall through to another model. | Preserve the explicit selection and block config until the user chooses an available model. |
+| A failed health response could appear successful. | Check the returned health value; label success as local gateway reachability, not website/client interoperability. |
+| Provider overrides and tool/server drafts disappeared between pages. | Keep drafts in process memory, with explicit Save/Reset and retryable failed forms. Never save task text in browser localStorage. |
+| Discovered models were counted as ready regardless of exposure. | Derive ready state from provider admission, exposure, readiness and model enablement/availability. |
+| Ending sessions, clearing diagnostics, resetting mappings and removing servers were too immediate. | Add scoped confirmations with accurate consequences; Cancel is the initial focus. |
+| Website close, gateway stop or an exposure change could interrupt current work without review. | Confirm relevant interruptions. The custom application-close control also checks active work. |
+| Tool approvals could be missed when browsing another page. | Keep a tool-count badge and compact task strip visible outside Tools. No execution occurs just because an alert appears. |
+| A broader grant checkbox could carry over to a changed call. | Reset it when the call ID, tool or arguments change; the default remains Allow once. |
+| Back/Forward, Find and palette focus behaved inconsistently on internal pages. | Separate management history, focus search fields, keep keyboard selections visible, and restore focus on dismissal. |
+| Ctrl-W/T/L could operate behind dialogs; Escape could close a busy modal without settling state. | Block background browser shortcuts and prevent half-dismissal while confirmation is executing. |
+| Opening an existing origin discarded the requested route. | Navigate the retained profile to the actual path/query/fragment. |
+| Session Open went to the provider rather than the saved conversation. | Call session.resume and then focus its associated profile. |
+| Late tab-open responses could override newer navigation. | Ignore stale activation completions. |
+| Copy confirmations changed the website rectangle. | Place transient success notices in a fixed-height footer and expire them. |
+| Backend loss looked like a new empty workspace. | Retain the last snapshot, mark it stale, block mutations, and link to runtime recovery. |
+| Failed operations lost errors after unrelated successful operations. | Keep useful errors; preserve human message/path casing and show modal errors inside the modal. |
+| Repeated clicks dispatched duplicate identical operations. | Coalesce identical in-flight requests and expose busy/disabled states. |
+| Filters, settings sections and zoom readouts reset unexpectedly. | Retain view filters/section, show per-profile zoom, and let filtered-empty lists recover in place. |
+| Ready/sleep/pin/local-only labels were misleading. | Use availability-aware counts, keep-awake wording, and “Local gateway · websites online.” |
+| Dense metadata, long names and code could be hard to read or widen the layout. | Increase faint-text contrast/secondary type size, wrap long strings, bound code/table scrolling, preserve reduced motion and remove duplicate dividers. |
 
-Old layout preferences migrate without bringing back duplicate rails. Menu
-focus/keyboard navigation and viewport-bounded placement are implemented.
-Trusted menus hide the remote native surface until dismissal. Loading/generation
-rings still spin only for work; idle and attention indicators remain stationary.
-The offline build now removes stale compiled source modules before compilation.
+## Verified
 
-## Verified in this revision
-
-| Check | Result | Evidence and scope |
+| Executed check | Result | Evidence |
 |---|---:|---|
-| Svelte component/rune compilation | 27 modules; zero component warnings | frontend-build.json; real local compiler/runtime |
-| New single-tab UI suite | 14 passed | single-tab-ui.json; compiled components + explicit native/website doubles |
-| Existing application UI suite | 15 passed | ui-browser.json; navigation selectors migrated, original feature checks retained |
-| Existing discovery/MCP UI suite | 12 passed | codemax-ui.json; exposure, permissions and continuation presentation |
-| Node helper/HTTP/static suite | 25 passed | node-current.log; not a native execution test |
-| Browser-agent suite | 26 passed | browser-dom-tests.json; same production script, controlled fixtures |
+| Actual Svelte component/rune compilation | 27 application modules, zero component warnings | tests/evidence/frontend-build.json |
+| New UX audit suite | 38 passed, 0 failed, no recorded JS runtime errors | tests/evidence/ux-audit.json |
+| Retained application UI suite | 15 passed | tests/evidence/ui-browser.json |
+| Retained discovery/MCP UI suite | 12 passed | tests/evidence/codemax-ui.json |
+| Retained single-tab UI suite | 14 passed | tests/evidence/single-tab-ui.json |
+| Node helper, real local HTTP and static boundary cases | 25 passed | tests/evidence/node-current.log |
+| Actual browser instrumentation with controlled DOM/network fixtures | 26 passed | tests/evidence/browser-dom-tests.json |
+| TypeScript syntax-only parse | Passed | tests/evidence/typescript-syntax.json |
+| Zag static import/symbol/arity audit | 4,255 qualified calls across 35 modules; no mismatches | tests/evidence/zag-static-contracts.json |
+| Native/backend/browser source comparison | 51 files byte-identical to supplied previous ZIP | tests/evidence/native-source-unchanged.json |
 
-Screenshots 12–14 are actual compiled-interface Chromium captures, using the
-labelled local test website and explicit native-host double. They are not AI
-concept renders and do not depict a native Tauri execution. Full-width native
-bounds messages, inspector collapse, menus and minimum 1000 × 680 layout are
-checked through the host double. The tab test also exercises sixteen open tabs.
+There are **79 compiled-UI scenarios in total**, not 79 native desktop tests.
+The 38-case UX audit includes a layout sweep of all nine surfaces and all five
+Settings sections at 1500 × 980, 1000 × 680, and an extra 800 × 640 viewport,
+plus long-name stress checks. The configured native minimum remains 1000 × 680.
 
-## Corrections during verification
+The compiler/runtime is the real locally available Svelte 5.48.0 distribution,
+with TypeScript 5.8.3 and Chromium 144.0.7559.96. Test host responses and website
+data are explicit doubles; application components, event handlers, reactive
+state and CSS are the production implementation. No native success or actual
+website execution is simulated in the production build.
 
-The first menu test exposed an accessible name containing an incidental model
-count; explicit menu labels now keep names stable. The new reorder assertion
-was corrected to match the existing insert-before-target operation. Unknown
-internal-page errors now use a named error code to preserve the intended message.
-All three compiled-UI suites were rerun after the final source changes.
+## Failed and corrected during development
 
-## Unverified and unchanged
+Earlier selectors needed updating for the newly collapsed technical sections
+and explicit confirmation steps. Three initial fault-injection cases incorrectly
+returned an arrow-function assignment to Playwright evaluate; Playwright invoked
+it immediately. The test setup was corrected and every final UI suite rerun. An
+initial externally time-limited audit was also rerun to completion. Development
+captures are kept separately in tests/evidence/ux-development/.
 
-This is a source-plus-compiled-frontend delivery, not a native installer. npm
-registry resolution failed (EAI_AGAIN); the existing trusted local Svelte 5.48.0
-compiler/runtime supplied the offline build. A normal Vite/svelte-check build,
-Zag compilation, Rust compilation and native desktop execution were not verified.
-No live website/MCP/tool/harness request was made in this revision. No remote
-GitHub commit, Actions run, or Drive upload is claimed.
+## Current blocker and claim boundary
 
-Backend Zag, browser instrumentation and Tauri/Rust source remain byte-for-byte
-unchanged from the supplied discovery/MCP package. The previous implementation
-scope and limitations are preserved in docs/history/discovery-mcp-closeout.md.
-Full product release gates remain open; this revision does not relabel them.
+This is **full application source plus a compiled frontend**, not a native
+installer or a fully release-qualified application. A fresh prerequisite check
+exited 77: local Zag, Rust/Cargo, project npm dependencies and WebKitGTK development
+dependencies are not all provisioned. See tests/evidence/ux-prerequisites.json.
+No native compilation, live provider request, live MCP execution, actual client
+interoperability, GitHub push or Drive upload is claimed in this revision.
 
-## Recovery
+Normal Vite/svelte-check, OS webview keyboard/focus/zoom behavior, provider login
+restoration, native file dialogs, and window-manager close handling still need
+native validation. The new close confirmation covers the custom application
+close control; it is not evidence of intercepting every OS shutdown path.
 
-RECOVERY.bundle includes the previous Git history and this local UX commit.
-MANIFEST.sha256 covers delivered contents except the two packaging metadata
-files. PACKAGE_METADATA.json and the external delivery receipt identify the
-commit, tests and archive verification. `npm run test:chrome` runs the new suite
-after the frontend is compiled in the documented offline module layout.
+A provider still has one retained browser profile/conversation per origin. This
+UX pass does not add multiple simultaneous same-origin conversation tabs. Drafts
+are retained across page changes only, not process termination. The UI audit is
+not an exhaustive accessibility conformance audit or a guarantee that no UX bugs
+remain. New tools or files did not receive any broader native permissions.
+
+## Next causal step
+
+Provision the documented Linux toolchains and run the existing native build,
+window/webview and actual-client gates against this source revision. Current
+release gates remain recorded in docs/release-gates.json; no failure was relabeled
+as a pass to publish this source package.
+
+## Regression status and recovery
+
+All four final compiled-interface suites passed after the last source changes.
+Zag, browser instrumentation and Tauri/Rust remain unchanged, preserving their
+previously documented behavior and unresolved native qualification gates.
+The original masterplan and historical closeouts are retained.
+
+RECOVERY.bundle contains local history including this revision. The archive’s
+MANIFEST.sha256 covers all included files except MANIFEST.sha256 and
+PACKAGE_METADATA.json. Package metadata records the local commit and evidence;
+checksums establish byte integrity, not native correctness.
+
+## Screenshots
+
+20-ux-providers.png, 21-ux-connect.png, 22-ux-permission.png,
+23-ux-browser-approval.png, 24-ux-providers-light.png and 25-ux-compact.png
+are current Chromium captures of the actual compiled interface. Provider names,
+model availability and tool calls in them are labelled test fixtures. They are
+not generated design images or a native Tauri/live-provider run.
