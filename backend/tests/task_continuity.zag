@@ -1,0 +1,66 @@
+// Native assertions: budget accounting, same-session resume, MCP identity and
+// progress correlation. No child process or live provider is used in this unit.
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../core/json.zag") as json
+@import("../mcp/budget.zag") as budget
+@import("../mcp/hub.zag") as hub
+@import("../mcp/runner.zag") as runner
+fn check(value: bool, label: []u8) void { if (!value) { _zag_eprintln(label);_zag_exit(1); } }
+fn budget_cases() void {
+ let b: budget.Budget=budget.make(1000);
+ check(b.limit==100 && b.remaining_ms==1800000,"default work budget");
+ check(!budget.exhausted(&b,20) && !budget.exhausted(&b,99),"old twenty-turn cutoff removed");
+ check(budget.exhausted(&b,100),"chosen boundary recognized");
+ budget.tick(&b,9999999,false);check(b.remaining_ms==1800000,"approval waits do not consume work");
+ budget.tick(&b,10000999,true);check(b.remaining_ms==1799000,"only active elapsed time consumed");
+ check(!budget.configure(&b,9,30,0) && !budget.configure(&b,100,241,0),"invalid configuration refused");
+ check(b.remaining_ms==1799000,"invalid configuration leaves budget unchanged");
+ check(budget.configure(&b,50,60,1000),"bounded customization accepted");
+ budget.tick(&b,7200000,true);check(b.remaining_ms==0,"work cannot become negative");
+ check(budget.extend(&b,151,7200000) && b.limit==201 && b.remaining_ms==3600000,"budget extension follows current turn count");
+ check(!budget.extend(&b,1000001,0),"bounded extension arithmetic");
+}
+fn continuity_cases() void {
+ let h: hub.Hub=hub.make();let out: buf.Buffer=buf.make(262144);
+ let config: json.Document=json.parse("{\"label\":\"Unit tools\",\"command\":\"unit-only\",\"args\":[]}");
+ check(hub.add(&h,&config,0)==1,"configure unit server");json.free(&config);
+ let s: *hub.Server=&h.servers[0];check(hub.connect(s,true,&out),"consent emits only a frame here");
+ let catalog: json.Document=json.parse("{\"tools\":[{\"name\":\"read_note\",\"description\":\"Unit fixture\",\"inputSchema\":{\"type\":\"object\"}}]}");
+ hub.catalog(s,&catalog,0,&out);json.free(&catalog);check(s.*.state==3 && s.*.count==1,"catalog admitted");
+ check(s.*.tools[0].schema_hash.len==64,"schema digest cached at admission");s.*.tools[0].enabled=true;
+ let r: runner.Run=runner.make();check(runner.begin(&r,&h,1,"p1/unit","Use the supplied unit tool",true),"start unit task");
+ let history: buf.Buffer=buf.make(8192);buf.copy(&history,buf.view(&r.history));
+ let id: buf.Buffer=buf.make(96);buf.copy(&id,buf.view(&r.id));
+ r.turns=100;r.calls=73;buf.copy(&r.grants,"|mcp_1_0|");buf.clear(&out);
+ runner.pump(&r,&h,&out);
+ check(r.state==8 && !r.cleanup_session && r.fd<0,"pause does not destroy session");
+ check(buf.eq(buf.view(&history),buf.view(&r.history)) && r.calls==73 && out.len==0,"pause retains transcript without replay or call");
+ check(r.grants.len==1 && r.deadline==0,"pause revokes broad grants");
+ check(!runner.resume(&r,&h,"wrong-run"),"resume identity required");
+ check(runner.resume(&r,&h,buf.view(&id)) && r.state==1 && r.pending,"same run resumes");
+ check(r.budget.limit==200 && r.calls==73 && buf.eq(buf.view(&r.id),buf.view(&id)),"resume extends budget without new session");
+ check(runner.request(&r,"unit-key-not-a-credential",7331),"continued request rendered");
+ check(buf.find(buf.view(&r.outgoing),buf.view(&id),0)>=0 && r.turns==101,"same session header retained");
+ runner.close(&r);r.state=2;r.pending=false;r.active_tool=0;r.budget.remaining_ms=0;
+ buf.copy(&r.call_id,"pending-1");buf.copy(&r.alias,"mcp_1_0");buf.copy(&r.arguments,"{}");
+ runner.pump(&r,&h,&out);check(r.state==8 && r.resume_state==2,"pending permission preserved at boundary");
+ check(runner.resume(&r,&h,buf.view(&id)) && r.state==2,"resume returns to permission, not automatic execution");
+ // A long idle user wait must not be charged when approval changes state.
+ r.budget.tick_ms=0;r.budget.remaining_ms=12000;buf.clear(&out);
+ check(runner.approve(&r,&h,buf.view(&id),"pending-1",false,&out),"fresh exact approval accepted");
+ check(r.budget.remaining_ms==12000 && r.calls==74,"approval wait excluded at transition");
+ check(!runner.approve(&r,&h,buf.view(&id),"pending-1",false,&out),"same approval cannot replay");
+ let hard: i64=s.*.hard_deadline;check(s.*.deadline>_zag_clock_monotonic_ms()+250000,"tool idle timeout longer than thirty seconds");
+ s.*.deadline=1;
+ hub.incoming(s,"{\"jsonrpc\":\"2.0\",\"method\":\"notifications/progress\",\"params\":{\"progressToken\":9999,\"progress\":1,\"message\":\"wrong call\"}}",&out);
+ check(s.*.deadline==1 && s.*.progress_message.len==0,"unrelated progress cannot extend a deadline");
+ let frame: buf.Buffer=buf.make(512);buf.add(&frame,"{\"jsonrpc\":\"2.0\",\"method\":\"notifications/progress\",\"params\":{\"progressToken\":");buf.integer(&frame,s.*.pending_id);buf.add(&frame,",\"progress\":1,\"message\":\"Reading item one\"}}");hub.incoming(s,buf.view(&frame),&out);
+ check(s.*.deadline>1 && s.*.hard_deadline==hard && buf.eq(buf.view(&s.*.progress_message),"Reading item one"),"correlated progress extends silence, not hard duration");
+ buf.copy(&s.*.result,"{\"content\":[{\"type\":\"text\",\"text\":\"unit-result\"}]}");s.*.result_ready=true;s.*.state=3;s.*.deadline=0;s.*.hard_deadline=0;
+ runner.pump(&r,&h,&out);check(r.state==1 && r.pending && r.calls==74,"approved result automatically continues without executing again");
+ check(buf.find(buf.view(&r.history),"unit-result",0)>=0,"result remains in same transcript");
+ runner.terminal(&r,7,"USER_CANCELLED");check(!runner.active(&r) && !runner.resume(&r,&h,buf.view(&id)),"cancel revokes continuation");
+ buf.free(&frame);buf.free(&id);buf.free(&history);runner.free(&r);hub.free(&h);buf.free(&out);
+}
+fn main() i32 { budget_cases();continuity_cases();_zag_println("native continuity assertions passed");return 0; }

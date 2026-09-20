@@ -108,3 +108,15 @@ pub async fn gateway_probe(webview: Webview, host: tauri::State<'_, Arc<Host>>) 
     }).await.map_err(|_| "GATEWAY_TIMEOUT")?.map_err(str::to_owned)?;
     Ok(json!({"healthy":true,"round_trip_ms":started.elapsed().as_millis(),"health":result}))
 }
+
+/// A user-driven folder picker returns a path only. It never reads contents or
+/// grants execution. Only the bundled main webview may open it.
+#[tauri::command]
+pub async fn directory_pick(webview: Webview) -> Result<Option<String>, String> {
+    views::trusted_main(&webview)?;
+    let Some(folder) = rfd::AsyncFileDialog::new().set_title("Choose a project folder for tools").pick_folder().await else { return Ok(None); };
+    let path = folder.path();
+    let value = path.to_str().ok_or("FOLDER_ENCODING_UNSUPPORTED")?;
+    if !path.is_absolute() || value.len() > 2000 { return Err("FOLDER_PATH_INVALID".into()); }
+    Ok(Some(value.to_owned()))
+}

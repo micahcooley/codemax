@@ -3,6 +3,8 @@
 All native IPC and website data are explicitly controlled test doubles.
 No Zag, Rust, live website, or real external coding client is executed here.
 """
+# Navigation updated for the registry shelf and nested disclosures. All prior
+# behavioral assertions remain; default-visibility checks are in progressive_ux.py.
 from __future__ import annotations
 import json, os, pathlib, subprocess, time, traceback
 from playwright.sync_api import sync_playwright, expect
@@ -28,6 +30,8 @@ def route(page,name):
     page.get_by_role('button',name='Codemax menu',exact=True).click()
     page.get_by_role('menuitem',name=name,exact=True).click()
     page.wait_for_timeout(30)
+    if name=='Connect a client':page.get_by_text('Advanced setup and connection details',exact=True).click()
+    if name=='Tools & MCP' and page.get_by_text('More setup',exact=True).count():page.get_by_text('More setup',exact=True).click()
 
 def open_site(page):
     page.get_by_role('tab',name='Local test provider',exact=True).click()
@@ -125,7 +129,7 @@ with sync_playwright() as pw:
 
     def offline(p):
         route(p,'Providers');p.evaluate("window.__uiFixture.emit('bridge:host',{state:'LOST',code:'BACKEND_UNAVAILABLE'})")
-        expect(p.locator('.provider-choice')).to_have_count(1);expect(p.locator('.stale-notice')).to_be_visible()
+        expect(p.locator('.shelf-row')).to_have_count(1);expect(p.locator('.stale-notice')).to_be_visible()
         expect(p.get_by_role('checkbox',name='Expose provider to harness')).to_be_disabled()
         before=len(ops(p,'provider.update'));p.evaluate("window.__app.perform('provider.update',{provider_id:1,exposed:false})")
         assert len(ops(p,'provider.update'))==before
@@ -242,13 +246,13 @@ with sync_playwright() as pw:
         p.get_by_role('button',name='Add tool server',exact=True).click();p.get_by_role('textbox',name='MCP server name').fill('Unsent server')
         p.get_by_role('textbox',name='MCP executable').fill('node');p.get_by_role('textbox',name='MCP arguments').fill('not json')
         p.get_by_role('button',name='Save server',exact=True).click();expect(p.locator('.form-error')).to_be_visible();assert not ops(p,'mcp.server.add')
-        route(p,'Providers');route(p,'Tools & MCP');expect(p.get_by_role('textbox',name='MCP task')).to_have_value('Preserve this unsent task')
-        expect(p.get_by_role('textbox',name='MCP server name')).to_have_value('Unsent server')
+        route(p,'Providers');route(p,'Tools & MCP');expect(p.get_by_role('textbox',name='MCP server name')).to_have_value('Unsent server')
+        p.get_by_role('button',name='Cancel',exact=True).click();expect(p.get_by_role('textbox',name='MCP task')).to_have_value('Preserve this unsent task')
     run(browser,'Unsent tool task and server drafts survive navigation; invalid JSON is explained inline',draft_tools)
 
     def global_approval(p):
         open_site(p);seed_task(p);expect(p.get_by_role('button',name='Review tool call',exact=True)).to_be_visible()
-        expect(p.get_by_label('1 tool approval waiting')).to_be_visible();assert not ops(p,'mcp.run.approve')
+        expect(p.get_by_label('Task needs attention')).to_be_visible();assert not ops(p,'mcp.run.approve')
         p.get_by_role('button',name='Review tool call',exact=True).click();expect(p.get_by_role('heading',name='Approve this tool call',exact=True)).to_be_visible()
     run(browser,'Tool approvals remain visible while browsing and never auto-execute',global_approval)
 
@@ -306,7 +310,7 @@ with sync_playwright() as pw:
                     for sub in ['Appearance','Local gateway','Website profiles','Privacy & diagnostics','Runtime']:
                         p.locator('.preferences-nav').get_by_role('button',name=sub,exact=True).click()
                         assert p.locator('.screen').evaluate('(e)=>e.scrollWidth<=e.clientWidth+1'),(name,sub,width)
-            open_site(p);assert p.evaluate('window.__uiFixture.bounds.width')==width
+            open_site(p);assert p.evaluate('window.__uiFixture.bounds.width')==width-p.locator('.provider-shelf').bounding_box()['width']
         p.set_viewport_size({'width':1500,'height':980});route(p,'Providers');p.screenshot(path=str(SHOTS/'20-ux-providers.png'),animations='disabled')
         route(p,'Connect a client');p.screenshot(path=str(SHOTS/'21-ux-connect.png'),animations='disabled')
         seed_task(p);route(p,'Tools & MCP');p.screenshot(path=str(SHOTS/'22-ux-permission.png'),animations='disabled')

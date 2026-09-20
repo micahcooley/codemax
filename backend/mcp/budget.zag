@@ -1,0 +1,18 @@
+// Work budgets pause at a safe boundary; they never cancel an executing tool.
+// User/approval wait time is excluded. All state belongs to the Zag runner.
+struct Budget { batch: i32, limit: i32, minutes: i32, remaining_ms: i64, tick_ms: i64, }
+fn valid(turns: i32, minutes: i32) bool { return turns>=10 && turns<=500 && minutes>=5 && minutes<=240; }
+fn make(now: i64) Budget { return Budget{.batch=100,.limit=100,.minutes=30,.remaining_ms=1800000,.tick_ms=now}; }
+fn configure(b: *Budget, turns: i32, minutes: i32, now: i64) bool {
+    if (!valid(turns,minutes)) { return false; }
+    b.*.batch=turns;b.*.limit=turns;b.*.minutes=minutes;b.*.remaining_ms=(minutes as i64)*60000;b.*.tick_ms=now;return true;
+}
+fn tick(b: *Budget, now: i64, working: bool) void {
+    if (working && now>b.*.tick_ms) { b.*.remaining_ms=b.*.remaining_ms-(now-b.*.tick_ms);if (b.*.remaining_ms<0) { b.*.remaining_ms=0; } }
+    b.*.tick_ms=now;
+}
+fn exhausted(b: *Budget, turns: i32) bool { return turns>=b.*.limit || b.*.remaining_ms<=0; }
+fn extend(b: *Budget, turns: i32, now: i64) bool {
+    if (turns<0 || turns>1000000 || !valid(b.*.batch,b.*.minutes)) { return false; }
+    b.*.limit=turns+b.*.batch;b.*.remaining_ms=(b.*.minutes as i64)*60000;b.*.tick_ms=now;return true;
+}

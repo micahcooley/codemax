@@ -66,7 +66,7 @@ async fn host_status(webview: Webview, host: tauri::State<'_, Arc<Host>>) -> Res
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![bridge_request, views::provider_observe, browser_bounds, browser_control, backend_restart, host_status, views::browser_find, platform::window_control, platform::document_export, platform::document_import, platform::gateway_probe])
+        .invoke_handler(tauri::generate_handler![bridge_request, views::provider_observe, browser_bounds, browser_control, backend_restart, host_status, views::browser_find, platform::window_control, platform::document_export, platform::document_import, platform::directory_pick, platform::gateway_probe])
         .setup(|app| {
             let root = app.path().app_local_data_dir()?.join("state");
             views::private_directory(&root).map_err(std::io::Error::other)?;

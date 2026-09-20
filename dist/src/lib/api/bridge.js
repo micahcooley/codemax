@@ -48,3 +48,4 @@ export async function copy(text) {
         throw new Error('CLIPBOARD_UNAVAILABLE');
     await navigator.clipboard.writeText(text);
 }
+export const chooseDirectory = () => invoke('directory_pick');

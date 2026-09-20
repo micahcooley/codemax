@@ -20,6 +20,7 @@
 @import("security/file_probe.zag") as probe
 @import("mcp/hub.zag") as mcp
 @import("mcp/runner.zag") as mcp_run
+@import("mcp/budget.zag") as mcp_budget
 @import("security/validation.zag") as validation
 @import("security/redaction.zag") as redaction
 @import("storage/files.zag") as files
@@ -58,7 +59,7 @@ fn suspend_idle(a: *App, now: i64) void {
     a.*.last_idle_check = now; let i: i32 = 0;
     while (i < a.*.providers.count) {
         let p: *registry.Provider = &a.*.providers.items[i];
-        if (p.*.id == a.*.focused_provider || p.*.active_request >= 0 || p.*.pinned || (mcp_run.active(&a.*.mcp_run) && a.*.mcp_run.provider==p.*.id) || (probe.active(&a.*.file_probe) && a.*.file_probe.provider==p.*.id)) { p.*.last_used = now; }
+        if (p.*.id == a.*.focused_provider || p.*.active_request >= 0 || p.*.browser_busy || p.*.pinned || (mcp_run.active(&a.*.mcp_run) && a.*.mcp_run.provider==p.*.id) || (probe.active(&a.*.file_probe) && a.*.file_probe.provider==p.*.id)) { p.*.last_used = now; }
         else if (p.*.state != 0 && p.*.open_tab && now - p.*.last_used >= (a.*.settings.idle_minutes as i64) * 60000) {
             if (p.*.session >= 0) { a.*.sessions.items[p.*.session].status = 2; p.*.session = 0 - 1; }
             p.*.state = 0; buf.clear(&p.*.document); buf.clear(&p.*.evidence); host_event(a, "browser.close", p);
@@ -179,7 +180,7 @@ fn begin_generation(a: *App, index: i32, protocol: i32) void {
     if (r.*.pending_files.len > 2 && p.*.attachment <= 0) { if (is_new) { sessions.discard_unstarted(&a.*.sessions, session); } http_error(c, 422, "ATTACHMENT_CONTROL_REQUIRED"); return; }
     c.*.provider = provider_index; c.*.model = model % 32; c.*.session = session;
     tools.free(&c.*.parser); c.*.parser = tools.make(buf.view(&r.*.nonce), buf.view(&r.*.tool_names), r.*.has_tools);
-    buf.copy(&c.*.calls, "["); buf.copy(&c.*.segments, "["); c.*.phase = 2; c.*.deadline = _zag_clock_monotonic_ms() + 120000;
+    buf.copy(&c.*.calls, "["); buf.copy(&c.*.segments, "["); c.*.phase = 2; c.*.deadline = _zag_clock_monotonic_ms() + 600000;c.*.generation_limit=_zag_clock_monotonic_ms()+3600000;
     p.*.active_request = index; p.*.session = session; item.*.status = 1;
     p.*.preparing = is_new; p.*.prepared = false;
     let dispatched: bool = false;
@@ -334,6 +335,7 @@ fn observe(a: *App, provider_id: i32, d: *json.Document, event: i32) void {
     if (json.is_text(d, kind, "generation_delta")) {
         let text: buf.Buffer = buf.make(4096); json.field_text(d, event, "text", &text); c.*.raw_bytes = c.*.raw_bytes + text.len;
         if (text.ok == 0 || c.*.raw_bytes > 131072) { buf.free(&text); cancel(a, index, "OUTPUT_LIMIT", 502); return; }
+        if (text.len>0) { c.*.deadline=_zag_clock_monotonic_ms()+600000; }
         tools.feed(&c.*.parser, buf.view(&text)); buf.free(&text);
         if (!consume_parser(c)) { cancel(a, index, "STREAM_LIMIT", 502); }
     } else if (json.is_text(d, kind, "generation_done")) { generation_done(a, index); }
@@ -396,22 +398,30 @@ fn ipc(a: *App, frame: []u8) void {
         let enabled: i32=json.kind(&d,json.get(&d,params,"enabled"));
         if (mcp_run.active(&a.*.mcp_run)) { error="CANCEL_MCP_RUN_FIRST"; }
         else if (alias.ok==0 || ti<0 || (enabled!=5 && enabled!=6)) { error="MCP_INVALID_TOOL_SETTING"; }
-        else { a.*.mcp.servers[ti/16].tools[ti%16].enabled=enabled==5;buf.add(&result,"null"); }
+        else {
+            let selected: *mcp.Tool=&a.*.mcp.servers[ti/64].tools[ti%64];let previous: bool=selected.*.enabled;selected.*.enabled=enabled==5;
+            let definitions: buf.Buffer=buf.make(49152);mcp.definitions(&a.*.mcp,&definitions);
+            if (definitions.ok==0) { selected.*.enabled=previous;error="MCP_TOOL_CONTEXT_LIMIT"; }else { buf.add(&result,"null"); }
+            buf.free(&definitions);
+        }
         buf.free(&alias);a.*.snapshot_pending=true;
     } else if (json.is_text(&d,op,"mcp.run.start")) {
         let model: buf.Buffer=buf.make(256);let task: buf.Buffer=buf.make(8192);json.field_text(&d,params,"model",&model);json.field_text(&d,params,"task",&task);
         let mi: i32=registry.find_model(&a.*.providers,buf.view(&model));
-        if (mi<0 || model.ok==0 || task.ok==0 || pi<0 || mi/32!=pi) { error="MODEL_UNAVAILABLE"; }
+        let turn_budget: i32=json.number(&d,json.get(&d,params,"turn_budget"),100) as i32;let work_minutes: i32=json.number(&d,json.get(&d,params,"work_minutes"),30) as i32;
+        if (!mcp_budget.valid(turn_budget,work_minutes)) { error="MCP_INVALID_WORK_BUDGET"; }
+        else if (mi<0 || model.ok==0 || task.ok==0 || pi<0 || mi/32!=pi) { error="MODEL_UNAVAILABLE"; }
         else if (!actions.allowed(&a.*.providers.items[pi]) || a.*.providers.items[pi].quota!=0) { error="PROVIDER_NOT_READY"; }
         else if (a.*.providers.items[pi].active_request>=0 || a.*.providers.items[pi].browser_busy || a.*.providers.items[pi].session>=0 || probe.active(&a.*.file_probe)) { error="END_CURRENT_SESSION_FIRST"; }
         else if (!mcp_run.begin(&a.*.mcp_run,&a.*.mcp,provider_id as i32,buf.view(&model),buf.view(&task),json.kind(&d,json.get(&d,params,"auto_continue"))==5)) { error="MCP_RUN_BUSY_OR_NO_ENABLED_TOOLS"; }
-        else { mcp_run.render(&a.*.mcp_run,&result); }
+        else { if (!mcp_run.configure(&a.*.mcp_run,turn_budget,work_minutes)) { mcp_run.terminal(&a.*.mcp_run,6,"MCP_INVALID_WORK_BUDGET");error="MCP_INVALID_WORK_BUDGET"; } else { mcp_run.render(&a.*.mcp_run,&result); } }
         buf.free(&model);buf.free(&task);a.*.snapshot_pending=true;
-    } else if (json.is_text(&d,op,"mcp.run.approve") || json.is_text(&d,op,"mcp.run.cancel") || json.is_text(&d,op,"mcp.run.continue")) {
+    } else if (json.is_text(&d,op,"mcp.run.approve") || json.is_text(&d,op,"mcp.run.cancel") || json.is_text(&d,op,"mcp.run.continue") || json.is_text(&d,op,"mcp.run.resume")) {
         let run_id: buf.Buffer=buf.make(96);let call_id: buf.Buffer=buf.make(192);json.field_text(&d,params,"run_id",&run_id);
         if (run_id.ok==0 || !buf.eq(buf.view(&run_id),buf.view(&a.*.mcp_run.id))) { error="MCP_STALE_RUN"; }
         else if (json.is_text(&d,op,"mcp.run.cancel")) { mcp_run.terminal(&a.*.mcp_run,7,"USER_CANCELLED");buf.add(&result,"null"); }
         else if (!mcp_context_valid(a,true)) { mcp_run.terminal(&a.*.mcp_run,6,"MCP_PROVIDER_OR_CONVERSATION_CHANGED");error="MCP_PROVIDER_OR_CONVERSATION_CHANGED"; }
+        else if (json.is_text(&d,op,"mcp.run.resume")) { if (!mcp_run.resume(&a.*.mcp_run,&a.*.mcp,buf.view(&run_id))) { error="MCP_RESUME_NOT_AVAILABLE"; } else { buf.add(&result,"null"); } }
         else if (json.is_text(&d,op,"mcp.run.continue")) { if (!mcp_run.continue_run(&a.*.mcp_run,buf.view(&run_id))) { error="MCP_RESULT_NOT_READY"; } else { buf.add(&result,"null"); } }
         else {
             json.field_text(&d,params,"call_id",&call_id);
@@ -827,7 +837,7 @@ fn drive_mcp(a: *App) void {
             if (rc!=0) { mcp_run.terminal(&a.*.mcp_run,6,"PRIVATE_CLIENT_TRANSPORT_FAILED"); }
             else {
                 a.*.mcp_run.fd=pair[0] as i64;
-                if (!mcp_run.request(&a.*.mcp_run,buf.view(&a.*.key),a.*.port)) { net.close(pair[1] as i64);mcp_run.terminal(&a.*.mcp_run,6,"MCP_REQUEST_LIMIT"); }
+                if (!mcp_run.request(&a.*.mcp_run,buf.view(&a.*.key),a.*.port)) { net.close(pair[1] as i64);if (a.*.mcp_run.state!=8) { mcp_run.terminal(&a.*.mcp_run,6,"MCP_REQUEST_LIMIT"); } }
                 else { a.*.clients[slot]=connection.make(pair[1] as i64); }
             }_zag_free(pair as *i8);
         }
@@ -913,7 +923,7 @@ fn run(a: *App) void {
                 }
                 if (c.*.fd >= 0) {
                     if (c.*.phase == 3 && c.*.output.len == 0) { release(a, i); }
-                    else if (now > c.*.deadline || (c.*.output.len > 0 && now - c.*.last_write > 5000)) {
+                    else if (now > c.*.deadline || (c.*.phase==2 && now>c.*.generation_limit) || (c.*.output.len > 0 && now - c.*.last_write > 5000)) {
                         if (c.*.phase == 2) { cancel(a, i, "TIMEOUT", 504); } else { release(a, i); }
                     } else if (c.*.phase == 2 && c.*.stream_open && now - c.*.last_ping >= 15000) {
                         if (c.*.output.len == 0) { c.*.last_write = now; }

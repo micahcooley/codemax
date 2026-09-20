@@ -32,7 +32,10 @@ impl Host {
     pub fn send(&self, frame: Value) -> Result<(), String> {
         if !self.ready.load(Ordering::Acquire) { return Err("BACKEND_UNAVAILABLE".into()); }
         let mut bytes = serde_json::to_vec(&frame).map_err(|_| "IPC_ENCODE_FAILED")?;
-        if bytes.len() > 65_536 { return Err("HOST_FRAME_LIMIT".into()); }
+        // Only internal MCP transport may carry a larger catalog frame. UI and
+        // provider observation commands retain their smaller admission bound.
+        let limit = if frame["op"] == "mcp.transport" { 1_048_576 } else { 65_536 };
+        if bytes.len() > limit { return Err("HOST_FRAME_LIMIT".into()); }
         bytes.push(b'\n');
         self.sender.try_send(bytes).map_err(|_| "HOST_BACKPRESSURE".into())
     }

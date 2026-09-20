@@ -104,6 +104,8 @@ try:
             page.wait_for_function("document.getElementById('messages').getAttribute('aria-busy')==='false'")
         record('cancellation_stops_provider_generation',cancellation)
         def scenario(mode,code):
+            # Independent error scenarios must dismiss the previous fixture's visible alert.
+            page.evaluate("document.getElementById('status').textContent=''");page.wait_for_timeout(220)
             page.select_option('#mode',mode); execute(action(mode)); events=finish(mode,'generation_error')
             assert any(e.get('code')==code for e in events),events
             page.wait_for_function("document.getElementById('messages').getAttribute('aria-busy')==='false'")
@@ -112,6 +114,8 @@ try:
         record('broken_stream_never_reports_success',lambda:scenario('broken','PROVIDER_STREAM_ERROR'))
         record('response_rewrite_never_duplicates_text',lambda:scenario('rewrite','RESPONSE_REWRITTEN'))
         def transports(mode,transport):
+            # Independent error scenarios must dismiss the previous fixture's visible alert.
+            page.evaluate("document.getElementById('status').textContent=''");page.wait_for_timeout(220)
             page.select_option('#mode',mode); execute(action(mode));finish(mode)
             assert page.evaluate("t=>__events.some(e=>e.type==='network'&&e.transport===t&&e.phase==='open')",transport)
         record('websocket_metadata_and_dom_stream',lambda:transports('websocket','websocket'))

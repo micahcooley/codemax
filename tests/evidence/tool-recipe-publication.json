@@ -1,0 +1,19 @@
+{
+  "scope": "Primary publication records; not installed package or runtime evidence",
+  "pins": {
+    "filesystem": "2026.8.31",
+    "memory": "2026.8.31",
+    "git": "2026.8.18",
+    "fetch": "2026.8.18",
+    "playwright": "0.0.82"
+  },
+  "sources": [
+    "https://github.com/modelcontextprotocol/servers/releases/tag/2026.8.31",
+    "https://github.com/modelcontextprotocol/servers/releases/tag/2026.8.18",
+    "https://pypi.org/project/mcp-server-git/",
+    "https://pypi.org/project/mcp-server-fetch/",
+    "https://www.npmjs.com/package/%40playwright/mcp?activeTab=versions"
+  ],
+  "packages_installed": false,
+  "packages_executed": false
+}

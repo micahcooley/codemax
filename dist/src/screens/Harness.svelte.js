@@ -5,7 +5,7 @@ import { app } from '../lib/state/app.svelte.js';
 import Icon from '../lib/components/Icon.svelte.js';
 import ExternalClients from '../lib/components/ExternalClients.svelte.js';
 
-var root = $.from_html(`<section class="screen"><div class="screen-inner"><header class="screen-head"><div><div class="breadcrumb">Codemax / Harness</div><h1>Connect a client</h1><p>Choose your coding client, start the local connection, and copy its configuration. Your signed-in websites supply the models.</p></div><button class="secondary"><!>Manage providers</button></header> <!> <details class="advanced-client"><summary>Advanced · MCP versus model connections</summary><p>MCP connects tools to an assistant. A model-provider connection lets a harness use the website model as its model. Codemax keeps both paths separate; adding an MCP server alone does not replace a harness’s model.</p><p style="margin-top:12px">The registry updates live. A harness that caches or requires an explicit model list may need a refresh, restart, or an updated configuration export. Codemax does not secretly overwrite client configuration files.</p><button class="secondary" style="margin-top:16px">Manage website tools<!></button></details></div></section>`);
+var root = $.from_html(`<section class="screen"><div class="screen-inner connect-screen"><header class="screen-head"><div><div class="breadcrumb">Codemax / Harness</div><h1>Connect a client</h1><p>Choose a client and a website model. Copy one launch command; your signed-in website supplies the quota.</p></div><button class="secondary"><!>Manage providers</button></header> <!> <p class="connection-footnote">Already connected? <button class="text-button">View client sessions</button> · Your coding client manages its own tools and permissions.</p></div></section>`);
 
 export default function Harness($$anchor, $$props) {
 	$.push($$props, false);
@@ -29,16 +29,12 @@ export default function Harness($$anchor, $$props) {
 
 	ExternalClients(node_1, {});
 
-	var details = $.sibling(node_1, 2);
-	var button_1 = $.sibling($.child(details), 3);
+	var p = $.sibling(node_1, 2);
+	var button_1 = $.sibling($.child(p));
 
-	button_1.__click = () => app.navigate('tools');
-
-	var node_2 = $.sibling($.child(button_1));
-
-	Icon(node_2, { name: 'arrow', size: 14 });
-	$.reset(button_1);
-	$.reset(details);
+	button_1.__click = () => app.navigate('sessions');
+	$.next();
+	$.reset(p);
 	$.reset(div);
 	$.reset(section);
 	$.append($$anchor, section);

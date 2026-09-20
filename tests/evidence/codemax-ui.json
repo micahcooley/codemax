@@ -6,52 +6,52 @@
     {
       "name": "Only detected profiles appear as providers; technical controls collapsed",
       "status": "PASS",
-      "seconds": 0.684
+      "seconds": 0.56
     },
     {
       "name": "Per-model and per-provider exposure changes actual generated harness config",
       "status": "PASS",
-      "seconds": 2.153
+      "seconds": 1.951
     },
     {
       "name": "Pause, exclusion and resume controls send scoped policies without onboarding wizard",
       "status": "PASS",
-      "seconds": 0.396
+      "seconds": 0.241
     },
     {
       "name": "Provider-reported context separated from unknown limits and tokenizer execution",
       "status": "PASS",
-      "seconds": 0.232
+      "seconds": 0.139
     },
     {
       "name": "Harness choice persists; new registry events update config without reload",
       "status": "PASS",
-      "seconds": 1.662
+      "seconds": 1.569
     },
     {
       "name": "Normal address navigation creates ordinary tab, not an exposed provider",
       "status": "PASS",
-      "seconds": 0.5
+      "seconds": 0.449
     },
     {
       "name": "Import only command/argv; strips credential env and does not start process",
       "status": "PASS",
-      "seconds": 0.613
+      "seconds": 0.566
     },
     {
       "name": "Explicit local-process trust plus disabled-by-default per-tool exposure",
       "status": "PASS",
-      "seconds": 0.233
+      "seconds": 0.206
     },
     {
       "name": "Per-call approval binds run/call; optional manual result insertion continues same run",
       "status": "PASS",
-      "seconds": 0.408
+      "seconds": 0.335
     },
     {
       "name": "Deny submits no approval; broader per-task tool permission is explicit advanced opt-in",
       "status": "PASS",
-      "seconds": 0.35
+      "seconds": 0.282
     },
     {
       "name": "Untrusted model/tool text escaped and compact viewport has no document overflow",

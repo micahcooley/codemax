@@ -52,6 +52,8 @@
       <button role="menuitem" class="danger-text" onclick={()=>app.showPopup('remove-provider',provider.id)}><Icon name="trash" size={15}/><span>Remove website</span></button>
     {:else}
       <button role="menuitem" onclick={()=>app.newTab()}><Icon name="plus" size={15}/><span>New tab</span><kbd>Ctrl T</kbd></button>
+      <button role="menuitem" onclick={()=>{app.toggleShelf();dismiss();}}><Icon name="panel" size={15}/><span>{app.shelfVisible?'Hide provider sidebar':'Show provider sidebar'}</span></button>
+      <button role="menuitem" onclick={()=>{app.navigate('browser');app.inspectorVisible=!app.inspectorVisible;app.saveLayout();}}><Icon name="scan" size={15}/><span>Connection inspector</span></button>
       <hr/>
       {#each pages as page(page.id)}
         <button role="menuitem" aria-label={page.title} class:active={app.route===page.id} onclick={()=>app.navigate(page.id)}><Icon name={page.icon} size={15}/><span>{page.title}</span>{#if page.id==='providers'}<small>{app.detectedProviders.length}</small>{:else if page.id==='models'}<small>{app.models.length}</small>{/if}</button>

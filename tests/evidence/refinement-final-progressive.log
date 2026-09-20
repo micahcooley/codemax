@@ -1,0 +1,30 @@
+PASS Default shelf shows only registered providers and never duplicates tab controls
+PASS Sidebar collapse fills the native surface and persists independently of the inspector
+PASS Closing and reopening a website leaves one saved provider and one browser tab
+PASS Provider settings open on demand without a second provider list or advanced controls
+PASS Ordinary browsing never creates a registered sidebar provider in the fixture flow
+PASS Registry activity rings track real state fields, reduced motion and disabled exposure
+PASS Client setup initially exposes only client, model and one private-launch action
+PASS Private launch starts then probes then copies; no config overwrite or false client-connected claim
+PASS Failed gateway probe does not retrieve or copy a key
+PASS Clipboard failure is actionable and never renders the local key
+PASS Navigating away cancels late credential retrieval and clipboard side effects
+PASS Losing model exposure while connecting prevents a stale launch command
+PASS Tool library and technical task settings are opt-in; browsing recipes never installs code
+PASS Folder picker fills one quoted argument; saving a recipe still requires separate process consent
+PASS Cancelling the native folder dialog preserves the typed folder without effects
+PASS Simple file recipe refuses a filesystem-root share or parent traversal
+PASS Tool catalogs are collapsed and searchable; clearing a filter restores choices
+PASS Task options validate budgets and forward automatic result continuation to Zag
+PASS Active tasks replace configuration panels with the relevant approval and stop controls
+PASS Budget pause resumes the same run without starting over or replaying an approval
+PASS Non-resumable state cannot be forced through UI; cancellation remains available
+PASS Routine task progress is quiet; a safe pause still surfaces attention while browsing
+PASS Current MCP progress is visible as untrusted text without granting execution
+PASS Clean connection, library and browser layouts remain bounded at three window sizes
+{
+  "scope": "Compiled Svelte and real Chromium; native-host and provider doubles. No native runtime or real external client/tool execution.",
+  "passed": 24,
+  "failed": 0,
+  "runtime_errors": []
+}

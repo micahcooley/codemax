@@ -8,19 +8,25 @@ A dedicated, browser-first desktop application that discovers AI websites as you
 
 Open a website in the address bar and sign in normally. Discovery follows the page and your model/reasoning controls without sending test prompts or opening menus. Ordinary websites remain browser tabs; only positive chat/model evidence admits a provider. Hidden capability data stays unknown until the website exposes it.
 
-Open **Connect a client**, choose your client, start/check the local gateway on that same page, and copy/export its configuration. A successful gateway health check only verifies the local listener; it does not claim that the client is connected or that a website request succeeded. The localhost access token protects the client-to-Codemax connection, not access to a paid model API. The registry and generated configuration update as models are observed. A client that caches a fixed model list may need refresh/restart or an updated export.
+Open **Connect a client**, choose your client and a website model, then **Copy private launch command**. That action starts the local gateway when necessary, checks it, and produces a safely quoted command. Paste it into your terminal with the client already installed. No configuration-file overwrite is required. The command contains the local bearer key: clipboard and terminal history may retain it. Manual configuration, export and endpoint/key controls remain under Advanced. A successful gateway health check only verifies the local listener; it does not claim that the client is connected or that a website request succeeded. The localhost access token protects the client-to-Codemax connection, not access to a paid model API. The registry and generated configuration update as models are observed. A client that caches a fixed model list may need refresh/restart or an updated export.
 
 **Providers** controls which sites and models are exposed. Context, tokenizer and reasoning evidence are visible; overrides, recorder tools and lifecycle settings are under Advanced. Turning off a site or model removes it from the gateway and revokes a conflicting active tool task.
 
-**Tools & MCP** is a separate optional workflow: add/import an installed stdio server, review the executable, enable tools, and start a website task. Codemax inserts instructions, asks permission for calls, and returns results into the same conversation. Auto-continuation does not imply automatic execution permission. A broader per-tool grant for that one task is available under Advanced. Servers run as the user and must be trusted; this is not an OS sandbox. Direct remote MCP HTTP/SSE/OAuth is not implemented in this revision.
+**Tools & MCP** is a separate optional workflow. Open the on-demand Tool library for five pinned external-server recipes, or add/import your own stdio server through More setup. A recipe fills a draft only; review and authorize its executable before connection, select tools, and start a website task. Codemax inserts instructions, asks permission for calls, and returns results into the same conversation. Auto-continuation does not imply automatic execution permission. A broader per-tool grant for that one task is available under Advanced. Servers run as the user and must be trusted; this is not an OS sandbox. Direct remote MCP HTTP/SSE/OAuth is not implemented in this revision.
 
 The synthetic file diagnostic now lives under Tools & MCP → Advanced. It is not required for everyday setup.
 
 ## Desktop workspace
 
-A single top tab strip and address bar surround native provider webviews. There is no second website list or permanent workspace sidebar. Providers, Tools and Connect are toolbar utilities; the Codemax menu contains the remaining management pages. The optional connection inspector starts closed and its preference persists. The UI includes back/forward/reload, find, zoom, keyboard shortcuts, a command palette, reorderable tabs, an optional resizable inspector, light/dark themes and reduced motion. Spinning rings indicate loading/generation; stationary rings indicate idle/sleeping or attention states, with accessible labels. Automatic submission preserves unsent drafts and refuses a composer changed by the user.
+A single top tab strip and address bar surround native provider webviews. A collapsible left shelf lists only positively registered providers, including those whose browser tabs are closed. It is not another tab strip: it has no tab close/reorder controls. Clicking a provider reuses or opens its website; its settings appear only on request. Ctrl+Shift+B toggles the shelf. Tools and Connect remain the two main toolbar utilities; the Codemax menu contains the other management pages. The optional connection inspector starts closed and its preference persists. The UI includes back/forward/reload, find, zoom, keyboard shortcuts, a command palette, reorderable tabs, an optional resizable inspector, light/dark themes and reduced motion. Spinning rings indicate loading/generation; stationary rings indicate idle/sleeping or attention states, with accessible labels. Automatic submission preserves unsent drafts and refuses a composer changed by the user.
 
 Limits include 16 origin-isolated profiles, one provider conversation per profile, 32 models per profile, four external generations, and one built-in MCP task at a time. The product does not claim full Chromium parity, arbitrary extensions, multiple simultaneous same-origin conversations, universal provider compatibility or cross-platform qualification.
+
+## Task continuity
+
+The built-in runner now uses a 100-model-turn / 30-active-minute budget by default, configurable under Task options (10–500 turns; 5–240 active minutes). Approval/result waiting is not charged as active work. Exhaustion pauses at a safe boundary, retaining this run’s in-memory transcript, last result and conversation/session ID. **Continue task** extends its budget rather than creating a new task. It revokes broad tool grants and cannot replay a completed tool approval. This is not crash/restart recovery: native execution and the new native regression source remain unverified.
+
+Actual tool progress can extend a five-minute MCP inactivity deadline, with an independent one-hour ceiling. Website generation gets ten minutes of inactivity tolerance and a one-hour ceiling. Quotas, lost authentication, finite context/byte limits, output errors and OS/process failures still require an honest stop or recovery; the application cannot guarantee uninterrupted agents. No automatic side-effect retry is added.
 
 ## Interaction behavior
 
@@ -64,6 +70,7 @@ python3 tests/ui_browser.py
 python3 tests/codemax_ui.py
 python3 tests/chrome_ui.py
 python3 tests/ux_audit.py
+python3 tests/progressive_ux.py
 python3 tests/browser_dom.py
 bash scripts/test-native.sh
 ```
@@ -72,10 +79,12 @@ The UI scripts above consume the included compiled module-graph distribution. `n
 
 The native test command requires the real Zag compiler. It includes discovery/MCP native unit tests and a stdio/synthetic-file round trip through the actual compiled backend, with explicit test browser/transport fixtures. That native suite has not run in this environment.
 
-This round actually ran: Svelte compilation (27 modules, zero component warnings), 79 compiled-UI scenarios across four suites (38 new UX cases plus 41 retained cases), 26 browser-agent scenarios, and 25 Node/helper/HTTP/static tests. Browser/UI fixtures do not establish native Tauri/WebKit, live model, MCP or harness correctness. See EXECUTION_REPORT.md and docs/release-gates.json.
+This revision has executable evidence for Svelte compilation (31 modules, zero component warnings), 103 compiled-UI scenarios across five suites, 26 browser-agent scenarios, and 32 Node/helper/HTTP/static/launch-command tests. The command tests execute Bash with explicit stub clients, not actual coding harnesses. Browser/UI fixtures do not establish native Tauri/WebKit, live model, MCP or harness correctness. See EXECUTION_REPORT.md and docs/release-gates.json.
 
 ## Documentation
 
+- `docs/PROGRESSIVE_WORKSPACE.md`: current cleanliness/continuity audit and evidence.
+- `TOOL_LIBRARY.md`: published version pins, prerequisites and trust limitations.
 - `docs/UX_AUDIT.md`: source findings, implemented corrections, scenario-by-scenario evidence and remaining native checks.
 - `docs/CODEMAX_WORKFLOW.md`: admission, low-setup UX and model-provider vs MCP distinction.
 - `docs/MCP_CLIENT.md`: protocol, consent, limits and native validation instructions.

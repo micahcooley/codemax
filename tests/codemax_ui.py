@@ -1,6 +1,8 @@
 """Actual compiled UI tests; native transport and provider facts are TEST DOUBLES.
 Does not claim to exercise native admission, MCP protocol, tools, or website login.
 """
+# Navigation updated for the registry shelf and nested disclosures. All prior
+# behavioral assertions remain; default-visibility checks are in progressive_ux.py.
 from __future__ import annotations
 import json, os, pathlib, subprocess, time, traceback
 from playwright.sync_api import sync_playwright, expect
@@ -25,13 +27,15 @@ with sync_playwright() as pw:
   page.get_by_role('button',name='Codemax menu',exact=True).click()
   page.get_by_role('menuitem',name=label,exact=True).click()
   page.wait_for_timeout(120)
+  if label=='Connect a client':page.get_by_text('Advanced setup and connection details',exact=True).click()
+  if label=='Tools & MCP' and page.get_by_text('More setup',exact=True).count():page.get_by_text('More setup',exact=True).click()
  def ops(name):return page.evaluate('(op)=>window.__uiFixture.calls.filter(c=>c.op===op)',name)
  def dismiss():
   if page.get_by_role('button',name='Dismiss notification').count():page.get_by_role('button',name='Dismiss notification').click()
  try:
   def detection_filter():
-   route('Providers');expect(page.locator('.provider-choice')).to_have_count(1)
-   assert page.locator('.provider-choice').inner_text().startswith('LT\nLocal test provider') or 'Local test provider' in page.locator('.provider-choice').inner_text()
+   route('Providers');expect(page.locator('.shelf-row')).to_have_count(1)
+   assert page.locator('.shelf-row').inner_text().startswith('LT\nLocal test provider') or 'Local test provider' in page.locator('.shelf-row').inner_text()
    assert not page.get_by_text('Advanced · overrides, mapping, and lifecycle',exact=True).locator('..').get_attribute('open')
    assert not page.get_by_role('button',name='Save overrides').is_visible()
    page.get_by_text('Other browser profiles · 2 not exposed',exact=True).click()
@@ -49,12 +53,12 @@ with sync_playwright() as pw:
    route('Providers');page.get_by_role('checkbox',name='Expose provider to harness',exact=True).check();page.get_by_role('checkbox',name='Expose Mock Coder',exact=True).check()
   record('Per-model and per-provider exposure changes actual generated harness config',exposure)
   def policy():
-   page.get_by_role('checkbox',name='Scan provider automatically',exact=True).uncheck();assert ops('provider.update')[-1]['params']['scan_enabled'] is False
+   page.get_by_text('Advanced · overrides, mapping, and lifecycle',exact=True).click();page.get_by_role('checkbox',name='Scan provider automatically',exact=True).uncheck();assert ops('provider.update')[-1]['params']['scan_enabled'] is False
    page.get_by_role('checkbox',name='Scan provider automatically',exact=True).check()
-   page.get_by_text('Advanced · overrides, mapping, and lifecycle',exact=True).click();page.get_by_role('button',name='Treat as an ordinary website').click()
+   page.get_by_role('button',name='Treat as an ordinary website').click()
    expect(page.get_by_role('heading',name='Browse first. Providers follow.')).to_be_visible()
    page.get_by_text('Other browser profiles · 3 not exposed',exact=True).click();page.get_by_role('button',name='Resume discovery').click()
-   expect(page.locator('.provider-choice')).to_have_count(1)
+   expect(page.locator('.shelf-row')).to_have_count(1)
    page.get_by_role('checkbox',name='Expose provider to harness',exact=True).check()
   record('Pause, exclusion and resume controls send scoped policies without onboarding wizard',policy)
   def metadata():
@@ -80,7 +84,7 @@ with sync_playwright() as pw:
    page.wait_for_function("window.__uiFixture.snapshot.providers.some(p=>p.origin==='https://google.com')")
    assert ops('provider.add')[-1]['params']['url']=='https://google.com/' or ops('provider.add')[-1]['params']['url']=='https://google.com'
    p=page.evaluate("window.__uiFixture.snapshot.providers.find(p=>p.origin==='https://google.com')");assert not p['detected'] and not p['models']
-   route('Providers');expect(page.locator('.provider-choice')).to_have_count(1)
+   route('Providers');expect(page.locator('.shelf-row')).to_have_count(1)
    assert not ops('connector.pick') and not ops('filesystem.prepare')
   record('Normal address navigation creates ordinary tab, not an exposed provider',ordinary)
   def import_config():
@@ -97,7 +101,7 @@ with sync_playwright() as pw:
    page.get_by_role('button',name='Connect',exact=True).click()
    expect(page.get_by_role('button',name='Allow process and connect')).to_be_disabled()
    page.get_by_role('checkbox',name='Trust MCP executable',exact=True).check();page.get_by_role('button',name='Allow process and connect').click()
-   page.get_by_role('checkbox',name='Enable MCP tool read_note',exact=True).wait_for()
+   page.locator('.tool-catalog summary').click();page.get_by_role('checkbox',name='Enable MCP tool read_note',exact=True).wait_for()
    assert ops('mcp.server.connect')[-1]['params']['confirmed'] is True
    expect(page.get_by_role('checkbox',name='Enable MCP tool read_note')).not_to_be_checked()
    page.get_by_role('textbox',name='MCP task',exact=True).fill('Read the fixture note and summarize it. UI test only.')
@@ -106,7 +110,7 @@ with sync_playwright() as pw:
    expect(page.get_by_role('button',name='Start in website')).to_be_enabled()
   record('Explicit local-process trust plus disabled-by-default per-tool exposure',process_consent)
   def approved_tool():
-   page.get_by_role('checkbox',name='Automatically continue tool results').uncheck()
+   page.get_by_text('Task options',exact=True).click();page.get_by_role('checkbox',name='Automatically continue tool results').uncheck()
    page.get_by_role('button',name='Start in website').click();page.get_by_role('heading',name='Approve this tool call').wait_for()
    assert not ops('mcp.run.approve')
    assert ops('mcp.run.start')[-1]['params']['auto_continue'] is False

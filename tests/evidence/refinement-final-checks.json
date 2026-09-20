@@ -1,0 +1,215 @@
+{
+  "completed": true,
+  "recorded_utc": "2026-09-20T01:39:51.309383+00:00",
+  "checks": [
+    {
+      "name": "node",
+      "command": [
+        "npm",
+        "test"
+      ],
+      "exit": 0,
+      "expected": 0,
+      "result": "PASS",
+      "seconds": 0.773,
+      "log": "tests/evidence/refinement-final-node.log"
+    },
+    {
+      "name": "ui",
+      "command": [
+        "python",
+        "tests/ui_browser.py"
+      ],
+      "exit": 0,
+      "expected": 0,
+      "result": "PASS",
+      "seconds": 10.553,
+      "log": "tests/evidence/refinement-final-ui.log"
+    },
+    {
+      "name": "codemax",
+      "command": [
+        "python",
+        "tests/codemax_ui.py"
+      ],
+      "exit": 0,
+      "expected": 0,
+      "result": "PASS",
+      "seconds": 8.243,
+      "log": "tests/evidence/refinement-final-codemax.log"
+    },
+    {
+      "name": "chrome",
+      "command": [
+        "python",
+        "tests/chrome_ui.py"
+      ],
+      "exit": 0,
+      "expected": 0,
+      "result": "PASS",
+      "seconds": 9.051,
+      "log": "tests/evidence/refinement-final-chrome.log"
+    },
+    {
+      "name": "audit",
+      "command": [
+        "python",
+        "tests/ux_audit.py"
+      ],
+      "exit": 0,
+      "expected": 0,
+      "result": "PASS",
+      "seconds": 45.316,
+      "log": "tests/evidence/refinement-final-audit.log"
+    },
+    {
+      "name": "progressive",
+      "command": [
+        "python",
+        "tests/progressive_ux.py"
+      ],
+      "exit": 0,
+      "expected": 0,
+      "result": "PASS",
+      "seconds": 21.816,
+      "log": "tests/evidence/refinement-final-progressive.log"
+    },
+    {
+      "name": "browser",
+      "command": [
+        "python",
+        "tests/browser_dom.py"
+      ],
+      "exit": 0,
+      "expected": 0,
+      "result": "PASS",
+      "seconds": 14.455,
+      "log": "tests/evidence/refinement-final-browser.log"
+    },
+    {
+      "name": "zag-static",
+      "command": [
+        "python",
+        "scripts/check-zag-contracts.py"
+      ],
+      "exit": 0,
+      "expected": 0,
+      "result": "PASS",
+      "seconds": 0.618,
+      "log": "tests/evidence/refinement-final-zag-static.log"
+    },
+    {
+      "name": "ts-syntax",
+      "command": [
+        "node",
+        "scripts/check-ts-syntax.mjs"
+      ],
+      "exit": 0,
+      "expected": 0,
+      "result": "PASS",
+      "seconds": 0.265,
+      "log": "tests/evidence/refinement-final-ts-syntax.log"
+    },
+    {
+      "name": "native-build",
+      "command": [
+        "bash",
+        "scripts/build-backend.sh"
+      ],
+      "exit": 77,
+      "expected": 77,
+      "result": "BLOCKED",
+      "seconds": 0.008,
+      "log": "tests/evidence/refinement-final-native-build.log"
+    },
+    {
+      "name": "prerequisites",
+      "command": [
+        "python",
+        "scripts/doctor.py"
+      ],
+      "exit": 77,
+      "expected": 77,
+      "result": "BLOCKED",
+      "seconds": 0.582,
+      "log": "tests/evidence/refinement-final-prerequisites.log"
+    }
+  ],
+  "compiled_ui_hashes": {
+    "dist/index.html": "7ce721c3678de0494bae3a3a367bdd694d3286eb674f3ee54686ee9d0b3ae653",
+    "dist/runtime/_commonjsHelpers-B85MJLTf.js": "4122079ea33ab12f8c496c5ed4e2d00bae5b7cbac7d2a3fc268fe2861dbc0936",
+    "dist/runtime/attributes-BObN4qe9.js": "4ef08df6cbe20543405c72ec6083656baeddb9f9f8365bdc75e53cc97149e8d9",
+    "dist/runtime/constants-BTL-klwN.js": "e2d62bfdea158434246ece88fdea83a4446249dc41a1e4ff86bd072112d0cdc6",
+    "dist/runtime/custom-element-N2TeiOiC.js": "506755ff49da6f357981010884fa515caf16f34c47db5cda581b19de58ee8e37",
+    "dist/runtime/escaping-CBnpiEl5.js": "4a0e9372b92a7ae138b7787934b904c63fe7cd1e69d7f44038dae3652c6c809a",
+    "dist/runtime/hydration-nC5IHVVc.js": "22f9899e5e59914e1affe59192614a31321b9a7d1697d98d63a0543789cf2345",
+    "dist/runtime/index-6-3S3c88.js": "b9f8b9e9fc88820aed6e69c66195c1bff487627d0d77cb887d4dd8773f61ee67",
+    "dist/runtime/index-B0zdmtA4.js": "2dd63be2ed459bda5d28fe8a9dc627ae1736866a978fe16a7fed356b508e06e9",
+    "dist/runtime/index-utLXTo0e.js": "b84e35b67c2652dd5f50ee51a0234672b405de7a268a851935372208ee331476",
+    "dist/runtime/legacy-client-zNO_yntr.js": "05f46b2146ee8b9cb9ee1887dd293c42e798cb084530cd8d3d2038c7b8169642",
+    "dist/runtime/loop-CiZ6Mtf9.js": "ab46a14704bc6fc8f842c68aafc120392b036fbab8e5ff39ccb6d265da85b33f",
+    "dist/runtime/media-query-D37ajmZt.js": "160d7c6911a1bef498c96e6c3373f2acc58f39ff82f10d53c10a3975f92ccb80",
+    "dist/runtime/reactive-value-o-Ihm_Cp.js": "6e7e16a053db26cf9b36b38d580d137f4d0f68aa68d88057ee3e26f1e320a8c3",
+    "dist/runtime/snippet-B7Rg6G9D.js": "2ce24b783fedfd06e1416319ab93d1c323b255c2319b739b5cd9a27424467e24",
+    "dist/runtime/svelte_animate.js": "215a8f08122023e00b88424bcae590bda3a5a2ec30ac8313ab895d491fa5565d",
+    "dist/runtime/svelte_attachments.js": "a9456ab80508be7bacf80de100f853b480c13a828cc5f8bc89b7158bd621acbb",
+    "dist/runtime/svelte_easing.js": "afc76e0faedcbe7e78013a8b9f4acc66901c5ff8917bd1dbf69ed8a8c4bd827f",
+    "dist/runtime/svelte_events.js": "b10325d82997576bb21543904032d19ad2552835324ae93c6a2a7025ba003e8f",
+    "dist/runtime/svelte_internal.js": "e6217e6fa7e8fe2bd1a413c51074f8be68e1c4f7a0d3d148d9fefdbf8157e000",
+    "dist/runtime/svelte_internal_client.js": "e1bbd30b4110d16523d92aa66292be742de7bdbcea616c36eea43c49fbf40d99",
+    "dist/runtime/svelte_internal_disclose-version.js": "780b2ae091b7c29cc544d5b53a4b7106dca4014fc1a27440bc17fb32a0ff4073",
+    "dist/runtime/svelte_internal_flags_async.js": "0c854101cdae196db12c408f87405c6f13e5d82af147833dffc598c8bde8629b",
+    "dist/runtime/svelte_internal_flags_legacy.js": "66b518a0f100afe6318365318b941ae39f97e4a6161b97ffe7deedd32c3dd5a7",
+    "dist/runtime/svelte_internal_flags_tracing.js": "825df41f76510ab267fe40052a233e2e83cb6bde1660c75dfde1a945bff354a3",
+    "dist/runtime/svelte_internal_server.js": "2449f8e32d0abccd64d20790be9809fb69869b2d782328053f5fd7263ca97377",
+    "dist/runtime/svelte_legacy.js": "6b8c4378cc29c67738b10d0c2a32b04c37b716f574923959f798df09a5ec9ba0",
+    "dist/runtime/svelte_motion.js": "2725d467df9739238f30f1720134d8c5e0791ea11b6a56eafdd2c7f1a8f1d2c9",
+    "dist/runtime/svelte_package.json.js": "825da6c283c6c91e905fc2f9e8e32eb065d2cac9b59491392a6a18fd6efcb384",
+    "dist/runtime/svelte_reactivity.js": "6dcca185b090972de5ca2ebbcab8cc124aedeae9bad658dafb8d2de41929ae10",
+    "dist/runtime/svelte_reactivity_window.js": "9b6932f5cae35b0065a517a8e6a692d990f067d4caf567882b218e0cb2161536",
+    "dist/runtime/svelte_server.js": "7b3d2e6b61b7a8e4974acf057783ce4aea14177863228bbd32777b1bbdb36fe4",
+    "dist/runtime/svelte_store.js": "0254f177d91bac11980b48d6768bce9f1faaa8c97a410a740d6d4c25025c5a1b",
+    "dist/runtime/svelte_svelte.js": "528ec79026df00b690d519db511c85796c2faf872bc016056b12dc0f70eb0805",
+    "dist/runtime/svelte_transition.js": "ae0286fb1be7debddc5865f6df7e714e4436d48fa29ed845f4c2e537697a28dc",
+    "dist/runtime/utils-Bmu7F6be.js": "0440877fbe55755b21bc5ba53c8d18ef52f9c5d42722fac4d69acce274d95b4f",
+    "dist/runtime/utils-CeSFTyv7.js": "d5a1a90d1f148f4d52a17ab7e1fef9c4330cdccde04596d37810f02a2f99de2f",
+    "dist/runtime/validate-khlEg3pd.js": "d44a2ec6a8aabc237e696204a9d83d9dd42dfbf9ec413af02ba58578d4f4fea3",
+    "dist/runtime/version-Byl1KxFg.js": "81d65660144bd400aa66413d8363993c85657750d096794e2cb44089b49c5713",
+    "dist/src/App.svelte.js": "693cc6e6ce11692c7a3d834411a06afaee25889d21b1c29b8651f8e5f60344d6",
+    "dist/src/lib/api/bridge.js": "4b5f1762aef6103d1c755a1e67a11fd020c19f137d317122de2456e3a98b9635",
+    "dist/src/lib/api/native.js": "02d5bff6beeaaebb2991e19fa5aeb14a62219b0d450d336b4634c779d0f06e41",
+    "dist/src/lib/components/Badge.svelte.js": "b0cee3f579c4dc36dc809f9bd6c0b492082b997e1cc7d8f0b52338797731afc5",
+    "dist/src/lib/components/BrowserPane.svelte.js": "3340c96ede3a1cb050e92f1b74c361adebcfd6ef8442a32ac8cccc9ef8bba7e8",
+    "dist/src/lib/components/CodeBlock.svelte.js": "8809e2dbf510d31e9ea694d1ebd355c7331e8d46d5f53127244876774a7ad42d",
+    "dist/src/lib/components/Dialog.svelte.js": "709bc52326cbebd43cadfb67fac72d467fd2c057a5c8cd8813a81aa6af96ea29",
+    "dist/src/lib/components/Empty.svelte.js": "bfa6b9ff05f515974022b00d1a5dd934711340599c20c5dd226b6ecdfc691aad",
+    "dist/src/lib/components/ExternalClients.svelte.js": "cfe2865296f211d80b3b1bd884c9bf7ed1b7e1bf7ef2f23b4e7a15a4459b352a",
+    "dist/src/lib/components/FileProbe.svelte.js": "e3d442dd27bc51129debdbb29cefd938a5de58c7431ae2c907839295e163b142",
+    "dist/src/lib/components/Icon.svelte.js": "50cabd2bdfdc8d454298ab6faaaca94712851ac30da4faa775cf677e400d6082",
+    "dist/src/lib/components/TabActivity.svelte.js": "bbf4803c816a682391665cddc423573263872689cc2c82e3259c1d02dff51a6b",
+    "dist/src/lib/components/chrome/ChromeMenu.svelte.js": "d61fcd1f1b757843ba8ebf88d84375042e1115a60ad2e85e468d13572179c515",
+    "dist/src/lib/components/chrome/Inspector.svelte.js": "17efeba0849498785d99324ffe97e871642fbc6ca19f62f8846157d16bfb82ce",
+    "dist/src/lib/components/providers/ProviderShelf.svelte.js": "3af2145c7d9cff4e3b44cde935f1d0adc80e48b77ce23503bad31609fce51b74",
+    "dist/src/lib/components/tools/ToolLibrary.svelte.js": "1f76a39e09e030ca8fe7fbd9a857d32b55e18131684e98c9f0380a60d721c8e1",
+    "dist/src/lib/format.js": "aaa13fa53cc3f5d31b09ee4a76e9df59f84cc927f6eb90d66044d393c57c0375",
+    "dist/src/lib/launch-command.js": "2150706423e70299185d7036bef1fd21c374a57ef294d61f80470e1bfb41a592",
+    "dist/src/lib/state/app.svelte.js": "5ae987f03eac3659a7dc5980dd727626a7de27d955920808f0d65135b2a70eb0",
+    "dist/src/lib/tool-recipes.js": "2468e2c7d92f730aabae961ee9235c20add357156901ba52256e779551b754d1",
+    "dist/src/lib/types/bridge.js": "04c3fdb6826d26c77c4776145a0ba22eef27ce6aee1a0c36e503bad0d4771a1d",
+    "dist/src/main.js": "ff49142e4541857013f5453a4fe6ac2d95f2fc201ea3d26db8e91e9105ce15d3",
+    "dist/src/screens/Detector.svelte.js": "d28fead79eeecea7e00339b6348c88f22245d6dcd9e1cc780db89f8befb4344f",
+    "dist/src/screens/Harness.svelte.js": "3ae7880a4894c9d7589e16eecf5c6c377ab622c13cba6644c191d5377b7c3deb",
+    "dist/src/screens/Home.svelte.js": "b7af1508acbc649f8e9bd6a444bc89282c2a5484a01284b734211e702074dc77",
+    "dist/src/screens/Models.svelte.js": "d7b608b0a5dedbb29c64a64834af9486f41e293b689931972681aea9982b2387",
+    "dist/src/screens/ProviderBrowser.svelte.js": "89a2de879d70eb781f233785e7b6e95f06a4d1fc4c9f93dee703943b2f96bd51",
+    "dist/src/screens/Providers.svelte.js": "2d3b72ed221d97216f25d8ef9e2c210a9c7156207ec588a83eb74151cb1c38a7",
+    "dist/src/screens/Sessions.svelte.js": "9384d41f342137b0d83a75645418b818b82475acad2b315cfb3827ca8bd49d8a",
+    "dist/src/screens/Settings.svelte.js": "43111e586ea41fe039d77def90dc20117454d04dcdf99d4ecdbc368994ebaf96",
+    "dist/src/screens/Tools.svelte.js": "aa4215238b40648b52de1616f89668bcedaf461eaf43ed7132d303860ed16d85",
+    "dist/ui.css": "ec5ca8472b575308c84fd224700834b9b0a65c17d620839c8a549c07f8412bd9"
+  },
+  "native_zag_executed": false,
+  "native_tauri_executed": false,
+  "real_harness_executed": false,
+  "external_mcp_packages_executed": false
+}

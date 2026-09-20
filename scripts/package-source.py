@@ -40,19 +40,25 @@ def main():
     chrome=load('tests/evidence/single-tab-ui.json')
     codemax=load('tests/evidence/codemax-ui.json')
     audit=load('tests/evidence/ux-audit.json')
-    tap=(ROOT/'tests/evidence/node-current.log').read_text()
+    progressive=load('tests/evidence/progressive-ux.json')
+    final=load('tests/evidence/refinement-final-checks.json')
+    if not final.get('completed') or any(c['result'] not in ('PASS','BLOCKED') for c in final['checks']):
+        raise SystemExit('Final evidence is incomplete or contains a failed check.')
+    for path,digest in final['compiled_ui_hashes'].items():
+        if hashlib.sha256((ROOT/path).read_bytes()).hexdigest()!=digest:raise SystemExit('Compiled UI changed since final tests: '+path)
+    tap=(ROOT/'tests/evidence/refinement-final-node.log').read_text()
     def tap_count(name):
         matches=re.findall(r'^# '+name+r' (\d+)\s*$',tap,re.MULTILINE)
         if len(matches)!=1:raise ValueError('Missing or ambiguous Node test summary: '+name)
         return int(matches[0])
     if (tap_count('fail') or any(row['status']!='PASS' for row in ui['results'])
-        or chrome['failed'] or codemax['failed'] or audit['failed'] or audit.get('runtime_errors')
+        or progressive['failed'] or progressive.get('runtime_errors') or chrome['failed'] or codemax['failed'] or audit['failed'] or audit.get('runtime_errors')
         or chrome.get('runtime_errors') or codemax.get('runtime_errors')
         or any(row['status']!='PASS' for row in dom.get('tests',[]))):
         raise SystemExit('Refusing to package a revision with failed UI/Node evidence.')
     metadata={
         'name':'Codemax','version':load('package.json')['version'],
-        'revision':'whole-interface-ux-audit',
+        'revision':'progressive-workspace-and-safe-continuation',
         'kind':'desktop-source-plus-compiled-svelte-ui','local_commit':head(),
         'native_installer_included':False,'full_masterplan_complete':False,'release_qualified':False,
         'file_count_excluding_packaging_metadata':len(content),
@@ -62,19 +68,23 @@ def main():
             'discovery_mcp':{'passed':codemax['passed'],'failed':codemax['failed'],'evidence':'tests/evidence/codemax-ui.json'},
             'single_tab':{'passed':chrome['passed'],'failed':chrome['failed'],'evidence':'tests/evidence/single-tab-ui.json'},
             'whole_interface_ux':{'passed':audit['passed'],'failed':audit['failed'],'evidence':'tests/evidence/ux-audit.json'},
-            'total_passed':len(ui['results'])+chrome['passed']+codemax['passed']+audit['passed'],
+            'progressive_workspace':{'passed':progressive['passed'],'failed':progressive['failed'],'evidence':'tests/evidence/progressive-ux.json'},
+            'total_passed':len(ui['results'])+chrome['passed']+codemax['passed']+audit['passed']+progressive['passed'],
             'scope':'Compiled Svelte with native-host/website test doubles; no native execution.',
         },
-        'node_tests':{'passed':tap_count('pass'),'failed':tap_count('fail'),'evidence':'tests/evidence/node-current.log'},
+        'node_tests':{'passed':tap_count('pass'),'failed':tap_count('fail'),'evidence':'tests/evidence/refinement-final-node.log'},
         'browser_test_cases':len(dom.get('tests',[])),
         'browser_evidence':'tests/evidence/browser-dom-tests.json',
-        'native_zag_build':'NOT_RUN_THIS_UI_REVISION','native_tauri_build':'NOT_RUN_THIS_UI_REVISION',
+        'native_zag_build':'BLOCKED_COMPILER_MISSING_EXIT_77','native_tauri_build':'BLOCKED_RUST_TOOLCHAIN_MISSING',
         'normal_vite_and_svelte_check':'NOT_VERIFIED',
-        'live_website_and_mcp_tests':'NOT_RUN_THIS_UI_REVISION','real_coding_harness':'NOT_RUN',
-        'prior_closeout':'docs/history/single-tab-closeout.md',
-        'unchanged_native_source':load('tests/evidence/native-source-unchanged.json'),
-        'prerequisite_check':load('tests/evidence/ux-prerequisites.json'),
-        'ux_audit_document':'docs/UX_AUDIT.md',
+        'live_website_and_mcp_tests':'NOT_RUN_THIS_REVISION','real_coding_harness':'NOT_RUN',
+        'prior_closeout':'docs/history/ux-audit-closeout.md',
+        'native_source_changed':True,
+        'native_task_regression_source':'backend/tests/task_continuity.zag',
+        'native_task_regression_executed':False,
+        'final_check_receipt':'tests/evidence/refinement-final-checks.json',
+        'prerequisite_check':json.loads((ROOT/'tests/evidence/refinement-final-prerequisites.log').read_text()),
+        'ux_audit_document':'docs/PROGRESSIVE_WORKSPACE.md',
         'manifest_sha256':hashlib.sha256(manifest.encode()).hexdigest(),
         'manifest_excludes':sorted(PACKAGING),
         'compiler_pin':'abed8aa170ef1bc33e5aca68b99fcdd905a4545f',

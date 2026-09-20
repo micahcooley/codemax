@@ -98,7 +98,7 @@ Emulated tool syntax is:
 
 The incremental parser tracks JSON nesting, string escapes, fragmented openers/closers, code fences, duplicate IDs, allowlisted tool names and payload limits. Wrong-nonce/escaped/fenced examples are text. Malformed or unfinished frames recover as literal text rather than executable events. Valid arguments are emitted only after the complete frame validates; argument bytes are not forwarded before validation.
 
-**Nonce framing is not a security boundary against prompt injection.** Website/model output is untrusted, and the receiving harness must enforce its own tool permissions and confirmation rules. This application never executes the model's tools itself.
+**Nonce framing is not a security boundary against prompt injection.** Website/model output is untrusted, and the receiving harness must enforce its own tool permissions and confirmation rules. The public model gateway returns tool calls to the external harness and never executes that harness's tools. The separately user-started built-in MCP runner can execute explicitly approved local MCP calls, as specified below.
 
 ## Usage and errors
 
@@ -112,8 +112,14 @@ If a client imposes stricter native formats or sends unsupported mandatory optio
 
 `provider.update` adds optional booleans `exposed`, `scan_enabled`, `dismissed`. `model.update` takes `provider_id`, exact registry `model`, and `enabled`. Browser `capabilities` observations are document/origin bound and whitelisted; see `schemas/capabilities.schema.json`.
 
-Trusted UI-only operations: `mcp.server.add` (label, command, JSON string-array args), `.connect` (server_id, confirmed), `.disconnect`, `.remove` (confirmed), `mcp.tool.update` (alias in `tool`, enabled), `mcp.run.start` (provider_id, model, task, auto_continue), `.approve` (run_id, call_id, confirmed, allow_run), `.cancel` (run_id), `.continue` (run_id). Snapshot fields `mcp_servers` and `mcp_run` provide bounded state. These are **not public model HTTP endpoints** and do not turn Codemax into a remotely exposed MCP server.
+Trusted UI-only operations: `mcp.server.add` (label, command, JSON string-array args), `.connect` (server_id, confirmed), `.disconnect`, `.remove` (confirmed), `mcp.tool.update` (alias in `tool`, enabled), `mcp.run.start` (provider_id, model, task, auto_continue, optional turn_budget and work_minutes), `.approve` (run_id, call_id, confirmed, allow_run), `.cancel` (run_id), `.continue` (run_id), `.resume` (run_id). Snapshot fields `mcp_servers` and `mcp_run` provide bounded state. These are **not public model HTTP endpoints** and do not turn Codemax into a remotely exposed MCP server.
 
 `mcp.transport` accepts only id-zero internal host notifications bound to server ID and connection epoch. Zag emits `type:mcp` frames with start/write/stop transport actions. The Rust transport supplies connected/line/closed/error events. No provider page or main-UI proxy can supply arbitrary process output.
 
-MCP task states: IDLE, GENERATING, PERMISSION_REQUIRED, EXECUTING_TOOL, RESULT_READY, COMPLETED, FAILED, CANCELLED. One-time approval is consumed on dispatch; auto_continue controls result submission, not tool permissions. Refer to `docs/MCP_CLIENT.md` for version, transport and byte/count limits.
+MCP task states: IDLE, GENERATING, PERMISSION_REQUIRED, EXECUTING_TOOL, RESULT_READY, PAUSED, COMPLETED, FAILED, CANCELLED. One-time approval is consumed on dispatch; auto_continue controls result submission, not tool permissions. Refer to `docs/MCP_CLIENT.md` for version, transport and byte/count limits.
+
+## Progressive task snapshot additions
+
+`mcp_run.turn_limit`, `work_remaining_seconds`, and `can_resume` distinguish active work from user waiting and safe pauses. `can_resume` is not execution permission: resume revalidates the exact run, catalog, provider and conversation. It only supports the in-memory work-budget pause. `mcp_servers[].progress_message` is bounded untrusted display text. Matching progress does not imply tool success or bypass the one-hour call ceiling.
+
+The new `directory_pick` native command belongs to the trusted main webview ACL/AppManifest only. It returns a user-selected absolute path or null, never file contents. It is unrelated to the external model HTTP API and is unavailable to provider pages.

@@ -29,9 +29,10 @@
   case'mcp.server.disconnect':{const s=snapshot.mcp_servers.find(s=>s.id===params.server_id);s.state='DISCONNECTED';s.tools=[];break;}
   case'mcp.server.remove':snapshot.mcp_servers=snapshot.mcp_servers.filter(s=>s.id!==params.server_id);break;
   case'mcp.tool.update':{const tool=snapshot.mcp_servers.flatMap(s=>s.tools).find(t=>t.alias===params.tool);if(!tool)throw Error('MCP_TOOL_NOT_FOUND');tool.enabled=params.enabled;break;}
-  case'mcp.run.start':{const t=snapshot.mcp_servers.flatMap(s=>s.tools).find(t=>t.enabled);if(!t)throw Error('NO_ENABLED_TOOLS');snapshot.mcp_run={...snapshot.mcp_run,id:'ui-run-1',state:'PERMISSION_REQUIRED',provider_id:params.provider_id,model:params.model,auto_continue:params.auto_continue,turns:1,calls:0,error:'',answer:'',call_id:'ui-call-1',tool:t.alias,arguments:JSON.stringify({path:'test-fixture.txt'}),last_result:''};break;}
+  case'mcp.run.start':{const t=snapshot.mcp_servers.flatMap(s=>s.tools).find(t=>t.enabled);if(!t)throw Error('NO_ENABLED_TOOLS');snapshot.mcp_run={...snapshot.mcp_run,id:'ui-run-1',state:'PERMISSION_REQUIRED',provider_id:params.provider_id,model:params.model,auto_continue:params.auto_continue,turn_limit:params.turn_budget,work_remaining_seconds:params.work_minutes*60,can_resume:false,turns:1,calls:0,error:'',answer:'',call_id:'ui-call-1',tool:t.alias,arguments:JSON.stringify({path:'test-fixture.txt'}),last_result:''};break;}
   case'mcp.run.approve':{const t=snapshot.mcp_run;if(params.run_id!==t.id||params.call_id!==t.call_id||!params.confirmed)throw Error('MCP_PERMISSION_STALE');t.state='EXECUTING_TOOL';t.calls++;break;}
   case'mcp.run.cancel':snapshot.mcp_run.state='CANCELLED';snapshot.mcp_run.error='USER_CANCELLED';break;
+  case'mcp.run.resume':{const t=snapshot.mcp_run;if(params.run_id!==t.id||t.state!=='PAUSED'||!t.can_resume)throw Error('MCP_RESUME_NOT_AVAILABLE');t.state=t.call_id?'PERMISSION_REQUIRED':'GENERATING';t.can_resume=false;t.error='';t.turn_limit=t.turns+100;break;}
   case'mcp.run.continue':snapshot.mcp_run.state='GENERATING';snapshot.mcp_run.turns++;break;
   case'provider.open':{const p=get(params.provider_id);p.open_tab=true;if(p.id===1)p.state='READY';break;}
   case'provider.close':{get(params.provider_id).open_tab=false;break;}
@@ -66,6 +67,7 @@
    case'browser_control':case'browser_find':return;
    case'window_control':return{maximized:args.action==='maximize'};
    case'document_export':window.__lastExport={name:args.name,content:args.content};return true;
+   case'directory_pick':return window.__folderPick??null;
    case'document_import':if(window.__importDocument)return clone(window.__importDocument);return{schema:1,origin:'http://127.0.0.1:7340',recipes:[],manual_model:''};
    case'gateway_probe':return{healthy:true,round_trip_ms:3};
    case'backend_restart':emit('bridge:host',{state:'STARTING',code:null});setTimeout(()=>{emit('bridge:host',{state:'READY',code:null});push();},40);return;

@@ -1,0 +1,1 @@
+BLOCKED: native Zag compiler missing. Run scripts/bootstrap-zag.sh on a network-enabled Linux host.

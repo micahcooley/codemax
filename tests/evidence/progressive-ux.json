@@ -1,0 +1,128 @@
+{
+  "scope": "Compiled Svelte and real Chromium; native-host and provider doubles. No native runtime or real external client/tool execution.",
+  "passed": 24,
+  "failed": 0,
+  "runtime_errors": [],
+  "tests": [
+    {
+      "name": "Default shelf shows only registered providers and never duplicates tab controls",
+      "status": "PASS",
+      "seconds": 0.169
+    },
+    {
+      "name": "Sidebar collapse fills the native surface and persists independently of the inspector",
+      "status": "PASS",
+      "seconds": 0.169
+    },
+    {
+      "name": "Closing and reopening a website leaves one saved provider and one browser tab",
+      "status": "PASS",
+      "seconds": 0.205
+    },
+    {
+      "name": "Provider settings open on demand without a second provider list or advanced controls",
+      "status": "PASS",
+      "seconds": 0.082
+    },
+    {
+      "name": "Ordinary browsing never creates a registered sidebar provider in the fixture flow",
+      "status": "PASS",
+      "seconds": 0.059
+    },
+    {
+      "name": "Registry activity rings track real state fields, reduced motion and disabled exposure",
+      "status": "PASS",
+      "seconds": 0.113
+    },
+    {
+      "name": "Client setup initially exposes only client, model and one private-launch action",
+      "status": "PASS",
+      "seconds": 0.502
+    },
+    {
+      "name": "Private launch starts then probes then copies; no config overwrite or false client-connected claim",
+      "status": "PASS",
+      "seconds": 0.556
+    },
+    {
+      "name": "Failed gateway probe does not retrieve or copy a key",
+      "status": "PASS",
+      "seconds": 0.534
+    },
+    {
+      "name": "Clipboard failure is actionable and never renders the local key",
+      "status": "PASS",
+      "seconds": 0.538
+    },
+    {
+      "name": "Navigating away cancels late credential retrieval and clipboard side effects",
+      "status": "PASS",
+      "seconds": 1.671
+    },
+    {
+      "name": "Losing model exposure while connecting prevents a stale launch command",
+      "status": "PASS",
+      "seconds": 0.916
+    },
+    {
+      "name": "Tool library and technical task settings are opt-in; browsing recipes never installs code",
+      "status": "PASS",
+      "seconds": 0.529
+    },
+    {
+      "name": "Folder picker fills one quoted argument; saving a recipe still requires separate process consent",
+      "status": "PASS",
+      "seconds": 0.747
+    },
+    {
+      "name": "Cancelling the native folder dialog preserves the typed folder without effects",
+      "status": "PASS",
+      "seconds": 0.64
+    },
+    {
+      "name": "Simple file recipe refuses a filesystem-root share or parent traversal",
+      "status": "PASS",
+      "seconds": 0.639
+    },
+    {
+      "name": "Tool catalogs are collapsed and searchable; clearing a filter restores choices",
+      "status": "PASS",
+      "seconds": 0.592
+    },
+    {
+      "name": "Task options validate budgets and forward automatic result continuation to Zag",
+      "status": "PASS",
+      "seconds": 0.667
+    },
+    {
+      "name": "Active tasks replace configuration panels with the relevant approval and stop controls",
+      "status": "PASS",
+      "seconds": 0.496
+    },
+    {
+      "name": "Budget pause resumes the same run without starting over or replaying an approval",
+      "status": "PASS",
+      "seconds": 0.556
+    },
+    {
+      "name": "Non-resumable state cannot be forced through UI; cancellation remains available",
+      "status": "PASS",
+      "seconds": 0.564
+    },
+    {
+      "name": "Routine task progress is quiet; a safe pause still surfaces attention while browsing",
+      "status": "PASS",
+      "seconds": 0.114
+    },
+    {
+      "name": "Current MCP progress is visible as untrusted text without granting execution",
+      "status": "PASS",
+      "seconds": 0.529
+    },
+    {
+      "name": "Clean connection, library and browser layouts remain bounded at three window sizes",
+      "status": "PASS",
+      "seconds": 3.292
+    }
+  ]
+}

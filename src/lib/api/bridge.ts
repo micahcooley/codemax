@@ -40,3 +40,5 @@ export async function copy(text:string):Promise<void>{
   if(!navigator.clipboard)throw new Error('CLIPBOARD_UNAVAILABLE');
   await navigator.clipboard.writeText(text);
 }
+
+export const chooseDirectory=():Promise<string|null>=>invoke('directory_pick');

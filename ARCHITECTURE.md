@@ -53,3 +53,11 @@ Browser profiles and admitted providers are distinct. `Provider.detected` record
 `backend/mcp/hub.zag` owns stdio MCP negotiation/catalog/call state. `backend/mcp/runner.zag` owns a bounded permissioned website task and its volatile transcript/grants. It uses a private nonblocking socketpair client into the same Zag generation/session path as external model clients. It does not implement a separate model backend. `src-tauri/src/mcp_transport.rs` only starts user-confirmed programs and transports bounded stdio frames; it does not decide permissions or execute model-generated shell text.
 
 MCP tools/consent/continuation are available through the trusted main UI's private operations. Remote provider observation cannot invoke those operations. Tasks are bound to exact server epochs/catalogs/model/session and revalidated at approval. A lost conversation, disabled provider/model or changed catalog revokes the task. Detailed scope and intentionally unnegotiated capabilities are in `docs/MCP_CLIENT.md`.
+
+## Progressive workspace / continuation changes (dev.7)
+
+`ProviderShelf.svelte` derives only admitted registry entries from backend state. It does not become a second authority for profiles or tab lifecycle. `launch-command.ts` renders connection configuration only; Zag owns listener/auth/model selection. `ToolLibrary.svelte` and `tool-recipes.ts` supply reviewed draft definitions, while `directory_pick` is a thin native dialog binding. No server runs at recipe selection.
+
+`backend/mcp/budget.zag` is the authoritative work-budget policy. The existing native runner owns safe pause/resume, retained volatile conversation transcript, permission revocation and tool progress. Rust only transports bounded bytes and manages the reviewed local process. Native server/catalog capacity changes are end-to-end, including the internal host envelope; ordinary provider IPC privileges remain unchanged. Paused tasks keep their browser awake. Manually generating background website tabs now also prevent idle suspension.
+
+The compiled UI tests use explicit native-host and provider doubles. The Bash launch tests use fake executable clients; native regression source is not evidence of a native pass. New native source is not described as unchanged or release-qualified.

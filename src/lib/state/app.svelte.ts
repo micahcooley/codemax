@@ -10,14 +10,14 @@ class Application {
   selectedProvider=$state<number|null>(null);popup=$state<Popup>(null);popupProvider=$state<number|null>(null);
   confirmation=$state<Confirmation|null>(null);confirming=$state(false);
   error=$state('');popupError=$state('');notification=$state('');pending=$state(0);inspectorWidth=$state(272);
-  inspectorVisible=$state(false);inspectorTab=$state<'connection'|'browser'>('connection');
+  shelfVisible=$state(true);inspectorVisible=$state(false);inspectorTab=$state<'connection'|'browser'>('connection');
   focusAddress=$state(0);focusFind=$state(0);findVisible=$state(false);zoom=$state(100);zoomByProvider=$state<Record<number,number>>({});liveOrigins=$state<Record<number,string>>({});
   loading=$state<Record<number,boolean>>({});
   contextMenu=$state<{id:number;x:number;y:number}|null>(null);tabOrder=$state<number[]>([]);secret=$state('');
   settingsSection=$state<SettingsSection>('appearance');providerSelection=$state<number|null>(null);clientModel=$state('');
   // Drafts live only in this process. Never persist tasks, commands or secrets in localStorage.
   providerDrafts=$state<Record<number,ProviderDraft>>({});
-  toolDraft=$state({adding:false,label:'',command:'',argv:'[]',task:'',chosen:'',automatic:true});
+  toolDraft=$state({adding:false,label:'',command:'',argv:'[]',task:'',chosen:'',automatic:true,turnBudget:100,workMinutes:30});
   modelFilters=$state({query:'',provider:'all',status:'all',sort:'provider' as 'provider'|'model',descending:false});
   sessionFilters=$state({query:'',status:'all'});
   pendingKeys=$state<string[]>([]);private requests=new Map<string,Promise<unknown>>();
@@ -36,7 +36,7 @@ class Application {
   ready=$derived(this.host.state==='READY'&&!!this.snapshot);
   sessions=$derived(this.snapshot?.sessions??[]);
   events=$derived(this.snapshot?.events??[]);
-  activeTask=$derived(this.snapshot?.mcp_run&&['GENERATING','PERMISSION_REQUIRED','EXECUTING_TOOL','RESULT_READY'].includes(this.snapshot.mcp_run.state)?this.snapshot.mcp_run:null);
+  activeTask=$derived(this.snapshot?.mcp_run&&['GENERATING','PERMISSION_REQUIRED','EXECUTING_TOOL','RESULT_READY','PAUSED'].includes(this.snapshot.mcp_run.state)?this.snapshot.mcp_run:null);
   get origin():string{return this.selectedProvider===null?'':this.liveOrigins[this.selectedProvider]||this.provider?.origin||'';}
   get pageUrl():string{const p=this.provider;return p?(this.origin&&this.origin!==p.origin?this.origin:p.current_url||p.url):'';}
   busy(op:string):boolean{return this.pendingKeys.some(key=>key.startsWith(op+'|'));}
@@ -148,13 +148,15 @@ class Application {
     const ids=this.tabs.map(p=>p.id),index=ids.indexOf(id),next=index+offset;if(index<0||next<0||next>=ids.length)return;
     [ids[index],ids[next]]=[ids[next],ids[index]];this.tabOrder=ids;this.saveLayout();
   }
-  saveLayout():void{try{localStorage.setItem('bridge.layout.v2',JSON.stringify({inspector:this.inspectorWidth,right:this.inspectorVisible,order:this.tabOrder}));}catch{/* Noncritical presentation preferences. */}}
+  toggleShelf():void{this.shelfVisible=!this.shelfVisible;this.saveLayout();}
+  saveLayout():void{try{localStorage.setItem('bridge.layout.v2',JSON.stringify({inspector:this.inspectorWidth,right:this.inspectorVisible,order:this.tabOrder,shelf:this.shelfVisible}));}catch{/* Noncritical presentation preferences. */}}
   restoreLayout():void{
     try{
       const saved=localStorage.getItem('bridge.layout.v2');const value=JSON.parse(saved||localStorage.getItem('bridge.layout.v1')||'{}');
       if(!value||typeof value!=='object')return;
       if(Number.isFinite(value.inspector))this.inspectorWidth=Math.max(240,Math.min(380,value.inspector));
       this.inspectorVisible=!!saved&&value.right===true;
+      this.shelfVisible=value.shelf!==false;
       if(Array.isArray(value.order))this.tabOrder=[...new Set<number>(value.order.filter((n:unknown):n is number=>typeof n==='number'&&Number.isInteger(n)&&n>0))].slice(0,16);
     }catch{/* Invalid layout must not prevent browsing. */}
   }

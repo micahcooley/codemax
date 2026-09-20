@@ -1,0 +1,240 @@
+PASS Entering an existing origin preserves its path, query and fragment
+PASS Address parser distinguishes local hosts, search, unsafe schemes and credentials
+PASS Escape cancels address edits without navigation and restores tab focus
+PASS Find focuses immediately, supports reverse search and closes independently
+PASS Confirmation defaults to Cancel and traps browser shortcuts without destructive side effects
+PASS Command palette autofocus and keyboard selection remain visible while scrolling
+PASS Internal management navigation has predictable Back and Forward history
+PASS Page zoom readout follows each website instead of resetting on every switch
+PASS Copy feedback stays in the reserved footer, does not shift the website and expires
+PASS Disconnected state retains last-known profiles, labels staleness and blocks mutations
+PASS Loading an unavailable snapshot is not mislabeled as an empty workspace
+PASS Repeated identical actions in flight dispatch only one backend request
+PASS Errors survive unrelated successful actions and preserve path/message casing
+PASS Provider override drafts survive navigation and Reset does not mutate saved data
+PASS Provider edits are explicit; unchanged values cannot be resubmitted
+PASS Disabling a provider during work requires confirmation; Cancel restores the checkbox
+PASS Client setup includes working Start, health Check and confirmed Stop controls
+PASS A negative health result cannot produce a successful connection message
+PASS Unavailable explicit client model selection is not silently replaced by another model
+PASS Technical connection fields start collapsed; leaving the page hides revealed secrets
+PASS Ready filters and default-model actions respect model and provider exposure
+PASS Model filters persist, empty searches recover in place, and sorting toggles direction
+PASS Opening a session asks the backend for that conversation, not the provider homepage
+PASS Ending a session requires review and does not delete a website conversation
+PASS A failed session rename restores its saved value without a stale event error
+PASS Unsent tool task and server drafts survive navigation; invalid JSON is explained inline
+PASS Tool approvals remain visible while browsing and never auto-execute
+PASS A new or changed tool call resets the broader grant checkbox to Allow once
+PASS Removing a tool server requires confirmation without deleting its executable
+PASS Failed tool-server connection keeps the reviewed definition available for retry
+PASS Settings deep links open the right section, remember it and settle applied forms
+PASS Connector reset, diagnostic clearing and application close guard destructive effects
+PASS Filtered-empty Sessions and Activity recover without sending users into setup
+PASS All nine surfaces and five Settings sections stay bounded at three viewport sizes
+PASS Long provider labels, model names and identifiers cannot expand the whole window
+PASS Slow tab opening cannot override a newer tab or page selection
+PASS An in-flight confirmation cannot be half-dismissed; failures remain recoverable in its dialog
+PASS Reduced motion keeps readable working states without animation
+{
+  "scope": "Actual compiled Svelte in Chromium; explicitly mocked native IPC and provider data only.",
+  "native_tauri_executed": false,
+  "zag_executed": false,
+  "live_website_contacted": false,
+  "passed": 38,
+  "failed": 0,
+  "tests": [
+    {
+      "name": "Entering an existing origin preserves its path, query and fragment",
+      "status": "PASS",
+      "seconds": 0.151
+    },
+    {
+      "name": "Address parser distinguishes local hosts, search, unsafe schemes and credentials",
+      "status": "PASS",
+      "seconds": 0.015
+    },
+    {
+      "name": "Escape cancels address edits without navigation and restores tab focus",
+      "status": "PASS",
+      "seconds": 0.103
+    },
+    {
+      "name": "Find focuses immediately, supports reverse search and closes independently",
+      "status": "PASS",
+      "seconds": 0.111
+    },
+    {
+      "name": "Confirmation defaults to Cancel and traps browser shortcuts without destructive side effects",
+      "status": "PASS",
+      "seconds": 0.421
+    },
+    {
+      "name": "Command palette autofocus and keyboard selection remain visible while scrolling",
+      "status": "PASS",
+      "seconds": 0.118
+    },
+    {
+      "name": "Internal management navigation has predictable Back and Forward history",
+      "status": "PASS",
+      "seconds": 0.847
+    },
+    {
+      "name": "Page zoom readout follows each website instead of resetting on every switch",
+      "status": "PASS",
+      "seconds": 0.195
+    },
+    {
+      "name": "Copy feedback stays in the reserved footer, does not shift the website and expires",
+      "status": "PASS",
+      "seconds": 5.211
+    },
+    {
+      "name": "Disconnected state retains last-known profiles, labels staleness and blocks mutations",
+      "status": "PASS",
+      "seconds": 0.42
+    },
+    {
+      "name": "Loading an unavailable snapshot is not mislabeled as an empty workspace",
+      "status": "PASS",
+      "seconds": 0.028
+    },
+    {
+      "name": "Repeated identical actions in flight dispatch only one backend request",
+      "status": "PASS",
+      "seconds": 0.078
+    },
+    {
+      "name": "Errors survive unrelated successful actions and preserve path/message casing",
+      "status": "PASS",
+      "seconds": 0.027
+    },
+    {
+      "name": "Provider override drafts survive navigation and Reset does not mutate saved data",
+      "status": "PASS",
+      "seconds": 1.141
+    },
+    {
+      "name": "Provider edits are explicit; unchanged values cannot be resubmitted",
+      "status": "PASS",
+      "seconds": 0.46
+    },
+    {
+      "name": "Disabling a provider during work requires confirmation; Cancel restores the checkbox",
+      "status": "PASS",
+      "seconds": 0.68
+    },
+    {
+      "name": "Client setup includes working Start, health Check and confirmed Stop controls",
+      "status": "PASS",
+      "seconds": 0.822
+    },
+    {
+      "name": "A negative health result cannot produce a successful connection message",
+      "status": "PASS",
+      "seconds": 0.413
+    },
+    {
+      "name": "Unavailable explicit client model selection is not silently replaced by another model",
+      "status": "PASS",
+      "seconds": 0.432
+    },
+    {
+      "name": "Technical connection fields start collapsed; leaving the page hides revealed secrets",
+      "status": "PASS",
+      "seconds": 0.605
+    },
+    {
+      "name": "Ready filters and default-model actions respect model and provider exposure",
+      "status": "PASS",
+      "seconds": 0.39
+    },
+    {
+      "name": "Model filters persist, empty searches recover in place, and sorting toggles direction",
+      "status": "PASS",
+      "seconds": 1.142
+    },
+    {
+      "name": "Opening a session asks the backend for that conversation, not the provider homepage",
+      "status": "PASS",
+      "seconds": 0.421
+    },
+    {
+      "name": "Ending a session requires review and does not delete a website conversation",
+      "status": "PASS",
+      "seconds": 0.957
+    },
+    {
+      "name": "A failed session rename restores its saved value without a stale event error",
+      "status": "PASS",
+      "seconds": 0.415
+    },
+    {
+      "name": "Unsent tool task and server drafts survive navigation; invalid JSON is explained inline",
+      "status": "PASS",
+      "seconds": 0.794
+    },
+    {
+      "name": "Tool approvals remain visible while browsing and never auto-execute",
+      "status": "PASS",
+      "seconds": 0.164
+    },
+    {
+      "name": "A new or changed tool call resets the broader grant checkbox to Allow once",
+      "status": "PASS",
+      "seconds": 0.498
+    },
+    {
+      "name": "Removing a tool server requires confirmation without deleting its executable",
+      "status": "PASS",
+      "seconds": 0.776
+    },
+    {
+      "name": "Failed tool-server connection keeps the reviewed definition available for retry",
+      "status": "PASS",
+      "seconds": 0.504
+    },
+    {
+      "name": "Settings deep links open the right section, remember it and settle applied forms",
+      "status": "PASS",
+      "seconds": 1.167
+    },
+    {
+      "name": "Connector reset, diagnostic clearing and application close guard destructive effects",
+      "status": "PASS",
+      "seconds": 1.314
+    },
+    {
+      "name": "Filtered-empty Sessions and Activity recover without sending users into setup",
+      "status": "PASS",
+      "seconds": 0.768
+    },
+    {
+      "name": "All nine surfaces and five Settings sections stay bounded at three viewport sizes",
+      "status": "PASS",
+      "seconds": 10.371
+    },
+    {
+      "name": "Long provider labels, model names and identifiers cannot expand the whole window",
+      "status": "PASS",
+      "seconds": 1.546
+    },
+    {
+      "name": "Slow tab opening cannot override a newer tab or page selection",
+      "status": "PASS",
+      "seconds": 0.272
+    },
+    {
+      "name": "An in-flight confirmation cannot be half-dismissed; failures remain recoverable in its dialog",
+      "status": "PASS",
+      "seconds": 1.539
+    },
+    {
+      "name": "Reduced motion keeps readable working states without animation",
+      "status": "PASS",
+      "seconds": 0.093
+    }
+  ],
+  "runtime_errors": [],
+  "chromium": "144.0.7559.96"
+}

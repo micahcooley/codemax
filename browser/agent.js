@@ -307,7 +307,7 @@
   }
   function stopGeneration(reason = 'CANCELLED', notify = true) {
     const g = generation; if (!g) return;
-    generation = null; clearTimeout(g.timeout);
+    generation = null; clearTimeout(g.timeout); clearTimeout(g.hardTimeout);
     try { const stop = findStop(g.stop); if (stop) stop.click(); } catch { /* Boundary never escalates to keyboard or shell. */ }
     if (notify) emit({type: 'generation_error', request_id: g.request, code: reason});
   }
@@ -334,13 +334,14 @@
         if (encoder.encode(next).length > 262144) throw new Error('OUTPUT_LIMIT');
         const delta = appendDelta(g.text, next);
         for (const text of splitText(delta)) emit({type: 'generation_delta', request_id: g.request, text});
+        if (delta.length) { clearTimeout(g.timeout); g.timeout=setTimeout(() => stopGeneration('TIMEOUT'), 600000); }
         g.text = next;
       }
       const stop = findStop(g.stop);
       const busy = region.getAttribute('aria-busy') === 'true' || !!(stop && visible(stop) && !stop.disabled && stop.getAttribute('aria-disabled') !== 'true');
       if (busy) g.sawBusy = true;
       if (g.sawBusy && !busy && g.text.length) {
-        generation = null; clearTimeout(g.timeout);
+        generation = null; clearTimeout(g.timeout); clearTimeout(g.hardTimeout);
         emit({type: 'generation_done', request_id: g.request, completion_source: 'observed_stop_or_busy_transition'});
       }
     } catch (error) { stopGeneration(error.message || 'BROWSER_ERROR'); }
@@ -416,7 +417,8 @@
     const baseline = assistantNode(region);
     generation = {request: action.request_id, response: id(region), stop: action.stop_node, action,
       baselineNode: baseline, baselineText: baseline ? responseText(baseline) : '', text: '', sawBusy: false, submitted: false,
-      timeout: setTimeout(() => stopGeneration('TIMEOUT'), 120000)};
+      timeout: setTimeout(() => stopGeneration('TIMEOUT'), 600000),
+      hardTimeout: setTimeout(() => stopGeneration('TIMEOUT'), 3600000)};
     try {
       if (input instanceof HTMLTextAreaElement || input instanceof HTMLInputElement) {
         const proto = input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;

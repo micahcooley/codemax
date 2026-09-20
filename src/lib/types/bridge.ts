@@ -31,8 +31,8 @@ export interface FileProbe {
   provider_id:number;model:string;path:string;scope:'one_synthetic_file_read_only';granted:boolean;
   read_count:number;denied_count:number;error:string;proof_verified:boolean;file_removed:boolean;writes:false;shell:false;remote_filesystem:false;
 }
-export interface McpServer {id:number;label:string;command:string;args:string[];state:'DISCONNECTED'|'CONNECTING'|'DISCOVERING'|'READY'|'CALLING'|'ERROR';error:string;protocol:string;tools:Array<{name:string;alias:string;description:string;enabled:boolean;schema:Record<string,unknown>}>}
-export interface McpRun {id:string;state:'IDLE'|'GENERATING'|'PERMISSION_REQUIRED'|'EXECUTING_TOOL'|'RESULT_READY'|'COMPLETED'|'FAILED'|'CANCELLED';provider_id:number;model:string;turns:number;calls:number;auto_continue:boolean;error:string;answer:string;call_id:string;tool:string;arguments:string;last_result:string}
+export interface McpServer {progress_message?:string;id:number;label:string;command:string;args:string[];state:'DISCONNECTED'|'CONNECTING'|'DISCOVERING'|'READY'|'CALLING'|'ERROR';error:string;protocol:string;tools:Array<{name:string;alias:string;description:string;enabled:boolean;schema:Record<string,unknown>}>}
+export interface McpRun {turn_limit?:number;work_remaining_seconds?:number;can_resume?:boolean;id:string;state:'IDLE'|'GENERATING'|'PERMISSION_REQUIRED'|'EXECUTING_TOOL'|'RESULT_READY'|'PAUSED'|'COMPLETED'|'FAILED'|'CANCELLED';provider_id:number;model:string;turns:number;calls:number;auto_continue:boolean;error:string;answer:string;call_id:string;tool:string;arguments:string;last_result:string}
 export interface Snapshot {
   mcp_servers?:McpServer[];mcp_run?:McpRun;
   file_probe?:FileProbe;

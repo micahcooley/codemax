@@ -3,6 +3,8 @@
 Only Tauri IPC and website content are doubles. These tests do not execute Zag,
 log into a real provider, or certify a native desktop build.
 """
+# Navigation updated for the registry shelf and nested disclosures. All prior
+# behavioral assertions remain; default-visibility checks are in progressive_ux.py.
 from __future__ import annotations
 import json
 import os
@@ -67,14 +69,14 @@ with sync_playwright() as pw:
             expect(page.get_by_role('tab', selected=True)).to_have_count(1)
             assert page.get_by_role('tab', selected=True).get_attribute('aria-label') == 'Local test provider'
             assert not page.locator('.inspector').count()
-            page.wait_for_function('window.__uiFixture.bounds.x===0&&window.__uiFixture.bounds.width===innerWidth')
+            page.wait_for_function('window.__uiFixture.bounds.x===194&&window.__uiFixture.bounds.width===innerWidth-194')
             page.screenshot(path=str(SHOTS/'12-single-tab-browser.png'), animations='disabled')
-        record('One top tab strip; no sidebar; full-width website; legacy layout migrates closed', one_strip)
+        record('One top tab strip; distinct provider registry; inspector closed after legacy migration', one_strip)
 
         def quick_links():
             tabs_before = page.locator('[data-provider-id]').count()
             for label, address in [('Providers','providers'), ('Tools & MCP','tools'), ('Connect a client','harness')]:
-                page.get_by_role('navigation', name='Codemax tools').get_by_role('button', name=label, exact=True).click()
+                route(label)
                 expect(page.get_by_role('textbox', name='Address bar')).to_have_value('codemax://'+address)
                 expect(page.get_by_role('tab', selected=True)).to_have_count(1)
                 assert page.locator('[data-provider-id]').count() == tabs_before
@@ -94,7 +96,7 @@ with sync_playwright() as pw:
             page.keyboard.press('Home')
             assert page.evaluate('document.activeElement.textContent').strip().startswith('New tab')
             page.keyboard.press('ArrowDown')
-            assert page.evaluate('document.activeElement.textContent').strip().startswith('Providers')
+            assert page.evaluate('document.activeElement.textContent').strip().startswith('Hide provider sidebar')
             page.keyboard.press('Escape')
             expect(page.get_by_role('dialog')).to_have_count(0)
             page.wait_for_function('window.__uiFixture.bounds.visible===true')
@@ -172,8 +174,8 @@ with sync_playwright() as pw:
             page.wait_for_function('!window.__uiFixture.snapshot.providers[0].open_tab')
             assert not page.get_by_role('tab',name='Local test provider',exact=True).count()
             route('Providers')
-            expect(page.locator('.provider-choice')).to_have_count(1)
-            assert 'Local test provider' in page.locator('.provider-choice').inner_text()
+            expect(page.locator('.shelf-row')).to_have_count(1)
+            assert 'Local test provider' in page.locator('.shelf-row').inner_text()
             page.get_by_role('button',name='Reopen website',exact=True).click()
             page.wait_for_function('window.__uiFixture.bounds.visible&&window.__uiFixture.bounds.provider_id===1')
             expect(page.get_by_role('tab',name='Local test provider',exact=True)).to_have_count(1)
@@ -181,11 +183,11 @@ with sync_playwright() as pw:
 
         def inspector():
             assert not page.locator('.inspector').count()
-            page.get_by_role('button',name='Toggle connection inspector',exact=True).click()
+            route('Connection inspector')
             expect(page.locator('.inspector')).to_be_visible()
             page.wait_for_function('window.__uiFixture.bounds.width<innerWidth-240')
             page.get_by_role('button',name='Close inspector',exact=True).click()
-            page.wait_for_function('window.__uiFixture.bounds.width===innerWidth')
+            page.wait_for_function('window.__uiFixture.bounds.width===innerWidth-194')
             page.evaluate('window.__chromeApp.restoreLayout()')
             assert not page.locator('.inspector').count()
         record('Inspector is opt-in, bounds follow it and the closed preference persists', inspector)
@@ -236,7 +238,7 @@ with sync_playwright() as pw:
             assert arc.evaluate('(e)=>getComputedStyle(e).animationName')=='none'
             page.emulate_media(reduced_motion='no-preference')
             page.evaluate('window.__uiFixture.snapshot.providers[0].browser_busy=false;window.__uiFixture.push()')
-            page.get_by_role('button',name='Providers',exact=True).click()
+            route('Providers')
             page.screenshot(path=str(SHOTS/'14-single-tab-providers.png'),animations='disabled')
             open_first()
         record('Spinning/idle rings remain on the top tabs and respect reduced motion', rings_and_shots)

@@ -43,7 +43,7 @@ pub fn handle(host: &Arc<Host>, frame: &Value) -> Result<(), String> {
             let stop = Arc::new(tokio::sync::Notify::new());
             {
                 let mut processes = host.mcp.lock().map_err(|_| "MCP_LOCK_FAILED")?;
-                if processes.contains_key(&id) || processes.len() >= 4 { return Err("MCP_PROCESS_LIMIT".into()); }
+                if processes.contains_key(&id) || processes.len() >= 8 { return Err("MCP_PROCESS_LIMIT".into()); }
                 processes.insert(id, ProcessHandle { epoch: epoch.clone(), sender, stop: stop.clone() });
             }
             let host = host.clone();
@@ -56,7 +56,7 @@ pub fn handle(host: &Arc<Host>, frame: &Value) -> Result<(), String> {
             });
         }
         Some("write") => {
-            let line = frame["line"].as_str().filter(|s| s.len() <= 32_768 && !s.contains('\n') && !s.contains('\r')).ok_or("MCP_INVALID_FRAME")?;
+            let line = frame["line"].as_str().filter(|s| s.len() <= 131_072 && !s.contains('\n') && !s.contains('\r')).ok_or("MCP_INVALID_FRAME")?;
             let processes = host.mcp.lock().map_err(|_| "MCP_LOCK_FAILED")?;
             let process = processes.get(&id).filter(|p| p.epoch == epoch).ok_or("MCP_STALE_PROCESS")?;
             let mut bytes = line.as_bytes().to_vec(); bytes.push(b'\n');
@@ -87,7 +87,7 @@ async fn run(host: Arc<Host>, id: u32, epoch: &str, program: &str, args: &[Strin
     let mut child = command.spawn().map_err(|_| "MCP_SPAWN_FAILED")?;
     let _group = Group(child.id().ok_or("MCP_CHILD_ID_MISSING")? as i32);
     let (Some(mut stdin), Some(mut stdout), Some(mut stderr)) = (child.stdin.take(), child.stdout.take(), child.stderr.take()) else { let _ = child.kill().await; return Err("MCP_PIPE_FAILED".into()); };
-    let mut line = Vec::with_capacity(32_768); let mut buffer = [0u8; 8192]; let mut errors = [0u8; 4096];
+    let mut line = Vec::with_capacity(131_072); let mut buffer = [0u8; 8192]; let mut errors = [0u8; 4096];
     let mut error_open = true; let mut tick = Instant::now(); let mut window_bytes = 0usize;
     notify(&host, id, epoch, "connected", None)?;
     let outcome = loop {
@@ -103,7 +103,7 @@ async fn run(host: Arc<Host>, id: u32, epoch: &str, program: &str, args: &[Strin
                 Ok(n) => {
                     if tick.elapsed() >= Duration::from_secs(1) { tick = Instant::now(); window_bytes = 0; }
                     window_bytes += n;
-                    if window_bytes > 262_144 { break Err("MCP_OUTPUT_RATE_LIMIT".into()); }
+                    if window_bytes > 1_048_576 { break Err("MCP_OUTPUT_RATE_LIMIT".into()); }
                     let mut error = None;
                     for byte in &buffer[..n] {
                         if *byte == b'\n' {
@@ -114,7 +114,7 @@ async fn run(host: Arc<Host>, id: u32, epoch: &str, program: &str, args: &[Strin
                             }
                             line.clear();
                         } else {
-                            if line.len() >= 32_768 { error = Some("MCP_FRAME_LIMIT"); break; }
+                            if line.len() >= 131_072 { error = Some("MCP_FRAME_LIMIT"); break; }
                             line.push(*byte);
                         }
                     }
@@ -126,7 +126,7 @@ async fn run(host: Arc<Host>, id: u32, epoch: &str, program: &str, args: &[Strin
                 // Discard untrusted diagnostics instead of exposing tokens.
                 match read { Ok(0) | Err(_) => error_open = false, Ok(n) => {
                     if tick.elapsed() >= Duration::from_secs(1) { tick = Instant::now(); window_bytes = 0; }
-                    window_bytes += n; if window_bytes > 262_144 { break Err("MCP_OUTPUT_RATE_LIMIT".into()); }
+                    window_bytes += n; if window_bytes > 1_048_576 { break Err("MCP_OUTPUT_RATE_LIMIT".into()); }
                 }}
             },
             status = child.wait() => break if status.is_ok() && line.is_empty() { Ok(()) } else { Err("MCP_CHILD_EXITED".into()) },

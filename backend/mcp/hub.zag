@@ -1,32 +1,33 @@
 @import("../core/runtime.zag")
 @import("../core/buffer.zag") as buf
 @import("../core/json.zag") as json
+@import("../core/sha256.zag") as sha
 @import("../security/local_token.zag") as token
 @import("../storage/files.zag") as files
 // MCP protocol, catalog and consent are authoritative here. Rust only moves
 // newline-framed bytes to a user-confirmed child process, never to a shell.
 // A configured server is trusted local code, NOT an OS-sandboxed tool.
 struct Tool {
-    name: buf.Buffer, alias: buf.Buffer, description: buf.Buffer, schema: buf.Buffer,
+    name: buf.Buffer, alias: buf.Buffer, description: buf.Buffer, schema: buf.Buffer, schema_hash: buf.Buffer,
     enabled: bool,
 }
 struct Server {
     id: i32, label: buf.Buffer, command: buf.Buffer, args: buf.Buffer, epoch: buf.Buffer,
-    error: buf.Buffer, version: buf.Buffer, cursor: buf.Buffer, result: buf.Buffer,
+    progress_message: buf.Buffer, error: buf.Buffer, version: buf.Buffer, cursor: buf.Buffer, result: buf.Buffer,
     tools: *Tool, count: i32, state: i32, request_id: i64, pending_id: i64,
-    deadline: i64, pages: i32, operation: i32, result_ready: bool, changed: bool,
+    deadline: i64, hard_deadline: i64, pages: i32, operation: i32, result_ready: bool, changed: bool,
 }
 struct Hub { servers: *Server, count: i32, next_id: i32, changed: bool, }
 fn tool_make() Tool {
-    return Tool{.name=buf.make(129),.alias=buf.make(64),.description=buf.make(1024),.schema=buf.make(4096),.enabled=false};
+    return Tool{.name=buf.make(129),.alias=buf.make(64),.description=buf.make(1024),.schema=buf.make(4096),.schema_hash=buf.make(65),.enabled=false};
 }
 fn server_make(id: i32) Server {
     return Server{.id=id,.label=buf.make(128),.command=buf.make(2048),.args=buf.make(4096),.epoch=buf.make(128),
-        .error=buf.make(128),.version=buf.make(32),.cursor=buf.make(512),.result=buf.make(24576),
-        .tools=_zag_malloc(16 * @sizeOf[Tool]()) as *Tool,.count=0,.state=0,.request_id=0,.pending_id=0,
-        .deadline=0,.pages=0,.operation=0,.result_ready=false,.changed=false};
+        .progress_message=buf.make(512),.error=buf.make(128),.version=buf.make(32),.cursor=buf.make(512),.result=buf.make(24576),
+        .tools=_zag_malloc(64 * @sizeOf[Tool]()) as *Tool,.count=0,.state=0,.request_id=0,.pending_id=0,
+        .deadline=0,.hard_deadline=0,.pages=0,.operation=0,.result_ready=false,.changed=false};
 }
-fn make() Hub { return Hub{.servers=_zag_malloc(4 * @sizeOf[Server]()) as *Server,.count=0,.next_id=1,.changed=false}; }
+fn make() Hub { return Hub{.servers=_zag_malloc(8 * @sizeOf[Server]()) as *Server,.count=0,.next_id=1,.changed=false}; }
 fn index(h: *Hub, id: i32) i32 { let i: i32=0; while (i<h.*.count) { if (h.*.servers[i].id==id) { return i; } i=i+1; } return 0 - 1; }
 fn state_name(s: i32) []u8 {
     if (s==1) { return "CONNECTING"; } if (s==2) { return "DISCOVERING"; }
@@ -34,7 +35,7 @@ fn state_name(s: i32) []u8 {
 }
 fn boolean(out: *buf.Buffer, b: bool) void { if (b) { buf.add(out,"true"); } else { buf.add(out,"false"); } }
 fn clear_tools(s: *Server) void {
-    let i: i32=0; while (i<s.*.count) { let t: *Tool=&s.*.tools[i]; buf.free(&t.*.name);buf.free(&t.*.alias);buf.free(&t.*.description);buf.free(&t.*.schema);i=i+1; }
+    let i: i32=0; while (i<s.*.count) { let t: *Tool=&s.*.tools[i]; buf.free(&t.*.name);buf.free(&t.*.alias);buf.free(&t.*.description);buf.free(&t.*.schema);buf.free(&t.*.schema_hash);i=i+1; }
     s.*.count=0;
 }
 fn transport(s: *Server, action: []u8, data: []u8, out: *buf.Buffer) void {
@@ -46,8 +47,8 @@ fn transport(s: *Server, action: []u8, data: []u8, out: *buf.Buffer) void {
 }
 fn stop(s: *Server, out: *buf.Buffer) void {
     if (s.*.epoch.len>0) { transport(s,"stop","",out); }
-    s.*.state=0;s.*.pending_id=0;s.*.operation=0;s.*.deadline=0;s.*.result_ready=false;s.*.changed=true;
-    clear_tools(s);buf.clear(&s.*.epoch);buf.clear(&s.*.result);
+    s.*.state=0;s.*.pending_id=0;s.*.operation=0;s.*.deadline=0;s.*.hard_deadline=0;s.*.result_ready=false;s.*.changed=true;
+    clear_tools(s);buf.clear(&s.*.epoch);buf.clear(&s.*.result);buf.clear(&s.*.progress_message);
 }
 fn fail(s: *Server, code: []u8, out: *buf.Buffer) void {
     stop(s,out);s.*.state=5;buf.copy(&s.*.error,code);
@@ -62,7 +63,10 @@ fn rpc(s: *Server, method: []u8, params: []u8, operation: i32, out: *buf.Buffer)
     buf.add(&frame,"{\"jsonrpc\":\"2.0\",\"id\":");buf.integer(&frame,s.*.request_id);buf.add(&frame,",\"method\":");buf.json(&frame,method);
     buf.add(&frame,",\"params\":");buf.add(&frame,params);buf.byte(&frame,125);
     if (frame.ok==0) { buf.free(&frame);fail(s,"MCP_REQUEST_LIMIT",out);return; }
-    transport(s,"write",buf.view(&frame),out);buf.free(&frame);s.*.deadline=_zag_clock_monotonic_ms()+30000;s.*.changed=true;
+    transport(s,"write",buf.view(&frame),out);buf.free(&frame);let now: i64=_zag_clock_monotonic_ms();
+    s.*.deadline=now+30000;if (operation==1) { s.*.deadline=now+120000; }
+    s.*.hard_deadline=0;if (operation==3) { s.*.deadline=now+300000;s.*.hard_deadline=now+3600000;buf.clear(&s.*.progress_message); }
+    s.*.changed=true;
 }
 fn list_tools(s: *Server, out: *buf.Buffer) void {
     if (s.*.pages>=8) { fail(s,"MCP_CATALOG_PAGE_LIMIT",out);return; }
@@ -79,7 +83,7 @@ fn safe_command(command: []u8) bool {
     let i: i32=0;while (i<n) { if (command[i]<32 || command[i]==127) { return false; }i=i+1; }return true;
 }
 fn add(h: *Hub, d: *json.Document, params: i32) i32 {
-    if (h.*.count>=4 || h.*.next_id>99999 || json.kind(d,params)!=1) { return 0; }
+    if (h.*.count>=8 || h.*.next_id>99999 || json.kind(d,params)!=1) { return 0; }
     let label: buf.Buffer=buf.make(128);let command: buf.Buffer=buf.make(2048);json.field_text(d,params,"label",&label);json.field_text(d,params,"command",&command);
     let args: i32=json.get(d,params,"args");let ok: bool=label.ok!=0 && label.len>0 && command.ok!=0 && safe_command(buf.view(&command)) && json.kind(d,args)==2 && d.*.tokens[args].size<=32 && _zag_strlen(json.raw(d,args))<4000;
     if (ok) { let j: i32=args+1;while (j<d.*.tokens[args].next) { if (json.kind(d,j)!=3) { ok=false; }j=d.*.tokens[j].next; } }
@@ -91,22 +95,26 @@ fn connect(s: *Server, confirmed: bool, out: *buf.Buffer) bool {
     if (!confirmed || (s.*.state!=0 && s.*.state!=5)) { return false; }
     clear_tools(s);buf.clear(&s.*.error);buf.clear(&s.*.cursor);buf.clear(&s.*.result);s.*.pages=0;s.*.result_ready=false;
     if (!token.generate(&s.*.epoch)) { return false; }
-    buf.copy(&s.*.version,"2025-11-25");s.*.state=1;s.*.operation=0;s.*.pending_id=0;s.*.deadline=_zag_clock_monotonic_ms()+15000;s.*.changed=true;transport(s,"start","",out);return true;
+    buf.copy(&s.*.version,"2025-11-25");s.*.state=1;s.*.operation=0;s.*.pending_id=0;s.*.deadline=_zag_clock_monotonic_ms()+120000;s.*.changed=true;transport(s,"start","",out);return true;
 }
 fn catalog(s: *Server, d: *json.Document, result: i32, out: *buf.Buffer) void {
     if (buf.eq(buf.view(&s.*.version),"2026-07-28") && !json.is_text(d,json.get(d,result,"resultType"),"complete")) { fail(s,"MCP_CATALOG_RESULT_UNSUPPORTED",out);return; }
     let array: i32=json.get(d,result,"tools");
-    if (json.kind(d,array)!=2 || d.*.tokens[array].size>16 || s.*.count+d.*.tokens[array].size>16) { fail(s,"MCP_CATALOG_LIMIT_OR_INVALID",out);return; }
+    if (json.kind(d,array)!=2 || d.*.tokens[array].size>64 || s.*.count+d.*.tokens[array].size>64) { fail(s,"MCP_CATALOG_LIMIT_OR_INVALID",out);return; }
+    let catalog_bytes: i32=0;let old: i32=0;
+    while (old<s.*.count) { catalog_bytes=catalog_bytes+6*(s.*.tools[old].name.len+s.*.tools[old].description.len)+s.*.tools[old].schema.len+256;old=old+1; }
     let i: i32=array+1;
     while (i<d.*.tokens[array].next) {
         let tool: Tool=tool_make();json.field_text(d,i,"name",&tool.name);
         let desc: i32=json.get(d,i,"description");if (desc>=0) { json.text(d,desc,&tool.description); }
         let schema: i32=json.get(d,i,"inputSchema");let valid: bool=tool.name.ok!=0 && tool.name.len>0 && tool.description.ok!=0 && json.kind(d,schema)==1 && _zag_strlen(json.raw(d,schema))<4096;
         let j: i32=0;while (j<s.*.count) { if (buf.eq(buf.view(&tool.name),buf.view(&s.*.tools[j].name))) { valid=false; }j=j+1; }
+        catalog_bytes=catalog_bytes+6*(tool.name.len+tool.description.len)+_zag_strlen(json.raw(d,schema))+256;
+        if (catalog_bytes>65536) { valid=false; }
         if (valid) {
             buf.add(&tool.alias,"mcp_");buf.integer(&tool.alias,s.*.id as i64);buf.byte(&tool.alias,95);buf.integer(&tool.alias,s.*.count as i64);
-            buf.copy(&tool.schema,json.raw(d,schema));s.*.tools[s.*.count]=tool;s.*.count=s.*.count+1;
-        } else { buf.free(&tool.name);buf.free(&tool.alias);buf.free(&tool.description);buf.free(&tool.schema);fail(s,"MCP_TOOL_SCHEMA_OR_NAME_INVALID",out);return; }
+            buf.copy(&tool.schema,json.raw(d,schema));let hashed: bool=sha.digest(buf.view(&tool.schema),&tool.schema_hash);if (!hashed) { tool.schema_hash.ok=0; }s.*.tools[s.*.count]=tool;s.*.count=s.*.count+1;
+        } else { buf.free(&tool.name);buf.free(&tool.alias);buf.free(&tool.description);buf.free(&tool.schema);buf.free(&tool.schema_hash);fail(s,"MCP_TOOL_SCHEMA_OR_NAME_INVALID",out);return; }
         i=d.*.tokens[i].next;
     }
     let cursor: i32=json.get(d,result,"nextCursor");
@@ -114,10 +122,10 @@ fn catalog(s: *Server, d: *json.Document, result: i32, out: *buf.Buffer) void {
         let next: buf.Buffer=buf.make(512);json.text(d,cursor,&next);
         if (next.ok==0 || next.len==0 || buf.eq(buf.view(&next),buf.view(&s.*.cursor))) { buf.free(&next);fail(s,"MCP_INVALID_CURSOR",out);return; }
         buf.copy(&s.*.cursor,buf.view(&next));buf.free(&next);list_tools(s,out);
-    } else { s.*.state=3;s.*.pending_id=0;s.*.operation=0;s.*.deadline=0;s.*.changed=true; }
+    } else { s.*.state=3;s.*.pending_id=0;s.*.operation=0;s.*.deadline=0;s.*.hard_deadline=0;s.*.changed=true; }
 }
 fn incoming(s: *Server, bytes: []u8, out: *buf.Buffer) void {
-    if (_zag_strlen(bytes)>32768) { fail(s,"MCP_FRAME_LIMIT",out);return; }
+    if (_zag_strlen(bytes)>131072) { fail(s,"MCP_FRAME_LIMIT",out);return; }
     let d: json.Document=json.parse(bytes);
     if (d.ok==0 || json.kind(&d,0)!=1 || !json.is_text(&d,json.get(&d,0,"jsonrpc"),"2.0")) { json.free(&d);fail(s,"MCP_INVALID_JSONRPC",out);return; }
     let method: i32=json.get(&d,0,"method");let id: i32=json.get(&d,0,"id");
@@ -130,6 +138,16 @@ fn incoming(s: *Server, bytes: []u8, out: *buf.Buffer) void {
             if (json.is_text(&d,method,"ping")) { buf.add(&response,",\"result\":{}}"); }
             else { buf.add(&response,",\"error\":{\"code\":-32601,\"message\":\"Client capability not granted\"}}"); }
             transport(s,"write",buf.view(&response),out);buf.free(&response);
+        } else if (json.is_text(&d,method,"notifications/progress") && s.*.state==4 && s.*.operation==3) {
+            let params: i32=json.get(&d,0,"params");
+            if (json.number(&d,json.get(&d,params,"progressToken"),0 - 1)==s.*.pending_id && json.kind(&d,json.get(&d,params,"progress"))==4 && json.number(&d,json.get(&d,params,"progress"),0 - 1)>=0) {
+                // Only the current call can extend its idle window. The hard
+                // duration bound remains unchanged; notifications are not consent.
+                s.*.deadline=_zag_clock_monotonic_ms()+300000;
+                buf.clear(&s.*.progress_message);let message: i32=json.get(&d,params,"message");
+                if (json.kind(&d,message)==3) { json.text(&d,message,&s.*.progress_message);if (s.*.progress_message.ok==0) { buf.copy(&s.*.progress_message,"Tool reports progress"); } }
+                s.*.changed=true;
+            }
         } else if (json.is_text(&d,method,"notifications/tools/list_changed")) {
             // Changing schemas revokes tool choices and fails in-flight calls.
             if (s.*.state==4) { json.free(&d);fail(s,"MCP_CATALOG_CHANGED_DURING_CALL",out);return; }
@@ -144,7 +162,7 @@ fn incoming(s: *Server, bytes: []u8, out: *buf.Buffer) void {
             buf.copy(&s.*.version,"2026-07-28");rpc(s,"server/discover","{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"Codemax\",\"version\":\"0.1.0\"},\"io.modelcontextprotocol/clientCapabilities\":{}}}",1,out);
         } else if (s.*.operation==3) {
             buf.copy(&s.*.result,"{\"isError\":true,\"content\":[{\"type\":\"text\",\"text\":\"MCP server rejected this tool request. It was not retried.\"}]}");
-            s.*.result_ready=true;s.*.pending_id=0;s.*.operation=0;s.*.deadline=0;s.*.state=3;s.*.changed=true;
+            s.*.result_ready=true;s.*.pending_id=0;s.*.operation=0;s.*.deadline=0;s.*.hard_deadline=0;s.*.state=3;s.*.changed=true;
         } else { fail(s,"MCP_PROTOCOL_REJECTED",out); }
     } else if (json.kind(&d,result)!=1) { fail(s,"MCP_INVALID_RESULT",out); }
     else if (s.*.operation==1) {
@@ -168,7 +186,7 @@ fn incoming(s: *Server, bytes: []u8, out: *buf.Buffer) void {
         // are unsupported and explicitly terminate rather than guessed complete.
         let rt: i32=json.get(&d,result,"resultType");let content: i32=json.get(&d,result,"content");
         if (((buf.eq(buf.view(&s.*.version),"2026-07-28") || rt>=0) && !json.is_text(&d,rt,"complete")) || (json.kind(&d,content)!=2 && json.get(&d,result,"structuredContent")<0) || _zag_strlen(json.raw(&d,result))>20000) { fail(s,"MCP_RESULT_UNSUPPORTED_OR_LIMIT",out); }
-        else { buf.copy(&s.*.result,json.raw(&d,result));s.*.result_ready=true;s.*.pending_id=0;s.*.operation=0;s.*.deadline=0;s.*.state=3;s.*.changed=true; }
+        else { buf.copy(&s.*.result,json.raw(&d,result));s.*.result_ready=true;s.*.pending_id=0;s.*.operation=0;s.*.deadline=0;s.*.hard_deadline=0;s.*.state=3;s.*.changed=true; }
     }
     json.free(&d);
 }
@@ -178,19 +196,19 @@ fn event(h: *Hub, d: *json.Document, p: i32, out: *buf.Buffer) void {
     let e: i32=json.get(d,p,"event");
     if (json.is_text(d,e,"connected") && s.*.state==1 && s.*.operation==0) {
         rpc(s,"initialize","{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"Codemax\",\"version\":\"0.1.0\"}}",1,out);
-    } else if (json.is_text(d,e,"line")) { let line: buf.Buffer=buf.make(32769);json.field_text(d,p,"line",&line);if (line.ok!=0) { incoming(s,buf.view(&line),out); } else { fail(s,"MCP_FRAME_LIMIT",out); }buf.free(&line); }
+    } else if (json.is_text(d,e,"line")) { let line: buf.Buffer=buf.make(131073);json.field_text(d,p,"line",&line);if (line.ok!=0) { incoming(s,buf.view(&line),out); } else { fail(s,"MCP_FRAME_LIMIT",out); }buf.free(&line); }
     else if (json.is_text(d,e,"closed") || json.is_text(d,e,"error")) { fail(s,"MCP_PROCESS_LOST",out); }
     h.*.changed=true;
 }
 fn tick(h: *Hub, out: *buf.Buffer) void {
     let i: i32=0;let now: i64=_zag_clock_monotonic_ms();while (i<h.*.count) {
-        let s: *Server=&h.*.servers[i];if (s.*.deadline>0 && now>=s.*.deadline) { fail(s,"MCP_REQUEST_TIMEOUT",out); }
+        let s: *Server=&h.*.servers[i];if ((s.*.deadline>0 && now>=s.*.deadline) || (s.*.hard_deadline>0 && now>=s.*.hard_deadline)) { fail(s,"MCP_REQUEST_TIMEOUT",out); }
         if (s.*.changed) { h.*.changed=true;s.*.changed=false; }i=i+1;
     }
 }
 fn busy(h: *Hub) bool { let i: i32=0;while (i<h.*.count) { if (h.*.servers[i].deadline>0) { return true; }i=i+1; }return false; }
 fn locate(h: *Hub, alias: []u8) i32 {
-    let i: i32=0;while (i<h.*.count) { let s: *Server=&h.*.servers[i];let j: i32=0;while (j<s.*.count) { if (buf.eq(alias,buf.view(&s.*.tools[j].alias))) { return i*16+j; }j=j+1; }i=i+1; }return 0 - 1;
+    let i: i32=0;while (i<h.*.count) { let s: *Server=&h.*.servers[i];let j: i32=0;while (j<s.*.count) { if (buf.eq(alias,buf.view(&s.*.tools[j].alias))) { return i*64+j; }j=j+1; }i=i+1; }return 0 - 1;
 }
 fn definitions(h: *Hub, out: *buf.Buffer) void {
     buf.clear(out);buf.byte(out,91);let n: i32=0;let i: i32=0;
@@ -200,35 +218,37 @@ fn definitions(h: *Hub, out: *buf.Buffer) void {
             buf.add(out,",\"description\":");let desc: buf.Buffer=buf.make(1400);buf.add(&desc,buf.view(&s.*.label));buf.add(&desc," / ");buf.add(&desc,buf.view(&t.*.name));buf.add(&desc,": ");buf.add(&desc,buf.view(&t.*.description));buf.json(out,buf.view(&desc));buf.free(&desc);
             buf.add(out,",\"parameters\":");buf.add(out,buf.view(&t.*.schema));buf.add(out,"}}");n=n+1;
         }j=j+1; }i=i+1;
-    }buf.byte(out,93);
+    }buf.byte(out,93);if (n>32) { out.*.ok=0; }
 }
 fn call(h: *Hub, index: i32, arguments: []u8, out: *buf.Buffer) bool {
-    if (index<0 || index/16>=h.*.count) { return false; }let s: *Server=&h.*.servers[index/16];let j: i32=index%16;
+    if (index<0 || index/64>=h.*.count) { return false; }let s: *Server=&h.*.servers[index/64];let j: i32=index%64;
     if (s.*.state!=3 || j>=s.*.count || !s.*.tools[j].enabled || _zag_strlen(arguments)>8192) { return false; }
     let d: json.Document=json.parse(arguments);let valid: bool=d.ok!=0 && json.kind(&d,0)==1;json.free(&d);if (!valid) { return false; }
-    let p: buf.Buffer=buf.make(12288);buf.add(&p,"{\"name\":");buf.json(&p,buf.view(&s.*.tools[j].name));buf.add(&p,",\"arguments\":");buf.add(&p,arguments);parameters_meta(s,&p);buf.byte(&p,125);
+    let p: buf.Buffer=buf.make(12288);buf.add(&p,"{\"name\":");buf.json(&p,buf.view(&s.*.tools[j].name));buf.add(&p,",\"arguments\":");buf.add(&p,arguments);buf.add(&p,",\"_meta\":{\"progressToken\":");buf.integer(&p,s.*.request_id+1);
+    if (buf.eq(buf.view(&s.*.version),"2026-07-28")) { buf.add(&p,",\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"Codemax\",\"version\":\"0.1.0\"},\"io.modelcontextprotocol/clientCapabilities\":{}"); }
+    buf.add(&p,"}}");
     s.*.state=4;s.*.result_ready=false;buf.clear(&s.*.result);rpc(s,"tools/call",buf.view(&p),3,out);buf.free(&p);return s.*.state==4;
 }
 fn render(h: *Hub, out: *buf.Buffer) void {
     buf.byte(out,91);let i: i32=0;while (i<h.*.count) { let s: *Server=&h.*.servers[i];if (i>0) { buf.byte(out,44); }
         buf.add(out,"{\"id\":");buf.integer(out,s.*.id as i64);buf.add(out,",\"label\":");buf.json(out,buf.view(&s.*.label));buf.add(out,",\"command\":");buf.json(out,buf.view(&s.*.command));buf.add(out,",\"args\":");buf.add(out,buf.view(&s.*.args));
-        buf.add(out,",\"state\":");buf.json(out,state_name(s.*.state));buf.add(out,",\"error\":");buf.json(out,buf.view(&s.*.error));buf.add(out,",\"protocol\":");buf.json(out,buf.view(&s.*.version));buf.add(out,",\"tools\":[");
+        buf.add(out,",\"state\":");buf.json(out,state_name(s.*.state));buf.add(out,",\"error\":");buf.json(out,buf.view(&s.*.error));buf.add(out,",\"progress_message\":");buf.json(out,buf.view(&s.*.progress_message));buf.add(out,",\"protocol\":");buf.json(out,buf.view(&s.*.version));buf.add(out,",\"tools\":[");
         let j: i32=0;while (j<s.*.count) { let t: *Tool=&s.*.tools[j];if (j>0) { buf.byte(out,44); }buf.add(out,"{\"alias\":");buf.json(out,buf.view(&t.*.alias));buf.add(out,",\"name\":");buf.json(out,buf.view(&t.*.name));buf.add(out,",\"description\":");buf.json(out,buf.view(&t.*.description));buf.add(out,",\"enabled\":");boolean(out,t.*.enabled);buf.add(out,",\"schema\":");buf.add(out,buf.view(&t.*.schema));buf.byte(out,125);j=j+1; }
         buf.add(out,"]}");i=i+1;
     }buf.byte(out,93);
 }
 fn save(h: *Hub, root: []u8) bool {
-    let out: buf.Buffer=buf.make(32768);buf.add(&out,"{\"version\":1,\"servers\":[");let i: i32=0;
+    let out: buf.Buffer=buf.make(65536);buf.add(&out,"{\"version\":1,\"servers\":[");let i: i32=0;
     while (i<h.*.count) { let s: *Server=&h.*.servers[i];if (i>0) { buf.byte(&out,44); }buf.add(&out,"{\"label\":");buf.json(&out,buf.view(&s.*.label));buf.add(&out,",\"command\":");buf.json(&out,buf.view(&s.*.command));buf.add(&out,",\"args\":");buf.add(&out,buf.view(&s.*.args));buf.byte(&out,125);i=i+1; }
     buf.add(&out,"]}");let ok: bool=out.ok!=0 && files.save(root,"mcp-servers.json",buf.view(&out));buf.free(&out);return ok;
 }
 fn load(h: *Hub, root: []u8) bool {
-    let raw: buf.Buffer=buf.make(32768);let status: i32=files.load(root,"mcp-servers.json",&raw);if (status==0) { buf.free(&raw);return true; }if (status<0) { buf.free(&raw);return false; }
-    let d: json.Document=json.parse(buf.view(&raw));let a: i32=json.get(&d,0,"servers");let ok: bool=d.ok!=0 && json.number(&d,json.get(&d,0,"version"),0)==1 && json.kind(&d,a)==2 && d.tokens[a].size<=4;
+    let raw: buf.Buffer=buf.make(65536);let status: i32=files.load(root,"mcp-servers.json",&raw);if (status==0) { buf.free(&raw);return true; }if (status<0) { buf.free(&raw);return false; }
+    let d: json.Document=json.parse(buf.view(&raw));let a: i32=json.get(&d,0,"servers");let ok: bool=d.ok!=0 && json.number(&d,json.get(&d,0,"version"),0)==1 && json.kind(&d,a)==2 && d.tokens[a].size<=8;
     if (ok) { let i: i32=a+1;while (i<d.tokens[a].next) { if (add(h,&d,i)==0) { ok=false; }i=d.tokens[i].next; } }
     json.free(&d);buf.free(&raw);return ok;
 }
-fn server_free(s: *Server) void { clear_tools(s);_zag_free(s.*.tools as *i8);buf.free(&s.*.label);buf.free(&s.*.command);buf.free(&s.*.args);buf.free(&s.*.epoch);buf.free(&s.*.error);buf.free(&s.*.version);buf.free(&s.*.cursor);buf.free(&s.*.result); }
+fn server_free(s: *Server) void { clear_tools(s);_zag_free(s.*.tools as *i8);buf.free(&s.*.label);buf.free(&s.*.command);buf.free(&s.*.args);buf.free(&s.*.epoch);buf.free(&s.*.error);buf.free(&s.*.progress_message);buf.free(&s.*.version);buf.free(&s.*.cursor);buf.free(&s.*.result); }
 fn remove(h: *Hub, id: i32, out: *buf.Buffer) bool {
     let i: i32=index(h,id);if (i<0) { return false; }stop(&h.*.servers[i],out);server_free(&h.*.servers[i]);
     let j: i32=i;while (j+1<h.*.count) { h.*.servers[j]=h.*.servers[j+1];j=j+1; }h.*.count=h.*.count-1;h.*.changed=true;return true;
@@ -243,7 +263,7 @@ fn binding(h: *Hub, out: *buf.Buffer) void {
         let s: *Server=&h.*.servers[i];if (i>0) { buf.byte(out,44); }
         buf.byte(out,91);buf.integer(out,s.*.id as i64);buf.byte(out,44);buf.json(out,buf.view(&s.*.epoch));buf.byte(out,44);
         boolean(out,s.*.state==3 || s.*.state==4);let j: i32=0;
-        while (j<s.*.count) { let t: *Tool=&s.*.tools[j];buf.byte(out,44);buf.json(out,buf.view(&t.*.name));buf.byte(out,44);boolean(out,t.*.enabled);buf.byte(out,44);buf.json(out,buf.view(&t.*.schema));j=j+1; }
+        while (j<s.*.count) { let t: *Tool=&s.*.tools[j];buf.byte(out,44);buf.json(out,buf.view(&t.*.name));buf.byte(out,44);boolean(out,t.*.enabled);buf.byte(out,44);buf.json(out,buf.view(&t.*.schema_hash));if (t.*.schema_hash.ok==0) { out.*.ok=0; }j=j+1; }
         buf.byte(out,93);i=i+1;
     }buf.byte(out,93);
 }

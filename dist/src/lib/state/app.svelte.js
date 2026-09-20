@@ -148,6 +148,16 @@ class Application {
 		$.set(this.#inspectorWidth, value, true);
 	}
 
+	#shelfVisible = $.state(true);
+
+	get shelfVisible() {
+		return $.get(this.#shelfVisible);
+	}
+
+	set shelfVisible(value) {
+		$.set(this.#shelfVisible, value, true);
+	}
+
 	#inspectorVisible = $.state(false);
 
 	get inspectorVisible() {
@@ -315,7 +325,9 @@ class Application {
 		argv: '[]',
 		task: '',
 		chosen: '',
-		automatic: true
+		automatic: true,
+		turnBudget: 100,
+		workMinutes: 30
 	}));
 
 	get toolDraft() {
@@ -495,7 +507,8 @@ class Application {
 		'GENERATING',
 		'PERMISSION_REQUIRED',
 		'EXECUTING_TOOL',
-		'RESULT_READY'
+		'RESULT_READY',
+		'PAUSED'
 	].includes(this.snapshot.mcp_run.state) ? this.snapshot.mcp_run : null);
 
 	get activeTask() {
@@ -872,12 +885,18 @@ class Application {
 		this.saveLayout();
 	}
 
+	toggleShelf() {
+		this.shelfVisible = !this.shelfVisible;
+		this.saveLayout();
+	}
+
 	saveLayout() {
 		try {
 			localStorage.setItem('bridge.layout.v2', JSON.stringify({
 				inspector: this.inspectorWidth,
 				right: this.inspectorVisible,
-				order: this.tabOrder
+				order: this.tabOrder,
+				shelf: this.shelfVisible
 			}));
 		} catch {
 			/* Noncritical presentation preferences. */
@@ -893,6 +912,7 @@ class Application {
 			if (Number.isFinite(value.inspector)) this.inspectorWidth = Math.max(240, Math.min(380, value.inspector));
 
 			this.inspectorVisible = !!saved && value.right === true;
+			this.shelfVisible = value.shelf !== false;
 
 			if (Array.isArray(value.order)) this.tabOrder = [
 				...new Set(value.order.filter((n) => typeof n === 'number' && Number.isInteger(n) && n > 0))

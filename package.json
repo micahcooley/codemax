@@ -1,6 +1,6 @@
 {
   "name": "codemax",
-  "version": "0.1.0-dev.6",
+  "version": "0.1.0-dev.7",
   "private": true,
   "type": "module",
   "scripts": {
@@ -22,7 +22,8 @@
     "check:zag-contracts": "python3 scripts/check-zag-contracts.py",
     "test:codemax": "python3 tests/codemax_ui.py",
     "test:chrome": "python3 tests/chrome_ui.py",
-    "test:ux": "python3 tests/ux_audit.py"
+    "test:ux": "python3 tests/ux_audit.py",
+    "test:progressive": "python3 tests/progressive_ux.py"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

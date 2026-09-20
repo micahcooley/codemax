@@ -1,0 +1,206 @@
+
+> codemax@0.1.0-dev.7 test
+> node --test tests/*.test.mjs
+
+TAP version 13
+# Subtest: network URL summaries exclude credentials, query secrets and identifiers
+ok 1 - network URL summaries exclude credentials, query secrets and identifiers
+  ---
+  duration_ms: 1.004407
+  type: 'test'
+  ...
+# Subtest: network structural evidence contains no payload values or arbitrary keys
+ok 2 - network structural evidence contains no payload values or arbitrary keys
+  ---
+  duration_ms: 0.298489
+  type: 'test'
+  ...
+# Subtest: Unicode stream splitting is byte bounded and lossless
+ok 3 - Unicode stream splitting is byte bounded and lossless
+  ---
+  duration_ms: 46.028573
+  type: 'test'
+  ...
+# Subtest: stream correction is not duplicated or silently appended
+ok 4 - stream correction is not duplicated or silently appended
+  ---
+  duration_ms: 0.618009
+  type: 'test'
+  ...
+# Subtest: common token formats are redacted from semantic labels
+ok 5 - common token formats are redacted from semantic labels
+  ---
+  duration_ms: 0.31302
+  type: 'test'
+  ...
+# Subtest: oversized and non-JSON network bodies remain opaque
+ok 6 - oversized and non-JSON network bodies remain opaque
+  ---
+  duration_ms: 0.297647
+  type: 'test'
+  ...
+# Subtest: capability extraction copies only explicit per-model facts, never messages or auth
+ok 7 - capability extraction copies only explicit per-model facts, never messages or auth
+  ---
+  duration_ms: 0.612942
+  type: 'test'
+  ...
+# Subtest: model names alone do not invent context, tokenizer or selection
+ok 8 - model names alone do not invent context, tokenizer or selection
+  ---
+  duration_ms: 0.161998
+  type: 'test'
+  ...
+# Subtest: metadata values and sample counts are bounded
+ok 9 - metadata values and sample counts are bounded
+  ---
+  duration_ms: 0.581134
+  type: 'test'
+  ...
+# Subtest: credential-shaped model or tokenizer identities are not exported
+ok 10 - credential-shaped model or tokenizer identities are not exported
+  ---
+  duration_ms: 0.314633
+  type: 'test'
+  ...
+# Subtest: model catalog metadata is not falsely marked as the current selection
+ok 11 - model catalog metadata is not falsely marked as the current selection
+  ---
+  duration_ms: 0.16308
+  type: 'test'
+  ...
+# Subtest: OpenCode launch preserves special characters and existing config via real Bash with fixture executable
+ok 12 - OpenCode launch preserves special characters and existing config via real Bash with fixture executable
+  ---
+  duration_ms: 143.338716
+  type: 'test'
+  ...
+# Subtest: Claude launch passes the selected model to each named model tier without shell injection
+ok 13 - Claude launch passes the selected model to each named model tier without shell injection
+  ---
+  duration_ms: 106.92191
+  type: 'test'
+  ...
+# Subtest: All three protocol request examples preserve auth, model and correct path as separate curl arguments
+ok 14 - All three protocol request examples preserve auth, model and correct path as separate curl arguments
+  ---
+  duration_ms: 335.105015
+  type: 'test'
+  ...
+# Subtest: Launch refuses non-loopback endpoint, missing data and header-breaking credentials
+ok 15 - Launch refuses non-loopback endpoint, missing data and header-breaking credentials
+  ---
+  duration_ms: 0.371186
+  type: 'test'
+  ...
+# Subtest: Tool recipes are pinned definitions, not executable shell commands or automatic effects
+ok 16 - Tool recipes are pinned definitions, not executable shell commands or automatic effects
+  ---
+  duration_ms: 0.440017
+  type: 'test'
+  ...
+# Subtest: Folder recipe refuses root, dot-root, relative paths, control bytes and traversal
+ok 17 - Folder recipe refuses root, dot-root, relative paths, control bytes and traversal
+  ---
+  duration_ms: 0.306441
+  type: 'test'
+  ...
+# Subtest: Remote provider capability never receives directory picker, MCP process or general filesystem permission
+ok 18 - Remote provider capability never receives directory picker, MCP process or general filesystem permission
+  ---
+  duration_ms: 0.565902
+  type: 'test'
+  ...
+# Subtest: mock provider binds loopback, serves UI, streams and rejects traversal
+ok 19 - mock provider binds loopback, serves UI, streams and rejects traversal
+  ---
+  duration_ms: 104.57606
+  type: 'test'
+  ...
+# Subtest: quota and login expiration are deterministic failure fixtures
+ok 20 - quota and login expiration are deterministic failure fixtures
+  ---
+  duration_ms: 10.145987
+  type: 'test'
+  ...
+# Subtest: mock tool payload contains nested JSON and echoes a requested framing nonce
+ok 21 - mock tool payload contains nested JSON and echoes a requested framing nonce
+  ---
+  duration_ms: 0.26518
+  type: 'test'
+  ...
+# Subtest: static: trusted commands scoped to the main webview, not its window
+ok 22 - static: trusted commands scoped to the main webview, not its window
+  ---
+  duration_ms: 2.687642
+  type: 'test'
+  ...
+# Subtest: static: remote capability has only bounded observation permission
+ok 23 - static: remote capability has only bounded observation permission
+  ---
+  duration_ms: 0.545843
+  type: 'test'
+  ...
+# Subtest: static: host events target main webview explicitly
+ok 24 - static: host events target main webview explicitly
+  ---
+  duration_ms: 0.539644
+  type: 'test'
+  ...
+# Subtest: static: production entry points remain in Zag and no preview backend exists
+ok 25 - static: production entry points remain in Zag and no preview backend exists
+  ---
+  duration_ms: 0.481318
+  type: 'test'
+  ...
+# Subtest: static: sidecar packaging and least-privilege CSP configured
+ok 26 - static: sidecar packaging and least-privilege CSP configured
+  ---
+  duration_ms: 0.297938
+  type: 'test'
+  ...
+# Subtest: static: all Zag imports resolve inside the package
+ok 27 - static: all Zag imports resolve inside the package
+  ---
+  duration_ms: 5.251471
+  type: 'test'
+  ...
+# Subtest: static: seven real Svelte screens exist and unknowns are explicit
+ok 28 - static: seven real Svelte screens exist and unknowns are explicit
+  ---
+  duration_ms: 0.480416
+  type: 'test'
+  ...
+# Subtest: static: provider execution code has no credential extraction or shell calls
+ok 29 - static: provider execution code has no credential extraction or shell calls
+  ---
+  duration_ms: 0.55815
+  type: 'test'
+  ...
+# Subtest: static: every custom command is declared in AppManifest for capability enforcement
+ok 30 - static: every custom command is declared in AppManifest for capability enforcement
+  ---
+  duration_ms: 0.957879
+  type: 'test'
+  ...
+# Subtest: static: synthetic-file broker is Zag-only, one-use, expiry and exact-path bound
+ok 31 - static: synthetic-file broker is Zag-only, one-use, expiry and exact-path bound
+  ---
+  duration_ms: 0.634293
+  type: 'test'
+  ...
+# Subtest: static: tab activity includes manual generation and no polling-based fake activity
+ok 32 - static: tab activity includes manual generation and no polling-based fake activity
+  ---
+  duration_ms: 0.315574
+  type: 'test'
+  ...
+1..32
+# tests 32
+# suites 0
+# pass 32
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 641.006175

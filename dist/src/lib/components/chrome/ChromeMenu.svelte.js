@@ -9,7 +9,7 @@ var root_1 = $.from_html(`<button role="menuitem"><!><span>Open website</span></
 var root_4 = $.from_html(`<small> </small>`);
 var root_6 = $.from_html(`<small> </small>`);
 var root_3 = $.from_html(`<button role="menuitem"><!><span> </span><!></button>`);
-var root_2 = $.from_html(`<button role="menuitem"><!><span>New tab</span><kbd>Ctrl T</kbd></button> <hr/> <!> <hr/> <button role="menuitem"><!><span>Settings</span></button> <button role="menuitem"><!><span>Commands</span><kbd>Ctrl K</kbd></button> <button role="menuitem"><!><span>Keyboard shortcuts</span></button>`, 1);
+var root_2 = $.from_html(`<button role="menuitem"><!><span>New tab</span><kbd>Ctrl T</kbd></button> <button role="menuitem"><!><span> </span></button> <button role="menuitem"><!><span>Connection inspector</span></button> <hr/> <!> <hr/> <button role="menuitem"><!><span>Settings</span></button> <button role="menuitem"><!><span>Commands</span><kbd>Ctrl K</kbd></button> <button role="menuitem"><!><span>Keyboard shortcuts</span></button>`, 1);
 var root = $.from_html(`<dialog class="chrome-menu"><div class="chrome-menu-heading"><strong> </strong><small> </small></div> <div role="menu"><!></div></dialog>`);
 
 export default function ChromeMenu($$anchor, $$props) {
@@ -237,56 +237,87 @@ export default function ChromeMenu($$anchor, $$props) {
 			$.next(2);
 			$.reset(button_8);
 
-			var node_10 = $.sibling(button_8, 4);
+			var button_9 = $.sibling(button_8, 2);
 
-			$.each(node_10, 17, () => pages, (page) => page.id, ($$anchor, page) => {
-				var button_9 = root_3();
+			button_9.__click = () => {
+				app.toggleShelf();
+				dismiss();
+			};
 
-				button_9.__click = () => app.navigate($.get(page).id);
+			var node_10 = $.child(button_9);
+
+			Icon(node_10, { name: 'panel', size: 15 });
+
+			var span_1 = $.sibling(node_10);
+			var text_3 = $.child(span_1, true);
+
+			$.reset(span_1);
+			$.reset(button_9);
+
+			var button_10 = $.sibling(button_9, 2);
+
+			button_10.__click = () => {
+				app.navigate('browser');
+				app.inspectorVisible = !app.inspectorVisible;
+				app.saveLayout();
+			};
+
+			var node_11 = $.child(button_10);
+
+			Icon(node_11, { name: 'scan', size: 15 });
+			$.next();
+			$.reset(button_10);
+
+			var node_12 = $.sibling(button_10, 4);
+
+			$.each(node_12, 17, () => pages, (page) => page.id, ($$anchor, page) => {
+				var button_11 = root_3();
+
+				button_11.__click = () => app.navigate($.get(page).id);
 
 				let classes;
-				var node_11 = $.child(button_9);
+				var node_13 = $.child(button_11);
 
-				Icon(node_11, {
+				Icon(node_13, {
 					get name() {
 						return $.get(page).icon;
 					},
 					size: 15
 				});
 
-				var span_1 = $.sibling(node_11);
-				var text_3 = $.child(span_1, true);
+				var span_2 = $.sibling(node_13);
+				var text_4 = $.child(span_2, true);
 
-				$.reset(span_1);
+				$.reset(span_2);
 
-				var node_12 = $.sibling(span_1);
+				var node_14 = $.sibling(span_2);
 
 				{
 					var consequent_1 = ($$anchor) => {
 						var small_1 = root_4();
-						var text_4 = $.child(small_1, true);
+						var text_5 = $.child(small_1, true);
 
 						$.reset(small_1);
-						$.template_effect(() => $.set_text(text_4, app.detectedProviders.length));
+						$.template_effect(() => $.set_text(text_5, app.detectedProviders.length));
 						$.append($$anchor, small_1);
 					};
 
 					var alternate = ($$anchor) => {
 						var fragment_2 = $.comment();
-						var node_13 = $.first_child(fragment_2);
+						var node_15 = $.first_child(fragment_2);
 
 						{
 							var consequent_2 = ($$anchor) => {
 								var small_2 = root_6();
-								var text_5 = $.child(small_2, true);
+								var text_6 = $.child(small_2, true);
 
 								$.reset(small_2);
-								$.template_effect(() => $.set_text(text_5, app.models.length));
+								$.template_effect(() => $.set_text(text_6, app.models.length));
 								$.append($$anchor, small_2);
 							};
 
 							$.if(
-								node_13,
+								node_15,
 								($$render) => {
 									if ($.get(page).id === 'models') $$render(consequent_2);
 								},
@@ -297,51 +328,52 @@ export default function ChromeMenu($$anchor, $$props) {
 						$.append($$anchor, fragment_2);
 					};
 
-					$.if(node_12, ($$render) => {
+					$.if(node_14, ($$render) => {
 						if ($.get(page).id === 'providers') $$render(consequent_1); else $$render(alternate, false);
 					});
 				}
 
-				$.reset(button_9);
+				$.reset(button_11);
 
 				$.template_effect(() => {
-					$.set_attribute(button_9, 'aria-label', $.get(page).title);
-					classes = $.set_class(button_9, 1, '', null, classes, { active: app.route === $.get(page).id });
-					$.set_text(text_3, $.get(page).title);
+					$.set_attribute(button_11, 'aria-label', $.get(page).title);
+					classes = $.set_class(button_11, 1, '', null, classes, { active: app.route === $.get(page).id });
+					$.set_text(text_4, $.get(page).title);
 				});
 
-				$.append($$anchor, button_9);
+				$.append($$anchor, button_11);
 			});
 
-			var button_10 = $.sibling(node_10, 4);
+			var button_12 = $.sibling(node_12, 4);
 
-			button_10.__click = () => app.navigate('settings');
-
-			var node_14 = $.child(button_10);
-
-			Icon(node_14, { name: 'settings', size: 15 });
-			$.next();
-			$.reset(button_10);
-
-			var button_11 = $.sibling(button_10, 2);
-
-			button_11.__click = () => app.showPopup('commands');
-
-			var node_15 = $.child(button_11);
-
-			Icon(node_15, { name: 'command', size: 15 });
-			$.next(2);
-			$.reset(button_11);
-
-			var button_12 = $.sibling(button_11, 2);
-
-			button_12.__click = () => app.showPopup('shortcuts');
+			button_12.__click = () => app.navigate('settings');
 
 			var node_16 = $.child(button_12);
 
-			Icon(node_16, { name: 'key', size: 15 });
+			Icon(node_16, { name: 'settings', size: 15 });
 			$.next();
 			$.reset(button_12);
+
+			var button_13 = $.sibling(button_12, 2);
+
+			button_13.__click = () => app.showPopup('commands');
+
+			var node_17 = $.child(button_13);
+
+			Icon(node_17, { name: 'command', size: 15 });
+			$.next(2);
+			$.reset(button_13);
+
+			var button_14 = $.sibling(button_13, 2);
+
+			button_14.__click = () => app.showPopup('shortcuts');
+
+			var node_18 = $.child(button_14);
+
+			Icon(node_18, { name: 'key', size: 15 });
+			$.next();
+			$.reset(button_14);
+			$.template_effect(() => $.set_text(text_3, app.shelfVisible ? 'Hide provider sidebar' : 'Show provider sidebar'));
 			$.append($$anchor, fragment_1);
 		};
 

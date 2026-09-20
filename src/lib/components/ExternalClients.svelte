@@ -1,6 +1,8 @@
 <script lang="ts">
  import {onDestroy} from 'svelte';import {app} from '../state/app.svelte';import * as bridge from '../api/bridge';import Icon from './Icon.svelte';
+ import {privateLaunch} from '../launch-command';
  type Client='opencode'|'claude'|'chat'|'responses'|'messages';
+ let alive=true;let setupBusy=$state(false),setupMessage=$state(''),setupError=$state(false);
  let probing=$state(false),probeMessage=$state(''),probeFailed=$state(false);let timer:ReturnType<typeof setTimeout>;
  const client=$derived<Client>(app.preferences.harness||'opencode');
  const sh=(value:string)=>"'"+value.replaceAll("'","'\\''")+"'";
@@ -30,8 +32,40 @@
  function stop(){void app.ask('Stop the local gateway?','Connected client requests will be cancelled. Browser tabs and website logins will stay open.','Stop gateway',()=>app.perform('api.stop'));}
  // A port/host change invalidates the old health result; it is not a live probe.
  let checkedEndpoint='';$effect(()=>{const fingerprint=`${endpoint}:${running}`;if(checkedEndpoint!==fingerprint){checkedEndpoint=fingerprint;probeMessage='';probeFailed=false;}});
- onDestroy(()=>{clearTimeout(timer);app.secret='';});
+
+ async function prepareAndCopy(){
+  if(setupBusy||!app.ready||!model)return;
+  const selected={client,model,endpoint,config};setupBusy=true;setupError=false;setupMessage='Checking the local connection…';
+  try{
+   if(!running&&await app.perform('api.start')===undefined)throw Error('Could not start the local connection.');
+   const health=await bridge.probe();if(!health.healthy)throw Error('Local connection check failed.');
+   if(!alive||!app.ready||selected.client!==client||selected.model!==model||selected.endpoint!==endpoint)throw Error('The connection changed. Review your selection and try again.');
+   const credentials=await app.perform<{token:string}>('key.reveal');if(!credentials)throw Error('Local access key unavailable.');
+   const command=privateLaunch(selected.client,selected.endpoint,selected.model,credentials.token,selected.config);
+   if(!alive||!app.ready||selected.model!==model||selected.client!==client||selected.endpoint!==endpoint)throw Error('The connection changed before copying. Try again.');
+   await bridge.copy(command);
+   setupMessage='Launch command copied. Paste it into a terminal in your project. Keep Codemax open.';
+  }catch(error){setupError=true;setupMessage=error instanceof Error?error.message:String(error);}
+  finally{setupBusy=false;}
+ }
+ let selectionSignature='';$effect(()=>{const signature=`${client}|${model}|${endpoint}`;if(selectionSignature!==signature){selectionSignature=signature;if(!setupBusy)setupMessage='';}});
+ onDestroy(()=>{alive=false;clearTimeout(timer);app.secret='';});
 </script>
+<section class="quick-connect" aria-label="Simple client connection">
+ <div class="quick-connection-status"><span class="dot" class:online={running}></span><span>{!app.ready?'Reconnect Codemax to continue':running?'Local gateway ready':'Ready to set up'}</span></div>
+ <label class="field"><span>Coding client</span><select aria-label="Quick coding client" value={client} disabled={!app.ready||setupBusy} onchange={e=>app.settings({harness:e.currentTarget.value as Client})}><option value="opencode">OpenCode</option><option value="claude">Claude Code</option><option value="chat">Other · Chat Completions</option><option value="responses">Other · Responses API</option><option value="messages">Other · Messages API</option></select></label>
+ <label class="field"><span>Website model</span><select aria-label="Quick website model" value={app.clientModel||model} disabled={!app.ready||setupBusy||!app.exposedModels.length} onchange={e=>app.clientModel=e.currentTarget.value}>{#if !model}<option value="">Choose an available model</option>{/if}{#each app.exposedModels as m(m.id)}<option value={m.id}>{m.provider.label} / {m.display_name}</option>{/each}</select></label>
+ {#if app.clientModel&&!choice}<p class="note warning">Your selected model is unavailable. Choose another explicitly; no automatic replacement.</p>{/if}
+ {#if !app.exposedModels.length}<p class="connect-empty">Visit an AI chat website and sign in. Your available models appear here automatically.</p><button class="secondary" onclick={()=>app.newTab()}>Browse a website</button>{:else}
+ <button class="primary launch-connect" disabled={!app.ready||!model||setupBusy} onclick={prepareAndCopy}>{#if setupBusy}<span class="spinner"></span>{:else}<Icon name="copy" size={15}/>{/if}{setupBusy?'Preparing…':client==='opencode'||client==='claude'?'Copy private launch command':'Copy private test request'}</button>
+ <p class="field-hint">Starts and checks the gateway. Requires {client==='opencode'?'OpenCode':client==='claude'?'Claude Code':'curl'} installed. No provider key, no config file editing.</p>
+ <p class="private-command-note"><Icon name="lock" size={12}/>Includes your local access key. Paste only into your terminal; clipboard and terminal history may retain it.</p>
+ {/if}
+ {#if setupMessage}<p class="setup-result" class:danger-text={setupError} role="status">{setupMessage}</p>{/if}
+ {#if client==='claude'}<p class="field-hint compatibility-note">Non-Claude website models may not support every Claude Code feature. This does not certify vendor compatibility.</p>{/if}
+ <div class="connect-checklist"><Icon name="globe" size={14}/><span>Website account → Codemax → your coding client</span></div>
+</section>
+<details class="connection-advanced" aria-label="Advanced client configuration"><summary>Advanced setup and connection details</summary>
 <div class="connection-layout">
  <div class="connection-main">
  <section class="section"><div class="section-title"><h2>1. Choose your client</h2><span class="tag">Website quota</span></div>
@@ -62,3 +96,5 @@
  </div>
  <aside class="connection-help"><h3>What happens next</h3><p>Keep Codemax running. Select your website model in the client and send a request.</p><p>The website tab’s ring spins while working and stays still when idle.</p><button class="text-button" onclick={()=>app.navigate('sessions')}>View client sessions<Icon name="arrow" size={13}/></button><hr/><h3>Who runs tools?</h3><p>Your coding client runs tools using its own permissions. Codemax’s separate website tool tasks require MCP setup and your approval.</p><button class="text-button" onclick={()=>app.navigate('tools')}>Tools & permissions<Icon name="arrow" size={13}/></button><hr/><p class="field-hint">Website quotas still apply. No sign-in credentials are copied out of the browser.</p></aside>
 </div>
+
+</details>

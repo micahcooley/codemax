@@ -1,7 +1,7 @@
 [[permission]]
 identifier = "main-bridge"
-description = "Trusted UI transport and webview geometry; no process or filesystem API."
-commands.allow = ["bridge_request", "browser_bounds", "browser_control", "backend_restart", "host_status", "browser_find", "window_control", "document_export", "document_import", "gateway_probe"]
+description = "Trusted UI transport and webview geometry; user-driven file dialogs, but no general process or filesystem API."
+commands.allow = ["bridge_request", "browser_bounds", "browser_control", "backend_restart", "host_status", "browser_find", "window_control", "document_export", "document_import", "directory_pick", "gateway_probe"]
 
 [[permission]]
 identifier = "provider-observation"

@@ -4,6 +4,8 @@ The Tauri IPC surface and the provider surface are explicit test doubles.
 This is not a native desktop, provider-login, or Zag execution test.
 No HTTP navigation or network-policy modifications are performed.
 """
+# Navigation updated for the registry shelf and nested disclosures. All prior
+# behavioral assertions remain; default-visibility checks are in progressive_ux.py.
 from __future__ import annotations
 import json, os, pathlib, subprocess, time, traceback
 from playwright.sync_api import sync_playwright
@@ -31,11 +33,13 @@ with sync_playwright() as pw:
   page.get_by_role('button',name='Codemax menu',exact=True).click()
   page.get_by_role('menuitem',name=label,exact=True).click()
   page.wait_for_timeout(120)
+  if label=='Connect a client':page.get_by_text('Advanced setup and connection details',exact=True).click()
+  if label=='Tools & MCP' and page.get_by_text('More setup',exact=True).count():page.get_by_text('More setup',exact=True).click()
  try:
   record('compiled Svelte startup, real runes and native-transport handshake',lambda:page.get_by_role('heading',name='Open a website.',exact=False).wait_for())
   def open_provider():
    page.locator('.tab-open').first.click();page.wait_for_function('window.__uiFixture.bounds.visible===true');page.wait_for_timeout(180)
-   r=page.locator('#__fixture_provider').bounding_box();assert r and r['width']>1450 and r['height']>700 and r['x']==0,r
+   r=page.locator('#__fixture_provider').bounding_box();assert r and r['width']>1250 and r['height']>700 and r['x']==194,r
    assert len(page.locator('iframe').all())==1
    assert not page.locator('.inspector').count()
   record('browser-first layout with separately positioned provider surface',open_provider)
@@ -47,6 +51,7 @@ with sync_playwright() as pw:
   record('Ctrl-L address focus and keyboard command palette with provider hiding',keyboard)
   page.screenshot(animations='disabled',path=str(SHOTS/'03-client-setup.png'))
   def client_controls():
+   page.get_by_text('Advanced setup and connection details',exact=True).click()
    page.get_by_text('Manual connection details · endpoint and local access token',exact=True).click()
    page.get_by_role('button',name='Copy API endpoint').click();page.wait_for_function("window.__clipboard==='http://127.0.0.1:7331/v1'")
    page.get_by_role('button',name='Reveal API key').click();page.get_by_text('sk-local-ui-fixture-not-a-real-key',exact=True).wait_for()
@@ -162,10 +167,10 @@ with sync_playwright() as pw:
    if page.get_by_role('button',name='Dismiss notification').count():page.get_by_role('button',name='Dismiss notification').click()
    handle=page.get_by_role('slider',name='Inspector width');before=float(handle.get_attribute('aria-valuenow'));handle.focus();page.keyboard.press('ArrowLeft');assert float(handle.get_attribute('aria-valuenow'))==before+16
    page.get_by_role('button',name='Close inspector',exact=True).click();assert not page.locator('.inspector').count()
-   page.get_by_role('button',name='Toggle connection inspector').click();assert page.locator('.inspector').is_visible()
+   route('Connection inspector');assert page.locator('.inspector').is_visible()
    assert not page.locator('.workspace-sidebar').count()
    page.get_by_role('button',name='Close inspector',exact=True).click()
-   page.wait_for_function('window.__uiFixture.bounds.width===innerWidth')
+   page.wait_for_function('window.__uiFixture.bounds.width===innerWidth-194')
   record('keyboard-resizable panes and collapse/restore bounds',resizing)
   def tabs():
    page.keyboard.press('Control+t');page.get_by_role('heading',name='Open a website.',exact=False).wait_for();page.get_by_role('textbox',name='Website to open').fill('https://chat.example.test');page.get_by_role('button',name='Open website',exact=True).click();page.wait_for_function('window.__uiFixture.snapshot.providers.length===4')
