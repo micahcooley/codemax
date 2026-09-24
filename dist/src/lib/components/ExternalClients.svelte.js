@@ -16,32 +16,33 @@ var root_4 = $.from_html(`<p class="note warning">Your selected model is unavail
 var root_5 = $.from_html(`<div class="note"><!><div>The local gateway needs the Zag backend (Linux x86_64). On this Mac, Codemax browses, signs in, and lists observed website models; coding-client connections stay off.</div></div>`);
 var root_6 = $.from_html(`<p class="connect-empty">Visit an AI chat website and sign in. Your available models appear here automatically.</p><button class="secondary">Browse a website</button>`, 1);
 var root_7 = $.from_html(`<span class="spinner"></span>`);
-var root_8 = $.from_html(`<p class="field-hint">The included Koryphaios integration discovers this gateway and its available models on this computer. Existing installations need the integration applied first.</p>`);
-var root_9 = $.from_html(`<p class="field-hint"> </p> <p class="private-command-note"><!>Includes your local access key. Paste only into your terminal; clipboard and terminal history may retain it.</p>`, 1);
-var root_10 = $.from_html(`<button class="primary launch-connect"><!> </button> <!>`, 1);
-var root_11 = $.from_html(`<p role="status"> </p>`);
-var root_12 = $.from_html(`<p class="field-hint compatibility-note">Non-Claude website models may not support every Claude Code feature. This does not certify vendor compatibility.</p>`);
-var root_13 = $.from_html(`<button> </button>`);
-var root_14 = $.from_html(`<option>Select an available model</option>`);
-var root_15 = $.from_html(`<div class="note warning" role="status">Your previous selection is no longer available. Choose a model above; Codemax will not switch it silently.</div>`);
-var root_16 = $.from_html(`<div class="note"><!><div>There are no ready, enabled models yet. <button class="text-button">Review providers</button> or <button class="text-button">open a website</button>.</div></div>`);
-var root_17 = $.from_html(`<p>The local gateway is part of the Zag backend, which runs on Linux x86_64. In browsing-only mode there is nothing to start here; website browsing and model detection above keep working.</p>`);
-var root_18 = $.from_html(`<button class="secondary"> </button><button class="text-button">Stop gateway</button>`, 1);
-var root_19 = $.from_html(`<button class="primary"> </button>`);
-var root_20 = $.from_html(`<p>Your client talks to Codemax on this computer. Codemax sends requests through your signed-in website—not a paid provider API.</p> <div class="button-group" style="margin-top:15px"><!><button class="text-button">Gateway settings</button></div>`, 1);
-var root_21 = $.from_html(`<button class="text-button"><!>Save config</button>`);
-var root_22 = $.from_html(`<label class="setting-line"><div><strong> </strong><p> </p></div><input type="checkbox"/></label>`);
-var root_23 = $.from_html(`<p class="note warning">None of the selected models are currently servable by the local gateway. The config still saves; requests will fail until a website session is ready.</p>`);
-var root_24 = $.from_html(`<p class="note warning">The default website model is not included above. Include it or choose another default.</p>`);
-var root_25 = $.from_html(`<div class="field"><span>Models to include in opencode.json</span> <p class="field-hint">Choose every website model OpenCode may use — the provider carries the whole set. An explicitly chosen default above must stay included and is never replaced silently; otherwise the first included model is the default.</p></div> <!> <!> <!>`, 1);
-var root_26 = $.from_html(`<p class="field-hint">To skip launch commands: save the config once, merge it with <code>node scripts/opencode-merge.mjs --from opencode.json</code> (backs up first, keeps your other providers), and export <code>CODEMAX_API_KEY</code> once in your shell profile.</p>`);
-var root_27 = $.from_html(`<label class="field"><span>Endpoint URL</span><div class="readout"><code> </code><button class="icon-button" aria-label="Copy custom API endpoint"><!></button></div><span class="field-hint"> </span></label> <div class="field"><span>API key · local gateway token</span><div class="readout"><code> </code><button class="icon-button"><!></button><button class="icon-button" aria-label="Copy custom API key"><!></button></div><span class="field-hint">Send as <code>Authorization: Bearer</code> — the same key the example request uses. Revealed keys disappear after 30 seconds or when you leave this page.</span></div>`, 1);
-var root_28 = $.from_html(`<div class="code-panel launch-command"><div class="code-heading"><!><span>Start OpenCode · Bash</span><button class="text-button">Copy setup command</button></div><pre></pre></div>`);
-var root_29 = $.from_html(`<div class="button-group" style="margin-top:14px"><button class="secondary"><!>Copy local key</button><span class="field-hint">Paste at the terminal prompt. It will not be displayed or saved in the config.</span></div>`);
-var root_30 = $.from_html(`<div class="note"><!><span>This non-Claude model connection is not vendor-supported. Actual compatibility depends on the website model and Claude Code’s protocol requirements.</span></div>`);
-var root_31 = $.from_html(`<p class="connection-instruction"> </p> <!> <div class="code-panel"><div class="code-heading"><!><span> </span><button class="text-button"><!>Copy</button></div><pre> </pre></div> <!> <!> <!> <!>`, 1);
-var root_32 = $.from_html(`<p class="muted">Configuration appears when a website model is ready. Nothing needs to be copied yet.</p>`);
-var root_33 = $.from_html(`<section class="quick-connect" aria-label="Simple client connection"><div class="quick-connection-status"><span></span><span> </span></div> <label class="field"><span>Coding client</span><select aria-label="Quick coding client"><option>Koryphaios</option><option>OpenCode</option><option>Claude Code</option><option>Other · Chat Completions</option><option>Other · Responses API</option><option>Other · Messages API</option></select></label> <label class="field"><span>Website model</span><select aria-label="Quick website model"><!><!></select></label> <!> <!> <!> <!> <!> <!> <div class="connect-checklist"><!><span>Website account → Codemax → your coding client</span></div></section> <details class="connection-advanced" aria-label="Advanced client configuration"><summary>Advanced setup and connection details</summary> <div class="connection-layout"><div class="connection-main"><section class="section"><div class="section-title"><h2>1. Choose your client</h2><span class="tag">Website quota</span></div> <div class="segmented" aria-label="Client format"></div> <details class="advanced-client client-formats"><summary>Other clients · protocol examples</summary><div class="segmented"></div><p class="field-hint">Use a protocol your client supports. These are example requests, not one-click installers.</p></details> <label class="field"><span>Website model</span><select aria-label="Client model"><!><!></select></label> <!> <!></section> <section class="section"><div class="section-title"><h2>2. Start the local connection</h2><span><span></span> </span></div> <!> <!></section> <section class="section"><div class="section-title"><h2> </h2><!></div> <!> <!> <details class="advanced-client"><summary>Manual connection details · endpoint and local access token</summary> <label class="field"><span>Local gateway endpoint</span><div class="readout"><code> </code><button class="icon-button" aria-label="Copy API endpoint"><!></button></div></label> <div class="field"><span>Local access token · not a provider credential</span><div class="readout"><code> </code><button class="icon-button"><!></button><button class="icon-button" aria-label="Copy API key"><!></button></div><span class="field-hint">Revealed keys disappear after 30 seconds or when you leave this page.</span></div> <p class="field-hint">Use the same session identifier for continuation. Some clients cache their model catalog; refresh or update their config after changing exposed models.</p></details></section></div> <aside class="connection-help"><h3>What happens next</h3><p>Keep Codemax running. Select your website model in the client and send a request.</p><p>The website tab’s ring spins while working and stays still when idle.</p><button class="text-button">View client sessions<!></button><hr/><h3>Who runs tools?</h3><p>Your coding client runs tools using its own permissions. Codemax’s separate website tool tasks require MCP setup and your approval.</p><button class="text-button">Tools & permissions<!></button><hr/><p class="field-hint">Website quotas still apply. No sign-in credentials are copied out of the browser.</p></aside></div></details>`, 1);
+var root_8 = $.from_html(`<button class="secondary"><!>Copy opencode config</button> <p class="field-hint">The codemax provider with every included model — no launch command. Merge it once (see below), export the key once, then just run opencode.</p>`, 1);
+var root_9 = $.from_html(`<p class="field-hint">The included Koryphaios integration discovers this gateway and its available models on this computer. Existing installations need the integration applied first.</p>`);
+var root_10 = $.from_html(`<p class="field-hint"> </p> <p class="private-command-note"><!>Includes your local access key. Paste only into your terminal; clipboard and terminal history may retain it.</p>`, 1);
+var root_11 = $.from_html(`<button class="primary launch-connect"><!> </button> <!> <!>`, 1);
+var root_12 = $.from_html(`<p role="status"> </p>`);
+var root_13 = $.from_html(`<p class="field-hint compatibility-note">Non-Claude website models may not support every Claude Code feature. This does not certify vendor compatibility.</p>`);
+var root_14 = $.from_html(`<button> </button>`);
+var root_15 = $.from_html(`<option>Select an available model</option>`);
+var root_16 = $.from_html(`<div class="note warning" role="status">Your previous selection is no longer available. Choose a model above; Codemax will not switch it silently.</div>`);
+var root_17 = $.from_html(`<div class="note"><!><div>There are no ready, enabled models yet. <button class="text-button">Review providers</button> or <button class="text-button">open a website</button>.</div></div>`);
+var root_18 = $.from_html(`<p>The local gateway is part of the Zag backend, which runs on Linux x86_64. In browsing-only mode there is nothing to start here; website browsing and model detection above keep working.</p>`);
+var root_19 = $.from_html(`<button class="secondary"> </button><button class="text-button">Stop gateway</button>`, 1);
+var root_20 = $.from_html(`<button class="primary"> </button>`);
+var root_21 = $.from_html(`<p>Your client talks to Codemax on this computer. Codemax sends requests through your signed-in website—not a paid provider API.</p> <div class="button-group" style="margin-top:15px"><!><button class="text-button">Gateway settings</button></div>`, 1);
+var root_22 = $.from_html(`<button class="text-button"><!>Save config</button>`);
+var root_23 = $.from_html(`<label class="setting-line"><div><strong> </strong><p> </p></div><input type="checkbox"/></label>`);
+var root_24 = $.from_html(`<p class="note warning">None of the selected models are currently servable by the local gateway. The config still saves; requests will fail until a website session is ready.</p>`);
+var root_25 = $.from_html(`<p class="note warning">The default website model is not included above. Include it or choose another default.</p>`);
+var root_26 = $.from_html(`<div class="field"><span>Models to include in opencode.json</span> <p class="field-hint">Choose every website model OpenCode may use — the provider carries the whole set. An explicitly chosen default above must stay included and is never replaced silently; otherwise the first included model is the default.</p></div> <!> <!> <!>`, 1);
+var root_27 = $.from_html(`<p class="field-hint">To skip launch commands: save the config once, merge it with <code>node scripts/opencode-merge.mjs --from opencode.json</code> (backs up first, keeps your other providers), and export <code>CODEMAX_API_KEY</code> once in your shell profile.</p>`);
+var root_28 = $.from_html(`<label class="field"><span>Endpoint URL</span><div class="readout"><code> </code><button class="icon-button" aria-label="Copy custom API endpoint"><!></button></div><span class="field-hint"> </span></label> <div class="field"><span>API key · local gateway token</span><div class="readout"><code> </code><button class="icon-button"><!></button><button class="icon-button" aria-label="Copy custom API key"><!></button></div><span class="field-hint">Send as <code>Authorization: Bearer</code> — the same key the example request uses. Revealed keys disappear after 30 seconds or when you leave this page.</span></div>`, 1);
+var root_29 = $.from_html(`<div class="code-panel launch-command"><div class="code-heading"><!><span>Start OpenCode · Bash</span><button class="text-button">Copy setup command</button></div><pre></pre></div>`);
+var root_30 = $.from_html(`<div class="button-group" style="margin-top:14px"><button class="secondary"><!>Copy local key</button><span class="field-hint">Paste at the terminal prompt. It will not be displayed or saved in the config.</span></div>`);
+var root_31 = $.from_html(`<div class="note"><!><span>This non-Claude model connection is not vendor-supported. Actual compatibility depends on the website model and Claude Code’s protocol requirements.</span></div>`);
+var root_32 = $.from_html(`<p class="connection-instruction"> </p> <!> <div class="code-panel"><div class="code-heading"><!><span> </span><button class="text-button"><!>Copy</button></div><pre> </pre></div> <!> <!> <!> <!>`, 1);
+var root_33 = $.from_html(`<p class="muted">Configuration appears when a website model is ready. Nothing needs to be copied yet.</p>`);
+var root_34 = $.from_html(`<section class="quick-connect" aria-label="Simple client connection"><div class="quick-connection-status"><span></span><span> </span></div> <label class="field"><span>Coding client</span><select aria-label="Quick coding client"><option>Koryphaios</option><option>OpenCode</option><option>Claude Code</option><option>Other · Chat Completions</option><option>Other · Responses API</option><option>Other · Messages API</option></select></label> <label class="field"><span>Website model</span><select aria-label="Quick website model"><!><!></select></label> <!> <!> <!> <!> <!> <!> <div class="connect-checklist"><!><span>Website account → Codemax → your coding client</span></div></section> <details class="connection-advanced" aria-label="Advanced client configuration"><summary>Advanced setup and connection details</summary> <div class="connection-layout"><div class="connection-main"><section class="section"><div class="section-title"><h2>1. Choose your client</h2><span class="tag">Website quota</span></div> <div class="segmented" aria-label="Client format"></div> <details class="advanced-client client-formats"><summary>Other clients · protocol examples</summary><div class="segmented"></div><p class="field-hint">Use a protocol your client supports. These are example requests, not one-click installers.</p></details> <label class="field"><span>Website model</span><select aria-label="Client model"><!><!></select></label> <!> <!></section> <section class="section"><div class="section-title"><h2>2. Start the local connection</h2><span><span></span> </span></div> <!> <!></section> <section class="section"><div class="section-title"><h2> </h2><!></div> <!> <!> <details class="advanced-client"><summary>Manual connection details · endpoint and local access token</summary> <label class="field"><span>Local gateway endpoint</span><div class="readout"><code> </code><button class="icon-button" aria-label="Copy API endpoint"><!></button></div></label> <div class="field"><span>Local access token · not a provider credential</span><div class="readout"><code> </code><button class="icon-button"><!></button><button class="icon-button" aria-label="Copy API key"><!></button></div><span class="field-hint">Revealed keys disappear after 30 seconds or when you leave this page.</span></div> <p class="field-hint">Use the same session identifier for continuation. Some clients cache their model catalog; refresh or update their config after changing exposed models.</p></details></section></div> <aside class="connection-help"><h3>What happens next</h3><p>Keep Codemax running. Select your website model in the client and send a request.</p><p>The website tab’s ring spins while working and stays still when idle.</p><button class="text-button">View client sessions<!></button><hr/><h3>Who runs tools?</h3><p>Your coding client runs tools using its own permissions. Codemax’s separate website tool tasks require MCP setup and your approval.</p><button class="text-button">Tools & permissions<!></button><hr/><p class="field-hint">Website quotas still apply. No sign-in credentials are copied out of the browser.</p></aside></div></details>`, 1);
 
 export default function ExternalClients($$anchor, $$props) {
 	$.push($$props, true);
@@ -265,6 +266,12 @@ export default function ExternalClients($$anchor, $$props) {
 		}
 	});
 
+	async function copyOpencodeConfig() {
+		if (!app.ready || !$.get(opencodeValid)) return;
+
+		await app.clipboard(JSON.stringify($.get(config), null, 2));
+	}
+
 	async function prepareAndCopy() {
 		const need = $.get(client) === 'opencode' ? $.get(opencodeDefault) : $.get(model);
 
@@ -334,7 +341,7 @@ export default function ExternalClients($$anchor, $$props) {
 		app.secret = '';
 	});
 
-	var fragment = root_33();
+	var fragment = root_34();
 	var section = $.first_child(fragment);
 	var div = $.child(section);
 	var span = $.child(div);
@@ -554,7 +561,7 @@ export default function ExternalClients($$anchor, $$props) {
 		};
 
 		var alternate_2 = ($$anchor) => {
-			var fragment_7 = root_10();
+			var fragment_7 = root_11();
 			var button_1 = $.first_child(fragment_7);
 			var node_12 = $.child(button_1);
 
@@ -582,19 +589,41 @@ export default function ExternalClients($$anchor, $$props) {
 
 			{
 				var consequent_11 = ($$anchor) => {
-					var p_2 = root_8();
+					var fragment_9 = root_8();
+					var button_2 = $.first_child(fragment_9);
+					var node_14 = $.child(button_2);
+
+					Icon(node_14, { name: 'copy', size: 14 });
+					$.next();
+					$.reset(button_2);
+					$.next(2);
+					$.template_effect(() => button_2.disabled = !app.ready || !$.get(opencodeValid));
+					$.delegated('click', button_2, copyOpencodeConfig);
+					$.append($$anchor, fragment_9);
+				};
+
+				$.if(node_13, ($$render) => {
+					if ($.get(client) === 'opencode') $$render(consequent_11);
+				});
+			}
+
+			var node_15 = $.sibling(node_13, 2);
+
+			{
+				var consequent_12 = ($$anchor) => {
+					var p_2 = root_9();
 
 					$.append($$anchor, p_2);
 				};
 
 				var alternate_1 = ($$anchor) => {
-					var fragment_9 = root_9();
-					var p_3 = $.first_child(fragment_9);
+					var fragment_10 = root_10();
+					var p_3 = $.first_child(fragment_10);
 					var text_9 = $.only_child(p_3);
 					var p_4 = $.sibling(p_3, 2);
-					var node_14 = $.child(p_4);
+					var node_16 = $.child(p_4);
 
-					Icon(node_14, { name: 'lock', size: 12 });
+					Icon(node_16, { name: 'lock', size: 12 });
 					$.next();
 					$.reset(p_4);
 
@@ -602,11 +631,11 @@ export default function ExternalClients($$anchor, $$props) {
 						? 'OpenCode'
 						: $.get(client) === 'claude' ? 'Claude Code' : 'curl'} installed. No provider key, no config file editing.`));
 
-					$.append($$anchor, fragment_9);
+					$.append($$anchor, fragment_10);
 				};
 
-				$.if(node_13, ($$render) => {
-					if ($.get(client) === 'koryphaios') $$render(consequent_11); else $$render(alternate_1, -1);
+				$.if(node_15, ($$render) => {
+					if ($.get(client) === 'koryphaios') $$render(consequent_12); else $$render(alternate_1, -1);
 				});
 			}
 
@@ -632,11 +661,11 @@ export default function ExternalClients($$anchor, $$props) {
 		});
 	}
 
-	var node_15 = $.sibling(node_11, 2);
+	var node_17 = $.sibling(node_11, 2);
 
 	{
-		var consequent_12 = ($$anchor) => {
-			var p_5 = root_11();
+		var consequent_13 = ($$anchor) => {
+			var p_5 = root_12();
 			let classes_1;
 			var text_10 = $.only_child(p_5, true);
 
@@ -648,29 +677,29 @@ export default function ExternalClients($$anchor, $$props) {
 			$.append($$anchor, p_5);
 		};
 
-		$.if(node_15, ($$render) => {
-			if ($.get(setupMessage)) $$render(consequent_12);
+		$.if(node_17, ($$render) => {
+			if ($.get(setupMessage)) $$render(consequent_13);
 		});
 	}
 
-	var node_16 = $.sibling(node_15, 2);
+	var node_18 = $.sibling(node_17, 2);
 
 	{
-		var consequent_13 = ($$anchor) => {
-			var p_6 = root_12();
+		var consequent_14 = ($$anchor) => {
+			var p_6 = root_13();
 
 			$.append($$anchor, p_6);
 		};
 
-		$.if(node_16, ($$render) => {
-			if ($.get(client) === 'claude') $$render(consequent_13);
+		$.if(node_18, ($$render) => {
+			if ($.get(client) === 'claude') $$render(consequent_14);
 		});
 	}
 
-	var div_2 = $.sibling(node_16, 2);
-	var node_17 = $.child(div_2);
+	var div_2 = $.sibling(node_18, 2);
+	var node_19 = $.child(div_2);
 
-	Icon(node_17, { name: 'globe', size: 14 });
+	Icon(node_19, { name: 'globe', size: 14 });
 	$.next();
 	$.reset(div_2);
 	$.reset(section);
@@ -682,40 +711,16 @@ export default function ExternalClients($$anchor, $$props) {
 	var div_5 = $.sibling($.child(section_1), 2);
 
 	$.each(div_5, 20, () => ['koryphaios', 'opencode', 'claude'], $.index, ($$anchor, id) => {
-		var button_2 = root_13();
+		var button_3 = root_14();
 		let classes_2;
-		var text_11 = $.only_child(button_2, true);
-
-		$.template_effect(
-			($0) => {
-				$.set_attribute(button_2, 'aria-pressed', $.get(client) === id);
-				button_2.disabled = $0;
-				classes_2 = $.set_class(button_2, 1, '', null, classes_2, { active: $.get(client) === id });
-				$.set_text(text_11, formatNames[id]);
-			},
-			[() => !app.ready || app.busy('settings.update')]
-		);
-
-		$.delegated('click', button_2, () => app.settings({ harness: id }));
-		$.append($$anchor, button_2);
-	});
-
-	$.reset(div_5);
-
-	var details_1 = $.sibling(div_5, 2);
-	var div_6 = $.sibling($.child(details_1));
-
-	$.each(div_6, 20, () => ['chat', 'responses', 'messages'], $.index, ($$anchor, id) => {
-		var button_3 = root_13();
-		let classes_3;
-		var text_12 = $.only_child(button_3, true);
+		var text_11 = $.only_child(button_3, true);
 
 		$.template_effect(
 			($0) => {
 				$.set_attribute(button_3, 'aria-pressed', $.get(client) === id);
 				button_3.disabled = $0;
-				classes_3 = $.set_class(button_3, 1, '', null, classes_3, { active: $.get(client) === id });
-				$.set_text(text_12, formatNames[id]);
+				classes_2 = $.set_class(button_3, 1, '', null, classes_2, { active: $.get(client) === id });
+				$.set_text(text_11, formatNames[id]);
 			},
 			[() => !app.ready || app.busy('settings.update')]
 		);
@@ -724,30 +729,54 @@ export default function ExternalClients($$anchor, $$props) {
 		$.append($$anchor, button_3);
 	});
 
+	$.reset(div_5);
+
+	var details_1 = $.sibling(div_5, 2);
+	var div_6 = $.sibling($.child(details_1));
+
+	$.each(div_6, 20, () => ['chat', 'responses', 'messages'], $.index, ($$anchor, id) => {
+		var button_4 = root_14();
+		let classes_3;
+		var text_12 = $.only_child(button_4, true);
+
+		$.template_effect(
+			($0) => {
+				$.set_attribute(button_4, 'aria-pressed', $.get(client) === id);
+				button_4.disabled = $0;
+				classes_3 = $.set_class(button_4, 1, '', null, classes_3, { active: $.get(client) === id });
+				$.set_text(text_12, formatNames[id]);
+			},
+			[() => !app.ready || app.busy('settings.update')]
+		);
+
+		$.delegated('click', button_4, () => app.settings({ harness: id }));
+		$.append($$anchor, button_4);
+	});
+
 	$.reset(div_6);
 	$.next();
 	$.reset(details_1);
 
 	var label_2 = $.sibling(details_1, 2);
 	var select_2 = $.sibling($.child(label_2));
-	var node_18 = $.child(select_2);
+	var node_20 = $.child(select_2);
 
 	{
-		var consequent_14 = ($$anchor) => {
-			var option_8 = root_14();
+		var consequent_15 = ($$anchor) => {
+			var option_8 = root_15();
 
 			option_8.value = option_8.__value = '';
 			$.append($$anchor, option_8);
 		};
 
-		$.if(node_18, ($$render) => {
-			if (!$.get(model)) $$render(consequent_14);
+		$.if(node_20, ($$render) => {
+			if (!$.get(model)) $$render(consequent_15);
 		});
 	}
 
-	var node_19 = $.sibling(node_18);
+	var node_21 = $.sibling(node_20);
 
-	$.each(node_19, 17, () => app.exposedModels, (m) => m.id, ($$anchor, m) => {
+	$.each(node_21, 17, () => app.exposedModels, (m) => m.id, ($$anchor, m) => {
 		var option_9 = root_1();
 		var text_13 = $.only_child(option_9);
 		var option_9_value = {};
@@ -770,43 +799,43 @@ export default function ExternalClients($$anchor, $$props) {
 	$.init_select(select_2);
 	$.reset(label_2);
 
-	var node_20 = $.sibling(label_2, 2);
+	var node_22 = $.sibling(label_2, 2);
 
 	{
-		var consequent_15 = ($$anchor) => {
-			var div_7 = root_15();
+		var consequent_16 = ($$anchor) => {
+			var div_7 = root_16();
 
 			$.append($$anchor, div_7);
 		};
 
-		$.if(node_20, ($$render) => {
-			if (app.clientModel && !$.get(choice)) $$render(consequent_15);
+		$.if(node_22, ($$render) => {
+			if (app.clientModel && !$.get(choice)) $$render(consequent_16);
 		});
 	}
 
-	var node_21 = $.sibling(node_20, 2);
+	var node_23 = $.sibling(node_22, 2);
 
 	{
-		var consequent_16 = ($$anchor) => {
-			var div_8 = root_16();
-			var node_22 = $.child(div_8);
+		var consequent_17 = ($$anchor) => {
+			var div_8 = root_17();
+			var node_24 = $.child(div_8);
 
-			Icon(node_22, { name: 'globe', size: 16 });
+			Icon(node_24, { name: 'globe', size: 16 });
 
-			var div_9 = $.sibling(node_22);
-			var button_4 = $.sibling($.child(div_9));
-			var button_5 = $.sibling(button_4, 2);
+			var div_9 = $.sibling(node_24);
+			var button_5 = $.sibling($.child(div_9));
+			var button_6 = $.sibling(button_5, 2);
 
 			$.next();
 			$.reset(div_9);
 			$.reset(div_8);
-			$.delegated('click', button_4, () => app.navigate('providers'));
-			$.delegated('click', button_5, () => app.newTab());
+			$.delegated('click', button_5, () => app.navigate('providers'));
+			$.delegated('click', button_6, () => app.newTab());
 			$.append($$anchor, div_8);
 		};
 
-		$.if(node_21, ($$render) => {
-			if (!app.exposedModels.length) $$render(consequent_16);
+		$.if(node_23, ($$render) => {
+			if (!app.exposedModels.length) $$render(consequent_17);
 		});
 	}
 
@@ -823,48 +852,48 @@ export default function ExternalClients($$anchor, $$props) {
 	$.reset(span_3);
 	$.reset(div_10);
 
-	var node_23 = $.sibling(div_10, 2);
+	var node_25 = $.sibling(div_10, 2);
 
 	{
-		var consequent_17 = ($$anchor) => {
-			var p_7 = root_17();
+		var consequent_18 = ($$anchor) => {
+			var p_7 = root_18();
 
 			$.append($$anchor, p_7);
 		};
 
 		var alternate_4 = ($$anchor) => {
-			var fragment_10 = root_20();
-			var div_11 = $.sibling($.first_child(fragment_10), 2);
-			var node_24 = $.child(div_11);
+			var fragment_11 = root_21();
+			var div_11 = $.sibling($.first_child(fragment_11), 2);
+			var node_26 = $.child(div_11);
 
 			{
-				var consequent_18 = ($$anchor) => {
-					var fragment_11 = root_18();
-					var button_6 = $.first_child(fragment_11);
-					var text_15 = $.only_child(button_6, true);
-					var button_7 = $.sibling(button_6);
+				var consequent_19 = ($$anchor) => {
+					var fragment_12 = root_19();
+					var button_7 = $.first_child(fragment_12);
+					var text_15 = $.only_child(button_7, true);
+					var button_8 = $.sibling(button_7);
 
 					$.template_effect(
 						($0) => {
-							button_6.disabled = $.get(probing);
+							button_7.disabled = $.get(probing);
 							$.set_text(text_15, $.get(probing) ? 'Checking…' : 'Check connection');
-							button_7.disabled = $0;
+							button_8.disabled = $0;
 						},
 						[() => app.busy('api.stop')]
 					);
 
-					$.delegated('click', button_6, probe);
-					$.delegated('click', button_7, stop);
-					$.append($$anchor, fragment_11);
+					$.delegated('click', button_7, probe);
+					$.delegated('click', button_8, stop);
+					$.append($$anchor, fragment_12);
 				};
 
 				var alternate_3 = ($$anchor) => {
-					var button_8 = root_19();
-					var text_16 = $.only_child(button_8, true);
+					var button_9 = root_20();
+					var text_16 = $.only_child(button_9, true);
 
 					$.template_effect(
 						($0, $1) => {
-							button_8.disabled = $0;
+							button_9.disabled = $0;
 							$.set_text(text_16, $1);
 						},
 						[
@@ -873,32 +902,32 @@ export default function ExternalClients($$anchor, $$props) {
 						]
 					);
 
-					$.delegated('click', button_8, () => app.perform('api.start'));
-					$.append($$anchor, button_8);
+					$.delegated('click', button_9, () => app.perform('api.start'));
+					$.append($$anchor, button_9);
 				};
 
-				$.if(node_24, ($$render) => {
-					if ($.get(running)) $$render(consequent_18); else $$render(alternate_3, -1);
+				$.if(node_26, ($$render) => {
+					if ($.get(running)) $$render(consequent_19); else $$render(alternate_3, -1);
 				});
 			}
 
-			var button_9 = $.sibling(node_24);
+			var button_10 = $.sibling(node_26);
 
 			$.reset(div_11);
-			$.delegated('click', button_9, () => app.settingsPage('gateway'));
-			$.append($$anchor, fragment_10);
+			$.delegated('click', button_10, () => app.settingsPage('gateway'));
+			$.append($$anchor, fragment_11);
 		};
 
-		$.if(node_23, ($$render) => {
-			if ($.get(fallback)) $$render(consequent_17); else $$render(alternate_4, -1);
+		$.if(node_25, ($$render) => {
+			if ($.get(fallback)) $$render(consequent_18); else $$render(alternate_4, -1);
 		});
 	}
 
-	var node_25 = $.sibling(node_23, 2);
+	var node_27 = $.sibling(node_25, 2);
 
 	{
-		var consequent_19 = ($$anchor) => {
-			var p_8 = root_11();
+		var consequent_20 = ($$anchor) => {
+			var p_8 = root_12();
 			let classes_6;
 			var text_17 = $.only_child(p_8);
 
@@ -910,8 +939,8 @@ export default function ExternalClients($$anchor, $$props) {
 			$.append($$anchor, p_8);
 		};
 
-		$.if(node_25, ($$render) => {
-			if ($.get(probeMessage)) $$render(consequent_19);
+		$.if(node_27, ($$render) => {
+			if ($.get(probeMessage)) $$render(consequent_20);
 		});
 	}
 
@@ -921,36 +950,36 @@ export default function ExternalClients($$anchor, $$props) {
 	var div_12 = $.child(section_3);
 	var h2 = $.child(div_12);
 	var text_18 = $.only_child(h2);
-	var node_26 = $.sibling(h2);
+	var node_28 = $.sibling(h2);
 
 	{
-		var consequent_20 = ($$anchor) => {
-			var button_10 = root_21();
-			var node_27 = $.child(button_10);
+		var consequent_21 = ($$anchor) => {
+			var button_11 = root_22();
+			var node_29 = $.child(button_11);
 
-			Icon(node_27, { name: 'download', size: 14 });
+			Icon(node_29, { name: 'download', size: 14 });
 			$.next();
-			$.reset(button_10);
-			$.template_effect(() => button_10.disabled = !app.ready || !$.get(opencodeValid));
-			$.delegated('click', button_10, () => app.export('opencode.json', $.get(config)));
-			$.append($$anchor, button_10);
+			$.reset(button_11);
+			$.template_effect(() => button_11.disabled = !app.ready || !$.get(opencodeValid));
+			$.delegated('click', button_11, () => app.export('opencode.json', $.get(config)));
+			$.append($$anchor, button_11);
 		};
 
-		$.if(node_26, ($$render) => {
-			if ($.get(client) === 'opencode') $$render(consequent_20);
+		$.if(node_28, ($$render) => {
+			if ($.get(client) === 'opencode') $$render(consequent_21);
 		});
 	}
 
 	$.reset(div_12);
 
-	var node_28 = $.sibling(div_12, 2);
+	var node_30 = $.sibling(div_12, 2);
 
 	{
-		var consequent_23 = ($$anchor) => {
-			var fragment_12 = root_25();
-			var node_29 = $.sibling($.first_child(fragment_12), 2);
+		var consequent_24 = ($$anchor) => {
+			var fragment_13 = root_26();
+			var node_31 = $.sibling($.first_child(fragment_13), 2);
 
-			$.each(node_29, 17, () => app.models, (m) => m.id, ($$anchor, m) => {
+			$.each(node_31, 17, () => app.models, (m) => m.id, ($$anchor, m) => {
 				const servable = $.derived(() => modelReady($.get(m), $.get(m).provider));
 
 				const badge = $.derived(() => $.get(servable)
@@ -960,7 +989,7 @@ export default function ExternalClients($$anchor, $$props) {
 						: modelStatus($.get(m), $.get(m).provider));
 
 				const locked = $.derived(() => !$.get(fallback) && !($.get(m).enabled && $.get(m).provider.exposed));
-				var label_3 = root_22();
+				var label_3 = root_23();
 				var div_13 = $.child(label_3);
 				var strong = $.child(div_13);
 				var text_19 = $.only_child(strong);
@@ -996,73 +1025,73 @@ export default function ExternalClients($$anchor, $$props) {
 				$.append($$anchor, label_3);
 			});
 
-			var node_30 = $.sibling(node_29, 2);
+			var node_32 = $.sibling(node_31, 2);
 
 			{
-				var consequent_21 = ($$anchor) => {
-					var p_10 = root_23();
+				var consequent_22 = ($$anchor) => {
+					var p_10 = root_24();
 
 					$.append($$anchor, p_10);
 				};
 
 				var d = $.derived(() => $.get(included).length > 0 && !$.get(included).some((m) => modelReady(m, m.provider)));
 
-				$.if(node_30, ($$render) => {
-					if ($.get(d)) $$render(consequent_21);
+				$.if(node_32, ($$render) => {
+					if ($.get(d)) $$render(consequent_22);
 				});
 			}
 
-			var node_31 = $.sibling(node_30, 2);
+			var node_33 = $.sibling(node_32, 2);
 
 			{
-				var consequent_22 = ($$anchor) => {
-					var p_11 = root_24();
+				var consequent_23 = ($$anchor) => {
+					var p_11 = root_25();
 
 					$.append($$anchor, p_11);
 				};
 
-				$.if(node_31, ($$render) => {
-					if ($.get(opencodeDefault) && !$.get(defaultIncluded)) $$render(consequent_22);
+				$.if(node_33, ($$render) => {
+					if ($.get(opencodeDefault) && !$.get(defaultIncluded)) $$render(consequent_23);
 				});
 			}
 
-			$.append($$anchor, fragment_12);
+			$.append($$anchor, fragment_13);
 		};
 
-		$.if(node_28, ($$render) => {
-			if ($.get(client) === 'opencode' && app.models.length) $$render(consequent_23);
+		$.if(node_30, ($$render) => {
+			if ($.get(client) === 'opencode' && app.models.length) $$render(consequent_24);
 		});
 	}
 
-	var node_32 = $.sibling(node_28, 2);
+	var node_34 = $.sibling(node_30, 2);
 
 	{
-		var consequent_29 = ($$anchor) => {
-			var fragment_13 = root_31();
-			var p_12 = $.first_child(fragment_13);
+		var consequent_30 = ($$anchor) => {
+			var fragment_14 = root_32();
+			var p_12 = $.first_child(fragment_14);
 			var text_21 = $.only_child(p_12, true);
-			var node_33 = $.sibling(p_12, 2);
+			var node_35 = $.sibling(p_12, 2);
 
 			{
-				var consequent_24 = ($$anchor) => {
-					var p_13 = root_26();
+				var consequent_25 = ($$anchor) => {
+					var p_13 = root_27();
 
 					$.append($$anchor, p_13);
 				};
 
-				$.if(node_33, ($$render) => {
-					if ($.get(client) === 'opencode') $$render(consequent_24);
+				$.if(node_35, ($$render) => {
+					if ($.get(client) === 'opencode') $$render(consequent_25);
 				});
 			}
 
-			var div_14 = $.sibling(node_33, 2);
+			var div_14 = $.sibling(node_35, 2);
 			var div_15 = $.child(div_14);
-			var node_34 = $.child(div_15);
+			var node_36 = $.child(div_15);
 
 			{
 				let $0 = $.derived(() => $.get(client) === 'opencode' ? 'folder' : 'terminal');
 
-				Icon(node_34, {
+				Icon(node_36, {
 					get name() {
 						return $.get($0);
 					},
@@ -1070,14 +1099,14 @@ export default function ExternalClients($$anchor, $$props) {
 				});
 			}
 
-			var span_5 = $.sibling(node_34);
+			var span_5 = $.sibling(node_36);
 			var text_22 = $.only_child(span_5, true);
-			var button_11 = $.sibling(span_5);
-			var node_35 = $.child(button_11);
+			var button_12 = $.sibling(span_5);
+			var node_37 = $.child(button_12);
 
-			Icon(node_35, { name: 'copy', size: 13 });
+			Icon(node_37, { name: 'copy', size: 13 });
 			$.next();
-			$.reset(button_11);
+			$.reset(button_12);
 			$.reset(div_15);
 
 			var pre = $.sibling(div_15);
@@ -1085,20 +1114,20 @@ export default function ExternalClients($$anchor, $$props) {
 
 			$.reset(div_14);
 
-			var node_36 = $.sibling(div_14, 2);
+			var node_38 = $.sibling(div_14, 2);
 
 			{
-				var consequent_25 = ($$anchor) => {
-					var fragment_14 = root_27();
-					var label_4 = $.first_child(fragment_14);
+				var consequent_26 = ($$anchor) => {
+					var fragment_15 = root_28();
+					var label_4 = $.first_child(fragment_15);
 					var div_16 = $.sibling($.child(label_4));
 					var code = $.child(div_16);
 					var text_24 = $.only_child(code, true);
-					var button_12 = $.sibling(code);
-					var node_37 = $.child(button_12);
+					var button_13 = $.sibling(code);
+					var node_39 = $.child(button_13);
 
-					Icon(node_37, { name: 'copy', size: 14 });
-					$.reset(button_12);
+					Icon(node_39, { name: 'copy', size: 14 });
+					$.reset(button_13);
 					$.reset(div_16);
 
 					var span_6 = $.sibling(div_16);
@@ -1110,13 +1139,13 @@ export default function ExternalClients($$anchor, $$props) {
 					var div_18 = $.sibling($.child(div_17));
 					var code_1 = $.child(div_18);
 					var text_26 = $.only_child(code_1, true);
-					var button_13 = $.sibling(code_1);
-					var node_38 = $.child(button_13);
+					var button_14 = $.sibling(code_1);
+					var node_40 = $.child(button_14);
 
 					{
 						let $0 = $.derived(() => app.secret ? 'close' : 'eye');
 
-						Icon(node_38, {
+						Icon(node_40, {
 							get name() {
 								return $.get($0);
 							},
@@ -1124,53 +1153,53 @@ export default function ExternalClients($$anchor, $$props) {
 						});
 					}
 
-					$.reset(button_13);
-
-					var button_14 = $.sibling(button_13);
-					var node_39 = $.child(button_14);
-
-					Icon(node_39, { name: 'copy', size: 14 });
 					$.reset(button_14);
+
+					var button_15 = $.sibling(button_14);
+					var node_41 = $.child(button_15);
+
+					Icon(node_41, { name: 'copy', size: 14 });
+					$.reset(button_15);
 					$.reset(div_18);
 					$.next();
 					$.reset(div_17);
 
 					$.template_effect(() => {
 						$.set_text(text_24, $.get(client) === 'messages' ? $.get(endpoint) : `${$.get(endpoint)}/v1`);
-						button_12.disabled = !app.ready;
+						button_13.disabled = !app.ready;
 
 						$.set_text(text_25, $.get(client) === 'messages'
 							? 'Anthropic-compatible clients append /v1/messages themselves.'
 							: 'OpenAI-compatible clients use this base URL directly.');
 
 						$.set_text(text_26, app.secret || 'Hidden — reveal or copy explicitly');
-						$.set_attribute(button_13, 'aria-label', app.secret ? 'Hide custom API key' : 'Reveal custom API key');
-						button_13.disabled = !app.ready;
+						$.set_attribute(button_14, 'aria-label', app.secret ? 'Hide custom API key' : 'Reveal custom API key');
 						button_14.disabled = !app.ready;
+						button_15.disabled = !app.ready;
 					});
 
-					$.delegated('click', button_12, () => app.clipboard($.get(client) === 'messages' ? $.get(endpoint) : `${$.get(endpoint)}/v1`));
-					$.delegated('click', button_13, reveal);
-					$.delegated('click', button_14, copyKey);
-					$.append($$anchor, fragment_14);
+					$.delegated('click', button_13, () => app.clipboard($.get(client) === 'messages' ? $.get(endpoint) : `${$.get(endpoint)}/v1`));
+					$.delegated('click', button_14, reveal);
+					$.delegated('click', button_15, copyKey);
+					$.append($$anchor, fragment_15);
 				};
 
-				$.if(node_36, ($$render) => {
-					if ($.get(client) === 'chat' || $.get(client) === 'responses' || $.get(client) === 'messages') $$render(consequent_25);
+				$.if(node_38, ($$render) => {
+					if ($.get(client) === 'chat' || $.get(client) === 'responses' || $.get(client) === 'messages') $$render(consequent_26);
 				});
 			}
 
-			var node_40 = $.sibling(node_36, 2);
+			var node_42 = $.sibling(node_38, 2);
 
 			{
-				var consequent_26 = ($$anchor) => {
-					var div_19 = root_28();
+				var consequent_27 = ($$anchor) => {
+					var div_19 = root_29();
 					var div_20 = $.child(div_19);
-					var node_41 = $.child(div_20);
+					var node_43 = $.child(div_20);
 
-					Icon(node_41, { name: 'terminal', size: 13 });
+					Icon(node_43, { name: 'terminal', size: 13 });
 
-					var button_15 = $.sibling(node_41, 2);
+					var button_16 = $.sibling(node_43, 2);
 
 					$.reset(div_20);
 
@@ -1178,36 +1207,13 @@ export default function ExternalClients($$anchor, $$props) {
 
 					pre_1.textContent = 'read -rsp \'Codemax local key: \' CODEMAX_API_KEY; echo\nexport CODEMAX_API_KEY\nopencode';
 					$.reset(div_19);
-					$.template_effect(() => button_15.disabled = !app.ready);
-					$.delegated('click', button_15, () => app.clipboard(startCommand));
+					$.template_effect(() => button_16.disabled = !app.ready);
+					$.delegated('click', button_16, () => app.clipboard(startCommand));
 					$.append($$anchor, div_19);
 				};
 
-				$.if(node_40, ($$render) => {
-					if ($.get(client) === 'opencode') $$render(consequent_26);
-				});
-			}
-
-			var node_42 = $.sibling(node_40, 2);
-
-			{
-				var consequent_27 = ($$anchor) => {
-					var div_21 = root_29();
-					var button_16 = $.child(div_21);
-					var node_43 = $.child(button_16);
-
-					Icon(node_43, { name: 'key', size: 14 });
-					$.next();
-					$.reset(button_16);
-					$.next();
-					$.reset(div_21);
-					$.template_effect(($0) => button_16.disabled = $0, [() => !app.ready || app.busy('key.reveal')]);
-					$.delegated('click', button_16, copyKey);
-					$.append($$anchor, div_21);
-				};
-
 				$.if(node_42, ($$render) => {
-					if ($.get(client) !== 'koryphaios') $$render(consequent_27);
+					if ($.get(client) === 'opencode') $$render(consequent_27);
 				});
 			}
 
@@ -1215,17 +1221,40 @@ export default function ExternalClients($$anchor, $$props) {
 
 			{
 				var consequent_28 = ($$anchor) => {
-					var div_22 = root_30();
-					var node_45 = $.child(div_22);
+					var div_21 = root_30();
+					var button_17 = $.child(div_21);
+					var node_45 = $.child(button_17);
 
-					Icon(node_45, { name: 'alert', size: 16 });
+					Icon(node_45, { name: 'key', size: 14 });
+					$.next();
+					$.reset(button_17);
+					$.next();
+					$.reset(div_21);
+					$.template_effect(($0) => button_17.disabled = $0, [() => !app.ready || app.busy('key.reveal')]);
+					$.delegated('click', button_17, copyKey);
+					$.append($$anchor, div_21);
+				};
+
+				$.if(node_44, ($$render) => {
+					if ($.get(client) !== 'koryphaios') $$render(consequent_28);
+				});
+			}
+
+			var node_46 = $.sibling(node_44, 2);
+
+			{
+				var consequent_29 = ($$anchor) => {
+					var div_22 = root_31();
+					var node_47 = $.child(div_22);
+
+					Icon(node_47, { name: 'alert', size: 16 });
 					$.next();
 					$.reset(div_22);
 					$.append($$anchor, div_22);
 				};
 
-				$.if(node_44, ($$render) => {
-					if ($.get(client) === 'claude') $$render(consequent_28);
+				$.if(node_46, ($$render) => {
+					if ($.get(client) === 'claude') $$render(consequent_29);
 				});
 			}
 
@@ -1239,35 +1268,35 @@ export default function ExternalClients($$anchor, $$props) {
 							: 'Run this example in a Bash terminal and paste the copied local key at the prompt.');
 
 				$.set_text(text_22, $.get(filename));
-				button_11.disabled = !app.ready;
+				button_12.disabled = !app.ready;
 				$.set_text(text_23, $.get(snippet));
 			});
 
-			$.delegated('click', button_11, () => app.clipboard($.get(snippet)));
-			$.append($$anchor, fragment_13);
+			$.delegated('click', button_12, () => app.clipboard($.get(snippet)));
+			$.append($$anchor, fragment_14);
 		};
 
 		var alternate_5 = ($$anchor) => {
-			var p_14 = root_32();
+			var p_14 = root_33();
 
 			$.append($$anchor, p_14);
 		};
 
-		$.if(node_32, ($$render) => {
-			if ($.get(client) === 'opencode' ? $.get(opencodeDefault) : $.get(model)) $$render(consequent_29); else $$render(alternate_5, -1);
+		$.if(node_34, ($$render) => {
+			if ($.get(client) === 'opencode' ? $.get(opencodeDefault) : $.get(model)) $$render(consequent_30); else $$render(alternate_5, -1);
 		});
 	}
 
-	var details_2 = $.sibling(node_32, 2);
+	var details_2 = $.sibling(node_34, 2);
 	var label_5 = $.sibling($.child(details_2), 2);
 	var div_23 = $.sibling($.child(label_5));
 	var code_2 = $.child(div_23);
 	var text_27 = $.only_child(code_2, true);
-	var button_17 = $.sibling(code_2);
-	var node_46 = $.child(button_17);
+	var button_18 = $.sibling(code_2);
+	var node_48 = $.child(button_18);
 
-	Icon(node_46, { name: 'copy', size: 14 });
-	$.reset(button_17);
+	Icon(node_48, { name: 'copy', size: 14 });
+	$.reset(button_18);
 	$.reset(div_23);
 	$.reset(label_5);
 
@@ -1275,13 +1304,13 @@ export default function ExternalClients($$anchor, $$props) {
 	var div_25 = $.sibling($.child(div_24));
 	var code_3 = $.child(div_25);
 	var text_28 = $.only_child(code_3, true);
-	var button_18 = $.sibling(code_3);
-	var node_47 = $.child(button_18);
+	var button_19 = $.sibling(code_3);
+	var node_49 = $.child(button_19);
 
 	{
 		let $0 = $.derived(() => app.secret ? 'close' : 'eye');
 
-		Icon(node_47, {
+		Icon(node_49, {
 			get name() {
 				return $.get($0);
 			},
@@ -1289,13 +1318,13 @@ export default function ExternalClients($$anchor, $$props) {
 		});
 	}
 
-	$.reset(button_18);
-
-	var button_19 = $.sibling(button_18);
-	var node_48 = $.child(button_19);
-
-	Icon(node_48, { name: 'copy', size: 14 });
 	$.reset(button_19);
+
+	var button_20 = $.sibling(button_19);
+	var node_50 = $.child(button_20);
+
+	Icon(node_50, { name: 'copy', size: 14 });
+	$.reset(button_20);
 	$.reset(div_25);
 	$.next();
 	$.reset(div_24);
@@ -1305,17 +1334,17 @@ export default function ExternalClients($$anchor, $$props) {
 	$.reset(div_4);
 
 	var aside = $.sibling(div_4, 2);
-	var button_20 = $.sibling($.child(aside), 3);
-	var node_49 = $.sibling($.child(button_20));
+	var button_21 = $.sibling($.child(aside), 3);
+	var node_51 = $.sibling($.child(button_21));
 
-	Icon(node_49, { name: 'arrow', size: 13 });
-	$.reset(button_20);
-
-	var button_21 = $.sibling(button_20, 4);
-	var node_50 = $.sibling($.child(button_21));
-
-	Icon(node_50, { name: 'arrow', size: 13 });
+	Icon(node_51, { name: 'arrow', size: 13 });
 	$.reset(button_21);
+
+	var button_22 = $.sibling(button_21, 4);
+	var node_52 = $.sibling($.child(button_22));
+
+	Icon(node_52, { name: 'arrow', size: 13 });
+	$.reset(button_22);
 	$.next(2);
 	$.reset(aside);
 	$.reset(div_3);
@@ -1370,11 +1399,11 @@ export default function ExternalClients($$anchor, $$props) {
 
 			$.set_text(text_18, `3. Configure ${formatNames[$.get(client)] ?? ''}`);
 			$.set_text(text_27, $.get(client) === 'claude' || $.get(client) === 'messages' ? $.get(endpoint) : `${$.get(endpoint)}/v1`);
-			button_17.disabled = !app.ready;
-			$.set_text(text_28, app.secret || 'Hidden — reveal or copy explicitly');
-			$.set_attribute(button_18, 'aria-label', app.secret ? 'Hide API key' : 'Reveal API key');
 			button_18.disabled = !app.ready;
+			$.set_text(text_28, app.secret || 'Hidden — reveal or copy explicitly');
+			$.set_attribute(button_19, 'aria-label', app.secret ? 'Hide API key' : 'Reveal API key');
 			button_19.disabled = !app.ready;
+			button_20.disabled = !app.ready;
 		},
 		[
 			() => ['chat', 'responses', 'messages'].includes($.get(client))
@@ -1384,11 +1413,11 @@ export default function ExternalClients($$anchor, $$props) {
 	$.delegated('change', select, (e) => app.settings({ harness: e.currentTarget.value }));
 	$.delegated('change', select_1, (e) => app.clientModel = e.currentTarget.value);
 	$.delegated('change', select_2, (e) => app.clientModel = e.currentTarget.value);
-	$.delegated('click', button_17, () => app.clipboard($.get(client) === 'claude' || $.get(client) === 'messages' ? $.get(endpoint) : `${$.get(endpoint)}/v1`));
-	$.delegated('click', button_18, reveal);
-	$.delegated('click', button_19, copyKey);
-	$.delegated('click', button_20, () => app.navigate('sessions'));
-	$.delegated('click', button_21, () => app.navigate('tools'));
+	$.delegated('click', button_18, () => app.clipboard($.get(client) === 'claude' || $.get(client) === 'messages' ? $.get(endpoint) : `${$.get(endpoint)}/v1`));
+	$.delegated('click', button_19, reveal);
+	$.delegated('click', button_20, copyKey);
+	$.delegated('click', button_21, () => app.navigate('sessions'));
+	$.delegated('click', button_22, () => app.navigate('tools'));
 	$.append($$anchor, fragment);
 	$.pop();
 }

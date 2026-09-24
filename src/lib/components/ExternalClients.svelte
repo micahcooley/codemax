@@ -64,6 +64,10 @@
  // A port/host change invalidates the old health result; it is not a live probe.
  let checkedEndpoint='';$effect(()=>{const fingerprint=`${endpoint}:${running}`;if(checkedEndpoint!==fingerprint){checkedEndpoint=fingerprint;probeMessage='';probeFailed=false;}});
 
+ async function copyOpencodeConfig(){
+  if(!app.ready||!opencodeValid)return;
+  await app.clipboard(JSON.stringify(config,null,2));
+ }
  async function prepareAndCopy(){
   const need=client==='opencode'?opencodeDefault:model;
   if(setupBusy||!app.ready||!need)return;
@@ -96,6 +100,8 @@
   {#if fallback}<div class="note"><Icon name="globe" size={16}/><div>The local gateway needs the Zag backend (Linux x86_64). On this Mac, Codemax browses, signs in, and lists observed website models; coding-client connections stay off.</div></div>{/if}
   {#if !app.models.length}<p class="connect-empty">Visit an AI chat website and sign in. Your available models appear here automatically.</p><button class="secondary" onclick={()=>app.newTab()}>Browse a website</button>{:else}
   <button class="primary launch-connect" disabled={!app.ready||setupBusy||fallback||(client==='opencode'?!opencodeValid:!model)} title={fallback?'Unavailable in browsing-only mode':undefined} onclick={prepareAndCopy}>{#if setupBusy}<span class="spinner"></span>{:else}<Icon name="copy" size={15}/>{/if}{setupBusy?'Preparing…':client==='koryphaios'?'Connect Koryphaios':client==='opencode'||client==='claude'?'Copy private launch command':'Copy private test request'}</button>
+  {#if client==='opencode'}<button class="secondary" disabled={!app.ready||!opencodeValid} onclick={copyOpencodeConfig}><Icon name="copy" size={14}/>Copy opencode config</button>
+  <p class="field-hint">The codemax provider with every included model — no launch command. Merge it once (see below), export the key once, then just run opencode.</p>{/if}
  {#if client==='koryphaios'}<p class="field-hint">The included Koryphaios integration discovers this gateway and its available models on this computer. Existing installations need the integration applied first.</p>{:else}
  <p class="field-hint">Starts and checks the gateway. Requires {client==='opencode'?'OpenCode':client==='claude'?'Claude Code':'curl'} installed. No provider key, no config file editing.</p>
  <p class="private-command-note"><Icon name="lock" size={12}/>Includes your local access key. Paste only into your terminal; clipboard and terminal history may retain it.</p>{/if}
