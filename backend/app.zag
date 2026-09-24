@@ -35,14 +35,14 @@ struct App {
     root: buf.Buffer, key: buf.Buffer, ipc_in: buf.Buffer, ipc_out: buf.Buffer,
     focused_provider: i32, last_idle_check: i64, listener: i64, lock_fd: i64, port: i32, desired_port: i32, dev: bool, running: bool,
     dirty: bool, snapshot_pending: bool, last_snapshot: i64, last_ipc_write: i64,
-    failed_requests: i64, completed_requests: i64, persistence_failed: bool,
+    failed_requests: i64, completed_requests: i64, persistence_failed: bool, last_refresh_open: i64,
 }
 fn make(root: []u8, dev: bool) App {
     let a: App = App{.mcp=mcp.make(), .mcp_run=mcp_run.make(), .providers = registry.make(), .sessions = sessions.make(), .settings = prefs.make(), .events = events.make(), .clients = _zag_malloc(32 * @sizeOf[connection.Client]()) as *connection.Client,
         .root = buf.make(4096), .key = buf.make(128), .ipc_in = buf.make(1048576), .ipc_out = buf.make(2097152),
         .focused_provider = 0, .last_idle_check = 0, .listener = 0 - 1, .lock_fd = 0 - 1, .port = 7331, .desired_port = 7331, .dev = dev, .running = true, .dirty = false,
         .snapshot_pending = false, .last_snapshot = 0, .last_ipc_write = _zag_clock_monotonic_ms(),
-        .failed_requests = 0, .completed_requests = 0, .persistence_failed = false};
+        .failed_requests = 0, .completed_requests = 0, .persistence_failed = false, .last_refresh_open = _zag_clock_monotonic_ms()};
     buf.copy(&a.root, root); let i: i32 = 0; while (i < 32) { a.clients[i].fd = 0 - 1; i = i + 1; } return a;
 }
 fn publish_connection(a: *App) bool {
@@ -340,6 +340,10 @@ fn observe(a: *App, provider_id: i32, d: *json.Document, event: i32) void {
                     if (a.*.clients[pw].fd >= 0 && a.*.clients[pw].phase == 4 && a.*.clients[pw].provider == provider_index) { parked = true; }
                     pw = pw + 1;
                 }
+                // An observed provider is observably open, even when the flag
+                // still says closed (backend-initiated opens, user reopens).
+                // This also arms provisioned resumes below.
+                if (parked && !p.*.open_tab) { p.*.open_tab = true; p.*.last_used = _zag_clock_monotonic_ms(); a.*.dirty = true; }
                 actions.investigate(p, &a.*.ipc_out, parked);
                 // Provisioned generations resume with full fresh validation
                 // once the opened website reports. Resume fires only into a
@@ -544,6 +548,7 @@ fn ipc(a: *App, frame: []u8) void {
             else {
                 if (p.*.active_request >= 0) { cancel(a, p.*.active_request, "CANCELLED", 409); }
                 if (p.*.session >= 0) { a.*.sessions.items[p.*.session].status = 2; p.*.session = 0 - 1; }
+                p.*.last_used = _zag_clock_monotonic_ms();
                 p.*.state = 0; p.*.open_tab = false; buf.clear(&p.*.document); buf.clear(&p.*.evidence);
                 if (json.is_text(&d, op, "provider.clear_profile")) { p.*.model_count = 0; buf.copy(&p.*.current_url, buf.view(&p.*.url)); host_event(a, "browser.clear_profile", p); } else { host_event(a, "browser.close", p); }
             }
@@ -900,6 +905,43 @@ fn run(a: *App) void {
         // backed up, skip (do not drop the pending flag) instead of flooding
         // it toward a fatal HOST_BACKPRESSURE exit that would also kill live
         // client streams. Targeted host actions bypass this coalescing.
+        // Stale-tab refresh: when nothing is servable anywhere, open one
+        // closed website with known models on its own so detection restates
+        // availability. Bounded to one open per window, most recently used
+        // first, silent providers only, never dismissed/hidden/limited sites,
+        // and never while that provider has live work. An observed site goes
+        // quiet in last_seen terms, so healthy tabs are never churned.
+        if (now - a.*.last_refresh_open >= 120000) {
+            a.*.last_refresh_open = now;
+            let servable: bool = false; let i: i32 = 0;
+            while (i < a.*.providers.count && !servable) {
+                let q: *registry.Provider = &a.*.providers.items[i];
+                if (q.*.detected && q.*.exposed && !q.*.dismissed && q.*.state == 4) {
+                    let m: i32 = 0;
+                    while (m < q.*.model_count) { if (q.*.models[m].enabled && q.*.models[m].available) { servable = true; } m = m + 1; }
+                }
+                i = i + 1;
+            }
+            if (!servable) {
+                let best: i32 = 0 - 1; let best_used: i64 = 0 - 1; i = 0;
+                while (i < a.*.providers.count) {
+                    let q: *registry.Provider = &a.*.providers.items[i];
+                    if (!q.*.open_tab && q.*.detected && q.*.model_count > 0 && q.*.exposed && !q.*.dismissed && q.*.scan_enabled &&
+                        q.*.quota == 0 && q.*.state != 2 && q.*.state != 6 && q.*.active_request < 0 &&
+                        now - q.*.last_seen > 120000 && now - q.*.last_used > 120000 && q.*.last_used > best_used) {
+                        best = i; best_used = q.*.last_used;
+                    }
+                    i = i + 1;
+                }
+                if (best >= 0) {
+                    let q: *registry.Provider = &a.*.providers.items[best];
+                    q.*.last_used = now; q.*.open_tab = true; if (q.*.state == 0 || q.*.state == 6) { q.*.state = 1; }
+                    host_event(a, "browser.open", q);
+                    log_event(a, q.*.id, "INFO", "tab.auto_open", "Opened a closed website to refresh its known models");
+                    a.*.dirty = true; a.*.snapshot_pending = true;
+                }
+            }
+        }
         if (a.*.snapshot_pending && now - a.*.last_snapshot >= 200 && a.*.ipc_out.len < 1048576) {
             let state: buf.Buffer = buf.make(1048576); snapshot(a, &state);
             if (state.ok != 0) { buf.add(&a.*.ipc_out, "{\"type\":\"event\",\"name\":\"snapshot\",\"data\":"); buf.add(&a.*.ipc_out, buf.view(&state)); buf.add(&a.*.ipc_out, "}\n"); }
