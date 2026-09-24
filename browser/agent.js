@@ -15,7 +15,11 @@
   const ids = new WeakMap(); const nodes = new Map(); let nextId = 1;
   let generation = null; let preparingRequest = null; let observationTimer = 0; let responseTimer = 0;
   let lastUserInteraction = 0; let investigating = false;
-  for (const event of ['pointerdown','keydown','input']) document.addEventListener(event,e=>{if(e.isTrusted)lastUserInteraction=performance.now();},true);
+  // Hover counts as activity: auto-inspection clicks the control it inspects,
+  // so firing while the pointer rests on (or roams around) that button makes
+  // its menu flash open and shut under the cursor and the pointer shape
+  // jitters. Movement alone only refreshes the idle timer; it never emits.
+  for (const event of ['pointerdown','keydown','input','pointermove']) document.addEventListener(event,e=>{if(e.isTrusted)lastUserInteraction=performance.now();},true);
   let picker = null; let lastMenuTrigger = null; let lastMenuAt = 0; let discoveryEnabled = true;
   let lastSnapshot = ''; let stopped = false; let sending = false;
   let conversationStarted = false;

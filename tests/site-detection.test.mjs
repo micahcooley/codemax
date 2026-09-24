@@ -346,6 +346,44 @@ test('ephemeral switch flips on before submission, timers cleaned', async () => 
   assert.ok(env.events.some(e => e && e.type === 'generation_error'), 'stop issued, generation timers cleared');
 });
 
+const HOVER_MENU = `<button aria-label="New chat">New chat</button>
+<main><div data-role="assistant">Hello</div></main>
+<button id="hm" aria-label="Model" aria-haspopup="menu">GPT-5</button>
+<textarea aria-label="Ask anything" placeholder="Ask anything"></textarea>
+<button aria-label="Send message">send</button>`;
+
+function trustedHover(env) {
+  const Evt = env.document.defaultView.Event;
+  const event = new Evt('pointermove', {bubbles: true});
+  Object.defineProperty(event, 'isTrusted', {value: true});
+  env.document.querySelector('#hm').dispatchEvent(event);
+}
+
+test('hovering the model button suppresses automatic menu inspection', async () => {
+  const env = await observeSite('https://chatgpt.com', HOVER_MENU);
+  const docId = (env.events.find(e => e && e.document_id) || {}).document_id;
+  const trigger = env.controls.find(c => /model/i.test(c.label || ''));
+  assert.ok(docId && trigger, 'hover-menu mappings present');
+  const button = env.document.querySelector('#hm');
+  button.addEventListener('click', () => env.document.documentElement.setAttribute('data-menu-opened', '1'));
+  trustedHover(env);
+  vm.runInContext(`__BRIDGE_EXECUTE__(${JSON.stringify({type: 'inspect_menu', document_id: docId, node: trigger.id})});`, env.context);
+  await new Promise(resolve => setTimeout(resolve, 600));
+  assert.equal(env.document.documentElement.getAttribute('data-menu-opened'), null, 'menu stays shut while the pointer is active');
+});
+
+test('idle model button still opens for automatic menu inspection', async () => {
+  const env = await observeSite('https://chatgpt.com', HOVER_MENU);
+  const docId = (env.events.find(e => e && e.document_id) || {}).document_id;
+  const trigger = env.controls.find(c => /model/i.test(c.label || ''));
+  assert.ok(docId && trigger, 'hover-menu mappings present');
+  const button = env.document.querySelector('#hm');
+  button.addEventListener('click', () => env.document.documentElement.setAttribute('data-menu-opened', '1'));
+  vm.runInContext(`__BRIDGE_EXECUTE__(${JSON.stringify({type: 'inspect_menu', document_id: docId, node: trigger.id})});`, env.context);
+  await new Promise(resolve => setTimeout(resolve, 900));
+  assert.equal(env.document.documentElement.getAttribute('data-menu-opened'), '1', 'menu opens once the pointer goes idle');
+});
+
 test('browser shortcut contract matches across page, host and bridge', () => {
   const agent = readFileSync(new URL('../browser/agent.js', import.meta.url), 'utf8');
   const host = readFileSync(new URL('../src-tauri/src/views.rs', import.meta.url), 'utf8');
