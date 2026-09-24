@@ -5,13 +5,12 @@ import * as bridge from '../lib/api/bridge.js';
 import { mappingNames } from '../lib/types/bridge.js';
 import Icon from '../lib/components/Icon.svelte.js';
 
-var root_1 = $.from_html(`<option> </option>`);
-var root_4 = $.from_html(`<option> </option>`);
-var root_3 = $.from_html(`<tr><td><span class="inline" style="gap:7px"><!> </span></td><td><select><option> </option><!></select></td><td><div class="row-actions"><button title="Save this mapping"><!></button><button title="Pick on website"><!></button></div></td></tr>`);
-var root_7 = $.from_html(`<pre style="font-size:10px"> </pre>`);
-var root_2 = $.from_html(`<div class="filterbar"><span class="tag"><!>Symbolic detector</span><span class="count"> </span><span class="spacer"></span><button class="text-button"><!>Import</button><button class="text-button"><!>Export</button><button class="secondary"><!>Rescan page</button></div> <div class="lab-columns" style="margin-top:26px"><div><div class="section-title"><h2>Control mappings</h2><small> </small></div><p class="field-hint" style="margin-bottom:13px">Pick a control on the website or select an observed element. The backend validates its role and rejects sensitive fields.</p><table class="mapping-table"><thead><tr><th>OPERATION</th><th>OBSERVED ELEMENT</th><th></th></tr></thead><tbody></tbody></table><section class="section"><h3 style="margin-bottom:12px">Website with a fixed model</h3><p class="field-hint" style="margin-bottom:12px">Use the website’s visible model label when it does not expose a selector. This is recorded as user supplied, not automatically discovered.</p><form class="inline"><input aria-label="Fixed model label" placeholder="Visible model name" maxlength="240" style="flex:1;min-width:0" required/><button class="secondary">Save label</button></form></section><section class="section" style="border:0"><div class="section-title"><h3>Repair learned mappings</h3><button class="text-button">Reset to automatic</button></div><p>Reset clears user-recorded selectors. Automatic discovery then runs against the current document; no prompt is sent.</p></section></div> <aside><div class="section-title"><h2>Current evidence</h2><span class="tag">Sanitized</span></div><div class="evidence-box"><!></div><div class="note"><!><span>Password fields are counted, never read. Network events retain bounded structure and timing, not cookies or authentication headers.</span></div><section class="section"><div class="section-title"><h3>TNN research boundary</h3><span class="count">GATED</span></div><p> </p><p style="margin-top:12px">This application does not substitute invented TNN predictions for a missing model. The research integration contract and action validator remain separate from production control.</p></section></aside></div>`, 1);
-var root_9 = $.from_html(`<div class="empty-state"><!><h2>Choose a website to inspect</h2><p>Each profile has its own evidence, semantic mappings, and connector version. Start by opening an AI chat website.</p><button class="secondary">Open browser</button></div>`);
-var root = $.from_html(`<section class="screen"><div class="screen-inner"><header class="screen-head"><div><div class="breadcrumb">Workspace / Discovery</div><h1>Detector lab</h1><p>Inspect the evidence, repair a mapping, or export a reusable connector.</p></div><select aria-label="Inspect website"><option>Choose a website</option><!></select></header> <!></div></section>`);
+var root = $.from_html(`<option> </option>`);
+var root_1 = $.from_html(`<tr><td><span class="inline" style="gap:7px"><!> </span></td><td><select><option> </option><!></select></td><td><div class="row-actions"><button title="Save this mapping"><!></button><button title="Pick on website"><!></button></div></td></tr>`);
+var root_2 = $.from_html(`<pre style="font-size:10px"> </pre>`);
+var root_3 = $.from_html(`<div class="filterbar"><span class="tag"><!>Symbolic detector</span><span class="count"> </span><span class="spacer"></span><button class="text-button"><!>Import</button><button class="text-button"><!>Export</button><button class="secondary"><!>Rescan page</button></div> <div class="lab-columns" style="margin-top:26px"><div><div class="section-title"><h2>Control mappings</h2><small> </small></div><p class="field-hint" style="margin-bottom:13px">Pick a control on the website or select an observed element. The backend validates its role and rejects sensitive fields.</p><table class="mapping-table"><thead><tr><th>OPERATION</th><th>OBSERVED ELEMENT</th><th></th></tr></thead><tbody></tbody></table><section class="section"><h3 style="margin-bottom:12px">Website with a fixed model</h3><p class="field-hint" style="margin-bottom:12px">Use the website’s visible model label when it does not expose a selector. This is recorded as user supplied, not automatically discovered.</p><form class="inline"><input aria-label="Fixed model label" placeholder="Visible model name" maxlength="240" style="flex:1;min-width:0" required=""/><button class="secondary">Save label</button></form></section><section class="section" style="border:0"><div class="section-title"><h3>Repair learned mappings</h3><button class="text-button">Reset to automatic</button></div><p>Reset clears user-recorded selectors. Automatic discovery then runs against the current document; no prompt is sent.</p></section></div> <aside><div class="section-title"><h2>Current evidence</h2><span class="tag">Sanitized</span></div><div class="evidence-box"><!></div><div class="note"><!><span>Password fields are counted, never read. Network events retain bounded structure and timing, not cookies or authentication headers.</span></div><section class="section"><div class="section-title"><h3>TNN research boundary</h3><span class="count">GATED</span></div><p> </p><p style="margin-top:12px">This application does not substitute invented TNN predictions for a missing model. The research integration contract and action validator remain separate from production control.</p></section></aside></div>`, 1);
+var root_4 = $.from_html(`<div class="empty-state"><!><h2>Choose a website to inspect</h2><p>Each profile has its own evidence, semantic mappings, and connector version. Start by opening an AI chat website.</p><button class="secondary">Open browser</button></div>`);
+var root_5 = $.from_html(`<section class="screen"><div class="screen-inner"><header class="screen-head"><div><div class="breadcrumb">Workspace / Discovery</div><h1>Detector lab</h1><p>Inspect the evidence, repair a mapping, or export a reusable connector.</p></div><select aria-label="Inspect website"><option>Choose a website</option><!></select></header> <!></div></section>`);
 
 export default function Detector($$anchor, $$props) {
 	$.push($$props, true);
@@ -83,13 +82,10 @@ export default function Detector($$anchor, $$props) {
 		}
 	}
 
-	var section = root();
+	var section = root_5();
 	var div = $.child(section);
 	var header = $.child(div);
 	var select = $.sibling($.child(header));
-
-	select.__change = (event) => app.selectedProvider = Number(event.currentTarget.value) || null;
-
 	var option = $.child(select);
 
 	option.value = option.__value = '';
@@ -97,18 +93,15 @@ export default function Detector($$anchor, $$props) {
 	var node = $.sibling(option);
 
 	$.each(node, 17, () => app.providers, $.index, ($$anchor, p) => {
-		var option_1 = root_1();
-		var text = $.child(option_1, true);
-
-		$.reset(option_1);
-
+		var option_1 = root();
+		var text = $.only_child(option_1, true);
 		var option_1_value = {};
 
 		$.template_effect(() => {
 			$.set_text(text, $.get(p).label);
 
 			if (option_1_value !== (option_1_value = $.get(p).id)) {
-				option_1.value = (option_1.__value = $.get(p).id) ?? '';
+				option_1.value = (option_1.__value = option_1_value) ?? '';
 			}
 		});
 
@@ -127,7 +120,7 @@ export default function Detector($$anchor, $$props) {
 	{
 		var consequent_2 = ($$anchor) => {
 			const p = $.derived(() => app.provider);
-			var fragment = root_2();
+			var fragment = root_3();
 			var div_1 = $.first_child(fragment);
 			var span = $.child(div_1);
 			var node_2 = $.child(span);
@@ -137,14 +130,8 @@ export default function Detector($$anchor, $$props) {
 			$.reset(span);
 
 			var span_1 = $.sibling(span);
-			var text_1 = $.child(span_1);
-
-			$.reset(span_1);
-
+			var text_1 = $.only_child(span_1);
 			var button = $.sibling(span_1, 2);
-
-			button.__click = importConnector;
-
 			var node_3 = $.child(button);
 
 			Icon(node_3, { name: 'upload', size: 13 });
@@ -152,9 +139,6 @@ export default function Detector($$anchor, $$props) {
 			$.reset(button);
 
 			var button_1 = $.sibling(button);
-
-			button_1.__click = exportConnector;
-
 			var node_4 = $.child(button_1);
 
 			Icon(node_4, { name: 'download', size: 13 });
@@ -162,9 +146,6 @@ export default function Detector($$anchor, $$props) {
 			$.reset(button_1);
 
 			var button_2 = $.sibling(button_1);
-
-			button_2.__click = () => app.perform('provider.rescan', { provider_id: $.get(p).id });
-
 			var node_5 = $.child(button_2);
 
 			Icon(node_5, { name: 'refresh', size: 13 });
@@ -176,16 +157,15 @@ export default function Detector($$anchor, $$props) {
 			var div_3 = $.child(div_2);
 			var div_4 = $.child(div_3);
 			var small = $.sibling($.child(div_4));
-			var text_2 = $.child(small);
+			var text_2 = $.only_child(small);
 
-			$.reset(small);
 			$.reset(div_4);
 
 			var table = $.sibling(div_4, 2);
 			var tbody = $.sibling($.child(table));
 
 			$.each(tbody, 20, () => roles, (role) => role, ($$anchor, role) => {
-				var tr = root_3();
+				var tr = root_1();
 				var td = $.child(tr);
 				var span_2 = $.child(td);
 				var node_6 = $.child(span_2);
@@ -208,30 +188,23 @@ export default function Detector($$anchor, $$props) {
 
 				var td_1 = $.sibling(td);
 				var select_1 = $.child(td_1);
-
-				select_1.__change = (event) => $.set(choices, { ...$.get(choices), [role]: event.currentTarget.value }, true);
-
 				var option_2 = $.child(select_1);
-				var text_4 = $.child(option_2, true);
+				var text_4 = $.only_child(option_2, true);
 
-				$.reset(option_2);
 				option_2.value = option_2.__value = '';
 
 				var node_7 = $.sibling(option_2);
 
 				$.each(node_7, 17, () => $.get(controls).filter((c) => (c.visible || role === 'attachment' && c.file_input) && !c.disabled), (control) => control.id, ($$anchor, control) => {
-					var option_3 = root_4();
-					var text_5 = $.child(option_3);
-
-					$.reset(option_3);
-
+					var option_3 = root();
+					var text_5 = $.only_child(option_3);
 					var option_3_value = {};
 
 					$.template_effect(() => {
 						$.set_text(text_5, `${$.get(control).id ?? ''} · ${($.get(control).label || $.get(control).role || $.get(control).tag) ?? ''}`);
 
 						if (option_3_value !== (option_3_value = $.get(control).id)) {
-							option_3.value = (option_3.__value = $.get(control).id) ?? '';
+							option_3.value = (option_3.__value = option_3_value) ?? '';
 						}
 					});
 
@@ -248,18 +221,12 @@ export default function Detector($$anchor, $$props) {
 				var td_2 = $.sibling(td_1);
 				var div_5 = $.child(td_2);
 				var button_3 = $.child(div_5);
-
-				button_3.__click = () => record(role);
-
 				var node_8 = $.child(button_3);
 
 				Icon(node_8, { name: 'check', size: 13 });
 				$.reset(button_3);
 
 				var button_4 = $.sibling(button_3);
-
-				button_4.__click = () => app.pick(role);
-
 				var node_9 = $.child(button_4);
 
 				Icon(node_9, { name: 'scan', size: 13 });
@@ -279,8 +246,8 @@ export default function Detector($$anchor, $$props) {
 
 					if (select_1_value !== (select_1_value = $.get(choices)[role] ?? '')) {
 						(
-							select_1.value = (select_1.__value = $.get(choices)[role] ?? '') ?? '',
-							$.select_option(select_1, $.get(choices)[role] ?? '')
+							select_1.value = (select_1.__value = select_1_value) ?? '',
+							$.select_option(select_1, select_1_value)
 						);
 					}
 
@@ -290,6 +257,9 @@ export default function Detector($$anchor, $$props) {
 					$.set_attribute(button_4, 'aria-label', `Pick ${mappingNames[role]} on page`);
 				});
 
+				$.delegated('change', select_1, (event) => $.set(choices, { ...$.get(choices), [role]: event.currentTarget.value }, true));
+				$.delegated('click', button_3, () => record(role));
+				$.delegated('click', button_4, () => app.pick(role));
 				$.append($$anchor, tr);
 			});
 
@@ -311,7 +281,6 @@ export default function Detector($$anchor, $$props) {
 			var div_6 = $.child(section_2);
 			var button_6 = $.sibling($.child(div_6));
 
-			button_6.__click = () => app.ask('Reset recorded controls?', `This removes manually recorded controls for ${$.get(p).label}. Automatic discovery will run again without sending a prompt.`, 'Reset controls', () => app.perform('connector.reset', { provider_id: $.get(p).id, confirmed: true }));
 			$.reset(div_6);
 			$.next();
 			$.reset(section_2);
@@ -328,57 +297,38 @@ export default function Detector($$anchor, $$props) {
 					$.append($$anchor, text_6);
 				};
 
-				var alternate_1 = ($$anchor) => {
-					var fragment_1 = $.comment();
-					var node_11 = $.first_child(fragment_1);
+				var consequent_1 = ($$anchor) => {
+					var pre = root_2();
+					var text_7 = $.only_child(pre, true);
 
-					{
-						var consequent_1 = ($$anchor) => {
-							var pre = root_7();
-							var text_7 = $.child(pre, true);
+					$.template_effect(($0) => $.set_text(text_7, $0), [() => JSON.stringify($.get(evidence), null, 2)]);
+					$.append($$anchor, pre);
+				};
 
-							$.reset(pre);
-							$.template_effect(($0) => $.set_text(text_7, $0), [() => JSON.stringify($.get(evidence), null, 2)]);
-							$.append($$anchor, pre);
-						};
+				var alternate = ($$anchor) => {
+					var text_8 = $.text('No observation has arrived. Open the website, sign in, and rescan.');
 
-						var alternate = ($$anchor) => {
-							var text_8 = $.text('No observation has arrived. Open the website, sign in, and rescan.');
-
-							$.append($$anchor, text_8);
-						};
-
-						$.if(
-							node_11,
-							($$render) => {
-								if ($.get(evidence)) $$render(consequent_1); else $$render(alternate, false);
-							},
-							true
-						);
-					}
-
-					$.append($$anchor, fragment_1);
+					$.append($$anchor, text_8);
 				};
 
 				$.if(node_10, ($$render) => {
-					if ($.get(loading)) $$render(consequent); else $$render(alternate_1, false);
+					if ($.get(loading)) $$render(consequent); else if ($.get(evidence)) $$render(consequent_1, 1); else $$render(alternate, -1);
 				});
 			}
 
 			$.reset(div_7);
 
 			var div_8 = $.sibling(div_7);
-			var node_12 = $.child(div_8);
+			var node_11 = $.child(div_8);
 
-			Icon(node_12, { name: 'shield', size: 15 });
+			Icon(node_11, { name: 'shield', size: 15 });
 			$.next();
 			$.reset(div_8);
 
 			var section_3 = $.sibling(div_8);
 			var p_1 = $.sibling($.child(section_3));
-			var text_9 = $.child(p_1, true);
+			var text_9 = $.only_child(p_1, true);
 
-			$.reset(p_1);
 			$.next();
 			$.reset(section_3);
 			$.reset(aside);
@@ -397,30 +347,35 @@ export default function Detector($$anchor, $$props) {
 				[() => $.get(p).active || !$.get(manual).trim()]
 			);
 
+			$.delegated('click', button, importConnector);
+			$.delegated('click', button_1, exportConnector);
+			$.delegated('click', button_2, () => app.perform('provider.rescan', { provider_id: $.get(p).id }));
+
 			$.event('submit', form, (event) => {
 				event.preventDefault();
 				void app.perform('connector.manual_model', { provider_id: $.get(p).id, label: $.get(manual).trim() });
 			});
 
 			$.bind_value(input, () => $.get(manual), ($$value) => $.set(manual, $$value));
+			$.delegated('click', button_6, () => app.ask('Reset recorded controls?', `This removes manually recorded controls for ${$.get(p).label}. Automatic discovery will run again without sending a prompt.`, 'Reset controls', () => app.perform('connector.reset', { provider_id: $.get(p).id, confirmed: true })));
 			$.append($$anchor, fragment);
 		};
 
-		var alternate_2 = ($$anchor) => {
-			var div_9 = root_9();
-			var node_13 = $.child(div_9);
+		var alternate_1 = ($$anchor) => {
+			var div_9 = root_4();
+			var node_12 = $.child(div_9);
 
-			Icon(node_13, { name: 'scan', size: 29 });
+			Icon(node_12, { name: 'scan', size: 29 });
 
-			var button_7 = $.sibling(node_13, 3);
+			var button_7 = $.sibling(node_12, 3);
 
-			button_7.__click = () => app.navigate('browser');
 			$.reset(div_9);
+			$.delegated('click', button_7, () => app.navigate('browser'));
 			$.append($$anchor, div_9);
 		};
 
 		$.if(node_1, ($$render) => {
-			if (app.provider) $$render(consequent_2); else $$render(alternate_2, false);
+			if (app.provider) $$render(consequent_2); else $$render(alternate_1, -1);
 		});
 	}
 
@@ -430,12 +385,13 @@ export default function Detector($$anchor, $$props) {
 	$.template_effect(() => {
 		if (select_value !== (select_value = app.selectedProvider ?? '')) {
 			(
-				select.value = (select.__value = app.selectedProvider ?? '') ?? '',
-				$.select_option(select, app.selectedProvider ?? '')
+				select.value = (select.__value = select_value) ?? '',
+				$.select_option(select, select_value)
 			);
 		}
 	});
 
+	$.delegated('change', select, (event) => app.selectedProvider = Number(event.currentTarget.value) || null);
 	$.append($$anchor, section);
 	$.pop();
 }

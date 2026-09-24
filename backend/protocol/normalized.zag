@@ -15,17 +15,17 @@ fn make() Request {
         .error = buf.make(128), .nonce = buf.make(96), .reasoning = buf.make(192), .selected_tool = buf.make(96), .attachments = buf.make(196608), .pending_files = buf.make(196608), .message_count = 0, .protocol = 1,
         .stream = false, .max_output = 65536, .has_tools = false, .require_tool = false, .explicit_session = false, .parallel_tools = true, .history_offset = 0, .attachment_count = 0, .include_usage = false};
 }
-fn fail(r: *Request, error: []u8) void { if (r.*.error.len == 0) { buf.copy(&r.*.error, error); } }
-fn message(role: []u8, content: []u8, calls: []u8, tool_id: []u8, out: *buf.Buffer) void {
+fn fail(r: @borrows_mut *Request, error: @borrows []u8) void { if (r.*.error.len == 0) { buf.copy(&r.*.error, error); } }
+fn message(role: @borrows []u8, content: @borrows []u8, calls: @borrows []u8, tool_id: @borrows []u8, out: @borrows_mut *buf.Buffer) void {
     buf.add(out, "{\"role\":"); buf.json(out, role); buf.add(out, ",\"content\":"); buf.json(out, content);
     buf.add(out, ",\"tool_calls\":"); buf.add(out, calls); buf.add(out, ",\"tool_call_id\":"); buf.json(out, tool_id); buf.add(out, "}\n");
 }
-fn add_message(r: *Request, role: []u8, content: []u8, calls: []u8, tool_id: []u8) void {
+fn add_message(r: @borrows_mut *Request, role: @borrows []u8, content: @borrows []u8, calls: @borrows []u8, tool_id: @borrows []u8) void {
     if (r.*.message_count >= 256) { fail(r, "MESSAGE_LIMIT"); return; }
     message(role, content, calls, tool_id, &r.*.canonical); r.*.message_count = r.*.message_count + 1;
     if (r.*.canonical.ok == 0) { fail(r, "CONTEXT_LIMIT"); }
 }
-fn content_text(d: *json.Document, content: i32, out: *buf.Buffer) bool {
+fn content_text(d: @borrows *json.Document, content: i32, out: @borrows_mut *buf.Buffer) bool {
     buf.clear(out);
     if (content < 0 || json.kind(d, content) == 7) { return true; }
     if (json.kind(d, content) == 3) { json.text(d, content, out); return out.*.ok != 0; }
@@ -40,7 +40,7 @@ fn content_text(d: *json.Document, content: i32, out: *buf.Buffer) bool {
     }
     buf.free(&text); return ok && out.*.ok != 0;
 }
-fn input_content(r: *Request, d: *json.Document, content: i32, out: *buf.Buffer, allow_files: bool) bool {
+fn input_content(r: @borrows_mut *Request, d: @borrows *json.Document, content: i32, out: @borrows_mut *buf.Buffer, allow_files: bool) bool {
     if (json.kind(d, content) != 2 || !allow_files) { return content_text(d, content, out); }
     buf.clear(out); let i: i32 = content + 1; let part: buf.Buffer = buf.make(131072); let ok: bool = true;
     while (i < d.*.tokens[content].next && ok) {
@@ -55,7 +55,7 @@ fn input_content(r: *Request, d: *json.Document, content: i32, out: *buf.Buffer,
     }
     buf.free(&part); return ok && out.*.ok != 0;
 }
-fn normalized_call(d: *json.Document, call: i32, protocol: i32, out: *buf.Buffer) bool {
+fn normalized_call(d: @borrows *json.Document, call: i32, protocol: i32, out: @borrows_mut *buf.Buffer) bool {
     let id: buf.Buffer = buf.make(96); let name: buf.Buffer = buf.make(96); let arguments: buf.Buffer = buf.make(65536);
     let fnobj: i32 = call; let input: i32 = 0 - 1;
     if (protocol == 1) {
@@ -75,7 +75,7 @@ fn normalized_call(d: *json.Document, call: i32, protocol: i32, out: *buf.Buffer
     } else { ok = false; }
     buf.free(&id); buf.free(&name); buf.free(&arguments); return ok;
 }
-fn normalize_message(r: *Request, d: *json.Document, item: i32) void {
+fn normalize_message(r: @borrows_mut *Request, d: @borrows *json.Document, item: i32) void {
     let role: buf.Buffer = buf.make(32); let text: buf.Buffer = buf.make(131072); let calls: buf.Buffer = buf.make(65536); let tool_id: buf.Buffer = buf.make(96);
     json.field_text(d, item, "role", &role);
     if (role.ok == 0 || (!buf.eq(buf.view(&role), "system") && !buf.eq(buf.view(&role), "developer") && !buf.eq(buf.view(&role), "user") && !buf.eq(buf.view(&role), "assistant") && !buf.eq(buf.view(&role), "tool"))) {
@@ -126,7 +126,7 @@ fn normalize_message(r: *Request, d: *json.Document, item: i32) void {
     }
     buf.free(&role); buf.free(&text); buf.free(&calls); buf.free(&tool_id);
 }
-fn decode_tools(r: *Request, d: *json.Document) void {
+fn decode_tools(r: @borrows_mut *Request, d: @borrows *json.Document) void {
     let array: i32 = json.get(d, 0, "tools"); buf.copy(&r.*.tool_names, "|"); buf.clear(&r.*.tools); buf.byte(&r.*.tools, 91);
     if (array >= 0) {
         if (json.kind(d, array) != 2 || d.*.tokens[array].size > 32) { fail(r, "TOOL_LIMIT"); }
@@ -180,7 +180,7 @@ fn decode_tools(r: *Request, d: *json.Document) void {
     if (r.*.require_tool && !r.*.has_tools) { fail(r, "TOOLS_REQUIRED"); }
     if (r.*.tools.ok == 0 || r.*.tool_names.ok == 0) { fail(r, "TOOL_LIMIT"); }
 }
-fn allowed_keys(d: *json.Document, protocol: i32) bool {
+fn allowed_keys(d: @borrows *json.Document, protocol: i32) bool {
     let key: buf.Buffer = buf.make(128); let i: i32 = 1; let valid: bool = true;
     while (i < d.*.tokens[0].next && valid) {
         json.text(d, i, &key); let name: []u8 = buf.view(&key);
@@ -194,8 +194,12 @@ fn allowed_keys(d: *json.Document, protocol: i32) bool {
     buf.free(&key); return valid;
 }
 
-fn decode(r: *Request, body: []u8, protocol: i32, request_id: []u8, session_header: []u8) void {
+fn decode(r: @borrows_mut *Request, body: @borrows []u8, protocol: i32, request_id: @borrows []u8, session_header: @borrows []u8) void {
     r.*.protocol = protocol; buf.copy(&r.*.id, request_id); buf.clear(&r.*.canonical); buf.clear(&r.*.error); r.*.message_count = 0;
+    // Decode must be idempotent: a provisioned request decodes once when it
+    // parks and again when it resumes. Without these resets the second pass
+    // would double-count attachments and duplicate their bytes.
+    r.*.attachment_count = 0; buf.clear(&r.*.attachments); buf.clear(&r.*.pending_files);
     let d: json.Document = json.parse(body);
     if (d.ok == 0 || json.kind(&d, 0) != 1) { fail(r, "INVALID_JSON"); json.free(&d); return; }
     if (!allowed_keys(&d, protocol)) { fail(r, "UNSUPPORTED_PARAMETER"); json.free(&d); return; }
@@ -276,7 +280,7 @@ fn decode(r: *Request, body: []u8, protocol: i32, request_id: []u8, session_head
     decode_tools(r, &d); json.free(&d);
     if (r.*.message_count == 0) { fail(r, "MESSAGES_REQUIRED"); }
 }
-fn render_prompt(r: *Request, start: i32) bool {
+fn render_prompt(r: @borrows_mut *Request, start: i32) bool {
     if (start < 0 || start > r.*.canonical.len) { return false; }
     if (!attachment.pending(buf.view(&r.*.attachments), start, &r.*.pending_files)) { return false; }
     buf.clear(&r.*.prompt);
@@ -294,7 +298,7 @@ fn render_prompt(r: *Request, start: i32) bool {
     buf.add(&r.*.prompt, r.*.canonical.data[start..r.*.canonical.len]);
     return r.*.prompt.ok != 0;
 }
-fn free(r: *Request) void {
+fn free(r: @consumes *Request) void {
     buf.free(&r.*.id); buf.free(&r.*.model); buf.free(&r.*.session_hint); buf.free(&r.*.previous); buf.free(&r.*.canonical); buf.free(&r.*.prompt);
     buf.free(&r.*.tools); buf.free(&r.*.tool_names); buf.free(&r.*.error); buf.free(&r.*.nonce); buf.free(&r.*.reasoning); buf.free(&r.*.selected_tool); buf.free(&r.*.attachments); buf.free(&r.*.pending_files);
 }

@@ -21,10 +21,17 @@ fn provider_cases() void {
  check(buf.find(buf.view(&p.*.reasoning_modes),"high",0)>=0,"reasoning options observed without invented levels");
  check(p.*.models[0].context_tokens==0 && p.*.models[0].tokenizer.len==0,"no capability from model names");
  registry.public_models(&r,&out);check(buf.find(buf.view(&out),"p1/fixture-1",0)>=0,"admitted model published");
- p.*.models[0].enabled=false;registry.public_models(&r,&out);check(buf.eq(buf.view(&out),"{\"object\":\"list\",\"codemax_catalog_version\":1,\"data\":[]}"),"disabled model hidden");p.*.models[0].enabled=true;
+ // The fixture sequence above admits two models (a bare mention plus the
+ // observed selector); disable every admitted model so the hidden-catalog
+ // assertion does not depend on admission order.
+ let dm: i32=0;while (dm<p.*.model_count) { p.*.models[dm].enabled=false; dm=dm+1; }
+ registry.public_models(&r,&out);check(buf.eq(buf.view(&out),"{\"object\":\"list\",\"codemax_catalog_version\":1,\"data\":[]}"),"disabled models hidden");
+ dm=0;while (dm<p.*.model_count) { p.*.models[dm].enabled=true; dm=dm+1; }
  p.*.exposed=false;check(registry.find_model(&r,"p1/fixture-1")<0,"provider exposure gates routing");p.*.exposed=true;
  let md: json.Document=json.parse("{\"origin\":\"https://fixture.example\",\"facts\":[{\"model\":\"unrelated\",\"context_tokens\":999999,\"source\":\"PROVIDER_METADATA\"},{\"model\":\"fixture-1\",\"context_tokens\":65536,\"tokenizer\":\"fixture-tok\",\"source\":\"PROVIDER_METADATA\"}]}");check(symbolic.capabilities(p,&md,0),"explicit metadata accepted");json.free(&md);
- check(p.*.models[0].context_tokens==65536 && buf.eq(buf.view(&p.*.models[0].tokenizer),"fixture-tok"),"metadata model scoped");
+ // Capabilities attach to the matching model id, not to admission order.
+ let fi: i32=0 - 1;let fj: i32=0;while (fj<p.*.model_count) { if (buf.eq(buf.view(&p.*.models[fj].id),"p1/fixture-1")) { fi=fj; } fj=fj+1; }
+ check(fi>=0 && p.*.models[fi].context_tokens==65536 && buf.eq(buf.view(&p.*.models[fi].tokenizer),"fixture-tok"),"metadata model scoped");
  observe(p,"{\"origin\":\"https://fixture.example\",\"document_id\":\"discovery_doc\",\"password_fields_present\":true,\"controls\":[{\"id\":1,\"tag\":\"textarea\",\"label\":\"Message\",\"visible\":true,\"editable\":true},{\"id\":2,\"tag\":\"button\",\"label\":\"Send message\",\"visible\":true},{\"id\":3,\"tag\":\"select\",\"label\":\"Model\",\"visible\":true,\"options\":[{\"label\":\"Fixture 1\",\"value\":\"fixture-1\",\"selected\":true,\"disabled\":false}]},{\"id\":4,\"tag\":\"div\",\"label\":\"Assistant responses\",\"visible\":true,\"role\":\"log\",\"assistant\":true},{\"id\":5,\"tag\":\"select\",\"label\":\"Reasoning\",\"visible\":true,\"options\":[{\"label\":\"High\",\"value\":\"high\",\"disabled\":false}]}]}");check(p.*.state==2 && !registry.publishable(p),"login screen not published");
  p.*.dismissed=true;observe(p,"{\"origin\":\"https://fixture.example\",\"document_id\":\"discovery_doc\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"textarea\",\"label\":\"Message\",\"visible\":true,\"editable\":true},{\"id\":2,\"tag\":\"button\",\"label\":\"Send message\",\"visible\":true},{\"id\":3,\"tag\":\"select\",\"label\":\"Model\",\"visible\":true,\"options\":[{\"label\":\"Fixture 1\",\"value\":\"fixture-1\",\"selected\":true,\"disabled\":false}]},{\"id\":4,\"tag\":\"div\",\"label\":\"Assistant responses\",\"visible\":true,\"role\":\"log\",\"assistant\":true},{\"id\":5,\"tag\":\"select\",\"label\":\"Reasoning\",\"visible\":true,\"options\":[{\"label\":\"High\",\"value\":\"high\",\"disabled\":false}]}]}");check(p.*.state==8 && !registry.publishable(p),"user dismissal wins over evidence");
  buf.free(&out);registry.free(&r);

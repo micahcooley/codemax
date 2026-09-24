@@ -61,11 +61,28 @@ Remote provider pages stay outside the trusted desktop command surface.
 
 The current release target is Linux x86_64.
 
+macOS (arm64) builds the native Zag backend sidecar from the same backend
+sources using the pinned macOS compiler (`.toolchain/zag-macos-arm64/znc`,
+a signed ARM64 Mach-O build of the Zag selfhost). The backend source is
+portable across both kernels: every raw syscall uses a Linux x86-64 tuple
+that the Mach-O encoder also admits, and the macOS build compiles a shadow
+copy at edition 2026 with all four native test programs executed. If the
+macOS compiler is absent, the app falls back to browsing-only mode with the
+native local-tools sidecar instead; see `scripts/build-backend.sh` and
+`docs/release-gates.json` for the per-platform gates.
+
 You need Node, npm, Rust, Cargo, Python, pkg config, GTK 3 development files, WebKitGTK 4.1 development files, and the pinned Zag compiler path used by the build scripts.
 
 ```bash
 npm install
 npm run package:linux
+```
+
+On macOS (Xcode command line tools plus `brew install pkg-config json-c`):
+
+```bash
+npm install
+npm run package:mac
 ```
 
 The Linux bundles are created in the Tauri release bundle directory after every build and test gate succeeds.
@@ -82,4 +99,4 @@ Full website behavior still depends on the website itself, its current interface
 
 ## Project status
 
-Codemax is under active development. The source tree contains the production browser, detector, Zag gateway, native tools, Tauri host, Svelte interface, Koryphaios integration, tests, and Linux packaging scripts.
+Codemax is under active development. The source tree contains the production browser, detector, Zag gateway, native tools, Tauri host, Svelte interface, Koryphaios integration, tests, and Linux and macOS packaging scripts.

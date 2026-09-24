@@ -31,14 +31,8 @@ export default function Dialog($$anchor, $$props) {
 	var dialog_1 = root();
 	var div = $.child(dialog_1);
 	var h2 = $.child(div);
-	var text = $.child(h2, true);
-
-	$.reset(h2);
-
+	var text = $.only_child(h2, true);
 	var button = $.sibling(h2);
-
-	button.__click = () => app.popup = null;
-
 	var node = $.child(button);
 
 	Icon(node, { name: 'close' });
@@ -63,6 +57,7 @@ export default function Dialog($$anchor, $$props) {
 		if (!app.confirming) app.popup = null;
 	});
 
+	$.delegated('click', button, () => app.popup = null);
 	$.append($$anchor, dialog_1);
 	$.pop();
 }

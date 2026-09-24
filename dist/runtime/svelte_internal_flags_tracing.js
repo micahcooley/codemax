@@ -1,3 +1,6 @@
-import { b as enable_tracing_mode_flag } from './index-6-3S3c88.js';
+import {
+  enable_tracing_mode_flag
+} from "./chunk-G4LOH7XG.js";
 
+// ../../Documents/codemax/node_modules/svelte/src/internal/flags/tracing.js
 enable_tracing_mode_flag();

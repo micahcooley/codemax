@@ -7,122 +7,122 @@
     {
       "name": "Default shelf shows only registered providers and never duplicates tab controls",
       "status": "PASS",
-      "seconds": 0.169
+      "seconds": 0.077
     },
     {
       "name": "Sidebar collapse fills the native surface and persists independently of the inspector",
       "status": "PASS",
-      "seconds": 0.169
+      "seconds": 0.103
     },
     {
       "name": "Closing and reopening a website leaves one saved provider and one browser tab",
       "status": "PASS",
-      "seconds": 0.205
+      "seconds": 0.153
     },
     {
       "name": "Provider settings open on demand without a second provider list or advanced controls",
       "status": "PASS",
-      "seconds": 0.082
+      "seconds": 0.047
     },
     {
       "name": "Ordinary browsing never creates a registered sidebar provider in the fixture flow",
       "status": "PASS",
-      "seconds": 0.059
+      "seconds": 0.019
     },
     {
       "name": "Registry activity rings track real state fields, reduced motion and disabled exposure",
       "status": "PASS",
-      "seconds": 0.113
+      "seconds": 0.073
     },
     {
       "name": "Client setup initially exposes only client, model and one private-launch action",
       "status": "PASS",
-      "seconds": 0.502
+      "seconds": 0.454
     },
     {
       "name": "Private launch starts then probes then copies; no config overwrite or false client-connected claim",
       "status": "PASS",
-      "seconds": 0.556
+      "seconds": 0.49
     },
     {
       "name": "Failed gateway probe does not retrieve or copy a key",
       "status": "PASS",
-      "seconds": 0.534
+      "seconds": 0.468
     },
     {
       "name": "Clipboard failure is actionable and never renders the local key",
       "status": "PASS",
-      "seconds": 0.538
+      "seconds": 0.506
     },
     {
       "name": "Navigating away cancels late credential retrieval and clipboard side effects",
       "status": "PASS",
-      "seconds": 1.671
+      "seconds": 1.598
     },
     {
       "name": "Losing model exposure while connecting prevents a stale launch command",
       "status": "PASS",
-      "seconds": 0.916
+      "seconds": 0.761
     },
     {
       "name": "Tool library and technical task settings are opt-in; browsing recipes never installs code",
       "status": "PASS",
-      "seconds": 0.529
+      "seconds": 0.511
     },
     {
       "name": "Folder picker fills one quoted argument; saving a recipe still requires separate process consent",
       "status": "PASS",
-      "seconds": 0.747
+      "seconds": 0.65
     },
     {
       "name": "Cancelling the native folder dialog preserves the typed folder without effects",
       "status": "PASS",
-      "seconds": 0.64
+      "seconds": 0.571
     },
     {
       "name": "Simple file recipe refuses a filesystem-root share or parent traversal",
       "status": "PASS",
-      "seconds": 0.639
+      "seconds": 0.538
     },
     {
       "name": "Tool catalogs are collapsed and searchable; clearing a filter restores choices",
       "status": "PASS",
-      "seconds": 0.592
+      "seconds": 0.536
     },
     {
       "name": "Task options validate budgets and forward automatic result continuation to Zag",
       "status": "PASS",
-      "seconds": 0.667
+      "seconds": 0.54
     },
     {
       "name": "Active tasks replace configuration panels with the relevant approval and stop controls",
       "status": "PASS",
-      "seconds": 0.496
+      "seconds": 0.45
     },
     {
       "name": "Budget pause resumes the same run without starting over or replaying an approval",
       "status": "PASS",
-      "seconds": 0.556
+      "seconds": 0.473
     },
     {
       "name": "Non-resumable state cannot be forced through UI; cancellation remains available",
       "status": "PASS",
-      "seconds": 0.564
+      "seconds": 0.491
     },
     {
       "name": "Routine task progress is quiet; a safe pause still surfaces attention while browsing",
       "status": "PASS",
-      "seconds": 0.114
+      "seconds": 0.069
     },
     {
       "name": "Current MCP progress is visible as untrusted text without granting execution",
       "status": "PASS",
-      "seconds": 0.529
+      "seconds": 0.463
     },
     {
       "name": "Clean connection, library and browser layouts remain bounded at three window sizes",
       "status": "PASS",
-      "seconds": 3.292
+      "seconds": 3.052
     }
   ]
 }

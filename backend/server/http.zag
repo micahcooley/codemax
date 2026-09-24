@@ -17,7 +17,7 @@ fn trim(s: []u8) []u8 {
     while (end > start && (s[end - 1] == 32 || s[end - 1] == 9)) { end = end - 1; }
     return s[start..end];
 }
-fn number(s: []u8) i32 {
+fn number(s: @borrows []u8) i32 {
     if (_zag_strlen(s) == 0 || _zag_strlen(s) > 7) { return 0 - 1; }
     let n: i32 = 0; let i: i32 = 0;
     while (i < _zag_strlen(s)) {
@@ -26,12 +26,12 @@ fn number(s: []u8) i32 {
     }
     return n;
 }
-fn header_name(s: []u8) bool {
+fn header_name(s: @borrows []u8) bool {
     let n: i32 = _zag_strlen(s); if (n < 1 || n > 64) { return false; } let i: i32 = 0;
     while (i < n) { let c: u8 = s[i]; if (!((c >= 65 && c <= 90) || (c >= 97 && c <= 122) || (c >= 48 && c <= 57) || c == 45)) { return false; } i = i + 1; }
     return true;
 }
-fn parse(h: *Headers, input: []u8, port: i32, expected_key: []u8) bool {
+fn parse(h: @borrows_mut *Headers, input: @borrows []u8, port: i32, expected_key: @borrows []u8) bool {
     let end: i32 = buf.find(input, "\r\n\r\n", 0);
     if (end < 0) { return false; }
     if (end > 16380) { h.*.error = 431; return true; }
@@ -88,23 +88,23 @@ fn reason(status: i32) []u8 {
     if (status == 502) { return "Bad Gateway"; } if (status == 503) { return "Service Unavailable"; } if (status == 504) { return "Gateway Timeout"; }
     return "Internal Server Error";
 }
-fn response(out: *buf.Buffer, status: i32, body: []u8, session: []u8) void {
+fn response(out: @borrows_mut *buf.Buffer, status: i32, body: @borrows []u8, session: @borrows []u8) void {
     buf.add(out, "HTTP/1.1 "); buf.integer(out, status as i64); buf.byte(out, 32); buf.add(out, reason(status));
     buf.add(out, "\r\nContent-Type: application/json; charset=utf-8\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n");
     if (_zag_strlen(session) > 0) { buf.add(out, "X-Bridge-Session: "); buf.add(out, session); buf.add(out, "\r\n"); }
     buf.add(out, "X-Bridge-Usage-Provenance: estimated-utf8-bytes-or-unknown\r\nContent-Length: "); buf.integer(out, _zag_strlen(body) as i64); buf.add(out, "\r\n\r\n"); buf.add(out, body);
 }
-fn stream_headers(out: *buf.Buffer, session: []u8) void {
+fn stream_headers(out: @borrows_mut *buf.Buffer, session: @borrows []u8) void {
     buf.add(out, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nConnection: close\r\nCache-Control: no-cache, no-transform\r\nX-Accel-Buffering: no\r\nX-Content-Type-Options: nosniff\r\nX-Bridge-Usage-Provenance: estimated-utf8-bytes-or-unknown\r\nX-Bridge-Session: ");
     buf.add(out, session); buf.add(out, "\r\n\r\n");
 }
-fn error_json(code: []u8, out: *buf.Buffer) void {
+fn error_json(code: @borrows []u8, out: @borrows_mut *buf.Buffer) void {
     buf.add(out, "{\"type\":\"error\",\"error\":{\"type\":\"bridge_error\",\"code\":"); buf.json(out, code); buf.add(out, ",\"message\":"); buf.json(out, code); buf.add(out, "}}");
 }
-fn free(h: *Headers) void { buf.free(&h.*.method); buf.free(&h.*.path); buf.free(&h.*.authorization); buf.free(&h.*.api_key); buf.free(&h.*.session); buf.free(&h.*.host); buf.free(&h.*.if_none_match); }
+fn free(h: @consumes *Headers) void { buf.free(&h.*.method); buf.free(&h.*.path); buf.free(&h.*.authorization); buf.free(&h.*.api_key); buf.free(&h.*.session); buf.free(&h.*.host); buf.free(&h.*.if_none_match); }
 
 // Catalogs are private to the authenticated caller. Never cache generations.
-fn catalog_response(out: *buf.Buffer, body: []u8, etag: []u8, not_modified: bool) void {
+fn catalog_response(out: @borrows_mut *buf.Buffer, body: @borrows []u8, etag: @borrows []u8, not_modified: bool) void {
     if (not_modified) { buf.add(out, "HTTP/1.1 304 Not Modified\r\n"); }
     else { buf.add(out, "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\n"); }
     buf.add(out, "Connection: close\r\nCache-Control: private, max-age=15, must-revalidate\r\nVary: Authorization, X-Api-Key\r\nX-Content-Type-Options: nosniff\r\nETag: ");

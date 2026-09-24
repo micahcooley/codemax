@@ -1,8 +1,8 @@
 {
   "compiler": "Svelte",
-  "version": "5.48.0",
-  "typescript": "5.8.3",
-  "compiled_modules": 30,
+  "version": "5.57.1",
+  "typescript": "5.9.3",
+  "compiled_modules": 33,
   "warnings": [],
   "fixture_code_in_distribution": false,
   "entry": "src/main.js"

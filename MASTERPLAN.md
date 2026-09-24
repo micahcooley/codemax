@@ -126,6 +126,16 @@ Do not quietly replace the backend with TypeScript or Rust to claim cross-platfo
 
 A platform is supported only when its **Zag backend actually runs there**.
 
+### macOS build target status (2026-09-20)
+
+The native local-tools sidecar is ported to macOS (arm64/x86_64) with
+equivalent containment primitives, `build-mac.sh` / `npm run package:mac`
+produce a .dmg, and the Tauri host autostart uses a LaunchAgent. The Zag
+backend sidecar remains Linux-only: the pinned znc compiler is a Linux x86_64
+ELF that cannot execute or emit Mach-O, so the macOS app runs the gateway in
+its designed fallback browsing mode. Per the rule above, macOS is a build
+target, not a supported platform, until a real Zag backend runs there.
+
 ---
 
 # 3. Process Architecture
@@ -2079,7 +2089,9 @@ No unrecoverable corruption.
 
 # 74. Phase 17 — Packaging
 
-Linux first.
+Linux first. macOS packaging (`scripts/package-mac.sh`, .dmg) exists as a
+build target; it is not a qualified release while the Zag backend stays
+Linux-only (see macOS build target status under Product Stage 2).
 
 Bundle Zag sidecar through Tauri's external binary mechanism. Tauri requires target-triple-specific sidecar binaries for each packaged platform.
 

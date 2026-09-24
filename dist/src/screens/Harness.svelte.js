@@ -15,9 +15,6 @@ export default function Harness($$anchor, $$props) {
 	var div = $.child(section);
 	var header = $.child(div);
 	var button = $.sibling($.child(header));
-
-	button.__click = () => app.navigate('providers');
-
 	var node = $.child(button);
 
 	Icon(node, { name: 'globe', size: 15 });
@@ -32,11 +29,12 @@ export default function Harness($$anchor, $$props) {
 	var p = $.sibling(node_1, 2);
 	var button_1 = $.sibling($.child(p));
 
-	button_1.__click = () => app.navigate('sessions');
 	$.next();
 	$.reset(p);
 	$.reset(div);
 	$.reset(section);
+	$.delegated('click', button, () => app.navigate('providers'));
+	$.delegated('click', button_1, () => app.navigate('sessions'));
 	$.append($$anchor, section);
 	$.pop();
 }

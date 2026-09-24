@@ -14,8 +14,8 @@
   },
   "actual_local_read": true,
   "permission": "explicit synthetic fixture grant; one read; no project/home/shell access",
-  "file_result": "BRIDGE_PROBE_c01931f0a05153098e137db544bb0b423c776cac591c5f3a041062b8e7a07226",
-  "file_sha256": "fa65ccb0ccffd8b7fef17043bc27528e01147990600b0fcb283763261ba16a53",
+  "file_result": "BRIDGE_PROBE_89889e111e2b847042b6156303fad8983df91afe9d0b41d2c62be9ddcc0fb14f",
+  "file_sha256": "9e34a91b17e7eeb8f976a6b3d90e2ea4cc88a9770576ea832b324bb51618fe99",
   "fixture_deleted": true,
   "results": [
     {

@@ -20,9 +20,14 @@ const warnings=[],modules=[];let css=fs.readFileSync(path.join(root,'src/lib/des
 const all=[];function walk(dir){for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const p=path.join(dir,entry.name);if(entry.isDirectory())walk(p);else all.push(p);}}
 walk(path.join(root,'src'));
 function target(source){return source.endsWith('.ts')?source.slice(0,-3)+'.js':source.endsWith('.svelte')?source+'.js':source;}
+// Every Svelte-runtime entry referenced by compiled output must resolve to a
+// file from the supplied SVELTE_RUNTIME_DIR. Without this check a compiler
+// upgrade (or a new svelte/* import) can silently mix stale vendored files
+// from a previous revision with fresh output, which breaks at runtime.
+const runtimeRefs=new Set();
 function resolveImport(spec,file){
- if(spec==='svelte')return path.join(out,'runtime/svelte_svelte.js');
- if(spec.startsWith('svelte/'))return path.join(out,'runtime/'+spec.replaceAll('/','_')+'.js');
+ if(spec==='svelte'){runtimeRefs.add('svelte_svelte.js');return path.join(out,'runtime/svelte_svelte.js');}
+ if(spec.startsWith('svelte/')){const name=spec.replaceAll('/','_')+'.js';runtimeRefs.add(name);return path.join(out,'runtime/'+name);}
  if(!spec.startsWith('.'))throw new Error(`Unexpected external import ${spec} in ${file}`);
  const base=path.resolve(path.dirname(file),spec);
  const found=[base,base+'.ts',base+'.js',base+'.svelte',path.join(base,'index.ts')].find(p=>fs.existsSync(p)&&fs.statSync(p).isFile());
@@ -62,6 +67,8 @@ for(const file of all.filter(f=>f.endsWith('.svelte')||f.endsWith('.ts'))){
 if(process.exitCode)process.exit(process.exitCode);
 fs.mkdirSync(path.join(out,'runtime'),{recursive:true});
 for(const name of fs.readdirSync(runtime).filter(n=>n.endsWith('.js')&&!n.includes('compiler'))){fs.copyFileSync(path.join(runtime,name),path.join(out,'runtime',name));modules.push('runtime/'+name);}
+for(const name of runtimeRefs){if(!fs.existsSync(path.join(runtime,name))){console.error(`RUNTIME REFERENCE WITHOUT VENDORED FILE: ${name} — extend SVELTE_RUNTIME_DIR with a matching entry built from the same compiler revision.`);process.exitCode=1;}}
+if(process.exitCode)process.exit(process.exitCode);
 fs.writeFileSync(path.join(out,'ui.css'),css);
 fs.writeFileSync(path.join(out,'index.html'),'<!doctype html>\n<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="dark light"><title>Codemax — Browser</title><link rel="stylesheet" href="./ui.css"></head><body><div id="app"></div><script type="module" src="./src/main.js"></script></body></html>\n');
 const report={compiler:'Svelte',version:compiler.VERSION,typescript:ts.version,compiled_modules:modules.filter(m=>m.startsWith('src/')).length,warnings,fixture_code_in_distribution:false,entry:'src/main.js'};

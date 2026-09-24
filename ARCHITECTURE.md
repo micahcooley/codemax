@@ -37,7 +37,7 @@ TNN prediction parsing and safety authority remain separate; the symbolic engine
 
 ## Build and evidence
 
-`build-linux.sh` uses native Zag and Tauri, with no Rust/JavaScript substitution for the gateway. `dist/` is the compiled frontend; it cannot perform native operations when opened as an ordinary webpage. `tests/fixtures/` is separate test infrastructure. See `EXECUTION_REPORT.md` for executed versus native-unverified checks.
+`build-linux.sh` uses native Zag and Tauri, with no Rust/JavaScript substitution for the gateway. `build-mac.sh` builds the macOS app with the ported native local-tools sidecar and, when the pinned macOS compiler is installed, a native Mach-O Zag backend sidecar built from the same portable sources (shadow copy at edition 2026, native tests executed); without that compiler the app runs the gateway in its designed fallback browsing mode (no Zag inference/sessions/MCP) rather than a substituted backend. `dist/` is the compiled frontend; it cannot perform native operations when opened as an ordinary webpage. `tests/fixtures/` is separate test infrastructure. See `EXECUTION_REPORT.md` for executed versus native-unverified checks.
 
 
 ## Revision 3 built-in client

@@ -4,12 +4,12 @@
 @import("../providers/registry.zag") as registry
 @import("../security/validation.zag") as validation
 fn role_valid(role: []u8) bool {
-    return buf.eq(role, "prompt") || buf.eq(role, "send") || buf.eq(role, "response") || buf.eq(role, "stop") || buf.eq(role, "new_chat") || buf.eq(role, "model") || buf.eq(role, "reasoning") || buf.eq(role, "attachment");
+    return buf.eq(role, "prompt") || buf.eq(role, "send") || buf.eq(role, "response") || buf.eq(role, "stop") || buf.eq(role, "new_chat") || buf.eq(role, "model") || buf.eq(role, "reasoning") || buf.eq(role, "attachment") || buf.eq(role, "ephemeral");
 }
 fn compatible(d: *json.Document, control: i32, role: []u8) bool {
     if (buf.eq(role, "prompt")) { return json.kind(d, json.get(d, control, "editable")) == 5; }
     if (buf.eq(role, "attachment")) { return json.is_text(d, json.get(d, control, "tag"), "input") && json.kind(d, json.get(d, control, "file_input")) == 5; }
-    if (buf.eq(role, "model") || buf.eq(role, "reasoning")) { return json.is_text(d, json.get(d, control, "tag"), "select") || json.is_text(d, json.get(d, control, "tag"), "button") || json.is_text(d, json.get(d, control, "role"), "combobox") || json.is_text(d, json.get(d, control, "role"), "button") || (buf.eq(role, "reasoning") && (json.is_text(d, json.get(d, control, "role"), "switch") || json.is_text(d, json.get(d, control, "role"), "checkbox"))); }
+    if (buf.eq(role, "model") || buf.eq(role, "reasoning") || buf.eq(role, "ephemeral")) { return json.is_text(d, json.get(d, control, "tag"), "select") || json.is_text(d, json.get(d, control, "tag"), "button") || json.is_text(d, json.get(d, control, "role"), "combobox") || json.is_text(d, json.get(d, control, "role"), "button") || ((buf.eq(role, "reasoning") || buf.eq(role, "ephemeral")) && (json.is_text(d, json.get(d, control, "role"), "switch") || json.is_text(d, json.get(d, control, "role"), "checkbox"))); }
     if (buf.eq(role, "response")) { return json.is_text(d, json.get(d, control, "role"), "log") || json.kind(d, json.get(d, control, "assistant")) == 5 || json.is_text(d, json.get(d, control, "tag"), "main") || json.is_text(d, json.get(d, control, "role"), "main"); }
     return json.is_text(d, json.get(d, control, "tag"), "button") || json.is_text(d, json.get(d, control, "role"), "button");
 }
@@ -67,6 +67,7 @@ fn apply(p: *registry.Provider, d: *json.Document, controls: i32) bool {
         if (buf.eq(buf.view(&mapping), "model")) { p.*.model_control = found; }
         if (buf.eq(buf.view(&mapping), "reasoning")) { p.*.reasoning_control = found; }
         if (buf.eq(buf.view(&mapping), "attachment")) { p.*.attachment = found; }
+        if (buf.eq(buf.view(&mapping), "ephemeral")) { p.*.ephemeral = found; }
         recipe = recipes.tokens[recipe].next;
     }
     json.free(&recipes); buf.free(&label); buf.free(&tag); buf.free(&role); buf.free(&mapping); return ok;

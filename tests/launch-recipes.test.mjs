@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
-import {privateLaunch,shellQuote} from '../dist/src/lib/launch-command.js';
+import {privateLaunch,shellQuote,buildOpencodeConfig} from '../dist/src/lib/launch-command.js';
 import {recipeDefinition,toolRecipes} from '../dist/src/lib/tool-recipes.js';
 
 // Execute generated Bash against a temporary local argument capture executable.
@@ -40,6 +40,23 @@ test('All three protocol request examples preserve auth, model and correct path 
   assert(out.argv.includes(endpoint+route));assert(out.argv.includes('Authorization: Bearer '+key));
   const body=JSON.parse(out.argv[out.argv.indexOf('--data')+1]);assert.equal(body.model,model);assert.equal(body.stream,true);
  }
+});
+test('OpenCode config carries every selected model with one default, not a single model',()=>{
+ const models=[{id:'p1/glm-4.6',providerLabel:'Z.ai',displayName:'GLM-4.6'},{id:'p1/glm-4.5',providerLabel:'Z.ai',displayName:'GLM-4.5'},{id:'p1/sonar',providerLabel:'Perplexity',displayName:'Sonar'}];
+ const config=buildOpencodeConfig(endpoint,'p1/glm-4.6',models);
+ assert.equal(config.model,'codemax/p1/glm-4.6');
+ assert.deepEqual(Object.keys(config.provider.codemax.models),['p1/glm-4.6','p1/glm-4.5','p1/sonar']);
+ assert.equal(config.provider.codemax.models['p1/sonar'].name,'Perplexity / Sonar');
+ const out=execute(privateLaunch('opencode',endpoint,'p1/glm-4.6',key,config));
+ assert.deepEqual(JSON.parse(out.env.OPENCODE_CONFIG_CONTENT),config);
+});
+test('OpenCode config refuses empty selection, unknown default and non-loopback endpoint',()=>{
+ const models=[{id:'p1/a',providerLabel:'P',displayName:'A'}];
+ assert.throws(()=>buildOpencodeConfig(endpoint,'p1/a',[]));
+ assert.throws(()=>buildOpencodeConfig(endpoint,'p1/missing',models));
+ assert.throws(()=>buildOpencodeConfig(endpoint,'',models));
+ assert.throws(()=>buildOpencodeConfig('https://example.org:7331','p1/a',models));
+ assert.throws(()=>buildOpencodeConfig(endpoint,'',[]));
 });
 test('Launch refuses non-loopback endpoint, missing data and header-breaking credentials',()=>{
  for(const url of ['https://example.org:7331','http://0.0.0.0:7331',endpoint+'/bad'])assert.throws(()=>privateLaunch('chat',url,model,key,{}));

@@ -1,6 +1,6 @@
 export type ProviderState = 'UNCONFIGURED'|'LOADING'|'LOGIN_REQUIRED'|'DISCOVERING'|'READY'|'RATE_LIMITED'|'BROKEN_MAPPING'|'REDISCOVERING'|'BROWSING'|'CANDIDATE';
 export type Route = 'home'|'browser'|'models'|'harness'|'sessions'|'detector'|'settings'|'providers'|'tools';
-export type Mapping = 'prompt'|'send'|'response'|'stop'|'new_chat'|'model'|'reasoning'|'attachment';
+export type Mapping = 'prompt'|'send'|'response'|'stop'|'new_chat'|'model'|'reasoning'|'attachment'|'ephemeral';
 export interface Model {
   id:string; display_name:string; enabled:boolean; available:boolean; confidence:'OBSERVED'|'USER_SUPPLIED';
   context:{nominal:number|null;effective:number|null;source:string;advertised_label?:string|null};
@@ -12,6 +12,7 @@ export interface Provider {
   id:number; label:string; origin:string; url:string; current_url:string; state:ProviderState;
   open_tab:boolean; pinned:boolean; active:boolean; browser_busy?:boolean; last_seen:number; mapping_version:number;
   last_error:string; models:Model[]; mappings:Record<Mapping,number>;
+  model_locked:boolean; reasoning_locked:boolean;
   context_hint:number; reasoning_value:string;
 }
 export interface Session {
@@ -22,7 +23,7 @@ export interface Session {
 }
 export interface Preferences {
   harness:'opencode'|'claude'|'chat'|'responses'|'messages'|'koryphaios';theme:'dark'|'light'|'system';compact:boolean;restore_tabs:boolean;auto_start:boolean;idle_minutes:number;
-  logging:'ERROR'|'WARN'|'INFO'|'DEBUG'; fallback_enabled:boolean;fallback_model:string;default_model:string;
+  logging:'ERROR'|'WARN'|'INFO'|'DEBUG'; fallback_enabled:boolean;fallback_model:string;default_model:string;ephemeral_chats:boolean;
   raw_capture:false;developer_mode:boolean;
 }
 export interface LogEntry {id:number;time:number;provider_id:number;level:string;kind:string;detail:string}
@@ -39,7 +40,7 @@ export interface Snapshot {
 export interface HostStatus {state:'STARTING'|'READY'|'LOST'|'FAILED'|'STOPPED'|'BROWSER_ONLY';code:string|null}
 export interface Control {
   id:number;tag:string;role:string;label:string;visible:boolean;editable:boolean;disabled:boolean;
-  live:string;busy:boolean;assistant:boolean;file_input:boolean;value:string;popup:string;
+  live:string;busy:boolean;assistant:boolean;file_input:boolean;value:string;popup:string;locked?:boolean;
   options:Array<{label:string;value:string;selected:boolean;disabled:boolean}>;
 }
 export interface Evidence {type:'observation';origin:string;document_id:string;controls:Control[];password_fields_present:boolean}
@@ -54,4 +55,4 @@ export const routes:Array<{id:Route;title:string;icon:string;description:string}
   {id:'home',title:'Activity',icon:'activity',description:'Gateway health and recent events'},
   {id:'settings',title:'Settings',icon:'settings',description:'Appearance, profiles and privacy'},
 ];
-export const mappingNames:Record<Mapping,string>={prompt:'Prompt input',send:'Send message',response:'Response region',stop:'Stop generation',new_chat:'New conversation',model:'Model selector',reasoning:'Reasoning control',attachment:'File attachment'};
+export const mappingNames:Record<Mapping,string>={prompt:'Prompt input',send:'Send message',response:'Response region',stop:'Stop generation',new_chat:'New conversation',model:'Model selector',reasoning:'Reasoning control',attachment:'File attachment',ephemeral:'Temporary chat'};

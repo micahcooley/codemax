@@ -9,74 +9,74 @@
     {
       "name": "One top tab strip; distinct provider registry; inspector closed after legacy migration",
       "status": "PASS",
-      "seconds": 0.268
+      "seconds": 0.105
     },
     {
       "name": "Providers, Tools and Connect are utilities; websites retain one set of tabs",
       "status": "PASS",
-      "seconds": 1.059
+      "seconds": 0.911
     },
     {
       "name": "App menu has keyboard navigation, restores focus and hides untrusted native surface",
       "status": "PASS",
-      "seconds": 0.075
+      "seconds": 0.052
     },
     {
       "name": "Ctrl-W closes a utility page without closing the selected website",
       "status": "PASS",
-      "seconds": 0.331
+      "seconds": 0.317
     },
     {
       "name": "Every existing management screen remains reachable from the app menu",
       "status": "PASS",
-      "seconds": 2.458
+      "seconds": 2.33
     },
     {
       "name": "Arrow, Home, End, Ctrl-Tab and reverse tab navigation use the single tab strip",
       "status": "PASS",
-      "seconds": 0.041
+      "seconds": 0.016
     },
     {
       "name": "Top-tab context menu supports reorder, keyboard access and confirmed profile clearing",
       "status": "PASS",
-      "seconds": 1.143
+      "seconds": 1.116
     },
     {
       "name": "Drag-and-drop tab ordering remains available without the sidebar",
       "status": "PASS",
-      "seconds": 0.111
+      "seconds": 0.114
     },
     {
       "name": "Closing a top tab preserves its detected provider and reopening does not duplicate it",
       "status": "PASS",
-      "seconds": 0.381
+      "seconds": 0.355
     },
     {
       "name": "Inspector is opt-in, bounds follow it and the closed preference persists",
       "status": "PASS",
-      "seconds": 0.379
+      "seconds": 0.383
     },
     {
       "name": "Internal addresses identify management pages and never create remote provider tabs",
       "status": "PASS",
-      "seconds": 0.129
+      "seconds": 0.098
     },
     {
       "name": "Sixteen tabs fit via strip scrolling; controls and menus remain usable at 1000 \u00d7 680",
       "status": "PASS",
-      "seconds": 0.267
+      "seconds": 0.2
     },
     {
       "name": "Spinning/idle rings remain on the top tabs and respect reduced motion",
       "status": "PASS",
-      "seconds": 0.483
+      "seconds": 0.4
     },
     {
       "name": "Chrome navigation does not authorize tools or delete profiles; no runtime errors",
       "status": "PASS",
-      "seconds": 0.011
+      "seconds": 0.003
     }
   ],
   "runtime_errors": [],
-  "chromium": "144.0.7559.96"
+  "chromium": "153.0.8010.12"
 }

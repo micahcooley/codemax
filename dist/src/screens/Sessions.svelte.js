@@ -4,15 +4,15 @@ import { app } from '../lib/state/app.svelte.js';
 import { stateText, dateTime, number } from '../lib/format.js';
 import Icon from '../lib/components/Icon.svelte.js';
 
-var root_2 = $.from_html(`<button class="secondary"><!>Stop</button>`);
-var root_4 = $.from_html(`<button class="secondary"><!>Resume</button>`);
-var root_6 = $.from_html(`<button class="text-button"><!>Open</button>`);
-var root_7 = $.from_html(`<button class="icon-button" title="End this local session"><!></button>`);
-var root_1 = $.from_html(`<tr><td style="min-width:190px"><input class="session-title-input" placeholder="Untitled conversation" maxlength="240"/><button class="text-button" style="padding:0;min-height:18px;display:block" title="Copy session ID"><span class="secondary-line mono"> </span></button><span class="secondary-line"> </span></td><td> <span class="secondary-line"> </span></td><td class="mono"> </td><td> <span class="secondary-line">Conservative byte bound</span></td><td><span><span></span> </span></td><td><div class="row-actions"><!><!></div></td></tr>`);
-var root_9 = $.from_html(`<button class="secondary">Clear filters</button>`);
-var root_10 = $.from_html(`<button class="secondary">Connect a client<!></button>`);
-var root_8 = $.from_html(`<div class="empty-state"><!><h2> </h2><p> </p><!></div>`);
-var root = $.from_html(`<section class="screen"><div class="screen-inner"><header class="screen-head"><div><div class="breadcrumb">Workspace / Continuity</div><h1>Sessions</h1><p>Client conversations mapped to their website chats. Resume without replaying the whole conversation.</p></div><span class="tag"><span></span> </span></header> <div class="filterbar"><label class="search-field"><!><input aria-label="Search sessions" placeholder="Search session, title, or model…"/></label><span class="spacer"></span><select aria-label="Filter session status"><option>All sessions</option><option>Running</option><option>Idle</option><option>Reconnect</option><option>Restoring</option><option>Rate limited</option><option>Ended</option></select></div> <div class="table-scroll"><table><thead><tr><th>CONVERSATION</th><th>MODEL / WEBSITE</th><th>TURNS</th><th>CONTEXT ESTIMATE</th><th>STATUS</th><th></th></tr></thead><tbody></tbody></table></div> <!> <div class="table-foot"><span> </span><span>Session metadata and digests persist; prompt bodies do not.</span></div><div class="note"><!><span>Restoration uses the website conversation URL and message-digest receipts. A missing or changed conversation is rejected rather than silently starting over. The context figure is an upper-bound estimate, not an exact tokenizer count.</span></div></div></section>`);
+var root = $.from_html(`<button class="secondary"><!>Stop</button>`);
+var root_1 = $.from_html(`<button class="secondary"><!>Resume</button>`);
+var root_2 = $.from_html(`<button class="text-button"><!>Open</button>`);
+var root_3 = $.from_html(`<button class="icon-button" title="End this local session"><!></button>`);
+var root_4 = $.from_html(`<tr><td style="min-width:190px"><input class="session-title-input" placeholder="Untitled conversation" maxlength="240"/><button class="text-button" style="padding:0;min-height:18px;display:block" title="Copy session ID"><span class="secondary-line mono"> </span></button><span class="secondary-line"> </span></td><td> <span class="secondary-line"> </span></td><td class="mono"> </td><td> <span class="secondary-line">Conservative byte bound</span></td><td><span><span></span> </span></td><td><div class="row-actions"><!><!></div></td></tr>`);
+var root_5 = $.from_html(`<button class="secondary">Clear filters</button>`);
+var root_6 = $.from_html(`<button class="secondary">Connect a client<!></button>`);
+var root_7 = $.from_html(`<div class="empty-state"><!><h2> </h2><p> </p><!></div>`);
+var root_8 = $.from_html(`<section class="screen"><div class="screen-inner"><header class="screen-head"><div><div class="breadcrumb">Workspace / Continuity</div><h1>Sessions</h1><p>Client conversations mapped to their website chats. Resume without replaying the whole conversation.</p></div><span class="tag"><span></span> </span></header> <div class="filterbar"><label class="search-field"><!><input aria-label="Search sessions" placeholder="Search session, title, or model…"/></label><span class="spacer"></span><select aria-label="Filter session status"><option>All sessions</option><option>Running</option><option>Idle</option><option>Reconnect</option><option>Restoring</option><option>Rate limited</option><option>Ended</option></select></div> <div class="table-scroll"><table><thead><tr><th>CONVERSATION</th><th>MODEL / WEBSITE</th><th>TURNS</th><th>CONTEXT ESTIMATE</th><th>STATUS</th><th></th></tr></thead><tbody></tbody></table></div> <!> <div class="table-foot"><span> </span><span>Session metadata and digests persist; prompt bodies do not.</span></div><div class="note"><!><span>Restoration uses the website conversation URL and message-digest receipts. A missing or changed conversation is rejected rather than silently starting over. The context figure is an upper-bound estimate, not an exact tokenizer count.</span></div></div></section>`);
 
 export default function Sessions($$anchor, $$props) {
 	$.push($$props, true);
@@ -37,7 +37,7 @@ export default function Sessions($$anchor, $$props) {
 		}
 	}
 
-	var section = root();
+	var section = root_8();
 	var div = $.child(section);
 	var header = $.child(div);
 	var span = $.sibling($.child(header));
@@ -88,6 +88,7 @@ export default function Sessions($$anchor, $$props) {
 
 	option_6.value = option_6.__value = 'EXPIRED';
 	$.reset(select);
+	$.init_select(select);
 	$.reset(div_1);
 
 	var div_2 = $.sibling(div_1, 2);
@@ -96,42 +97,32 @@ export default function Sessions($$anchor, $$props) {
 
 	$.each(tbody, 21, () => $.get(visible), (s) => s.id, ($$anchor, s) => {
 		const provider = $.derived(() => app.providers.find((p) => p.id === $.get(s).provider));
-		var tr = root_1();
+		var tr = root_4();
 		var td = $.child(tr);
 		var input_2 = $.child(td);
 
 		$.remove_input_defaults(input_2);
-		input_2.__change = (event) => rename(event, $.get(s).id);
 
 		var button = $.sibling(input_2);
-
-		button.__click = () => app.clipboard($.get(s).id);
-
 		var span_2 = $.child(button);
-		var text_1 = $.child(span_2, true);
+		var text_1 = $.only_child(span_2, true);
 
-		$.reset(span_2);
 		$.reset(button);
 
 		var span_3 = $.sibling(button);
-		var text_2 = $.child(span_3, true);
+		var text_2 = $.only_child(span_3, true);
 
-		$.reset(span_3);
 		$.reset(td);
 
 		var td_1 = $.sibling(td);
 		var text_3 = $.child(td_1, true);
 		var span_4 = $.sibling(text_3);
-		var text_4 = $.child(span_4, true);
+		var text_4 = $.only_child(span_4, true);
 
-		$.reset(span_4);
 		$.reset(td_1);
 
 		var td_2 = $.sibling(td_1);
-		var text_5 = $.child(td_2, true);
-
-		$.reset(td_2);
-
+		var text_5 = $.only_child(td_2, true);
 		var td_3 = $.sibling(td_2);
 		var text_6 = $.child(td_3, true);
 
@@ -154,102 +145,60 @@ export default function Sessions($$anchor, $$props) {
 
 		{
 			var consequent = ($$anchor) => {
-				var button_1 = root_2();
-
-				button_1.__click = () => app.cancel($.get(s).id);
-
+				var button_1 = root();
 				var node_2 = $.child(button_1);
 
 				Icon(node_2, { name: 'stop', size: 12 });
 				$.next();
 				$.reset(button_1);
+				$.delegated('click', button_1, () => app.cancel($.get(s).id));
 				$.append($$anchor, button_1);
 			};
 
-			var alternate_1 = ($$anchor) => {
-				var fragment = $.comment();
-				var node_3 = $.first_child(fragment);
+			var consequent_1 = ($$anchor) => {
+				var button_2 = root_1();
+				var node_3 = $.child(button_2);
 
-				{
-					var consequent_1 = ($$anchor) => {
-						var button_2 = root_4();
+				Icon(node_3, { name: 'refresh', size: 12 });
+				$.next();
+				$.reset(button_2);
+				$.template_effect(() => button_2.disabled = !$.get(s).url || !$.get(provider));
+				$.delegated('click', button_2, () => app.resume($.get(s).id));
+				$.append($$anchor, button_2);
+			};
 
-						button_2.__click = () => app.resume($.get(s).id);
+			var consequent_2 = ($$anchor) => {
+				var button_3 = root_2();
+				var node_4 = $.child(button_3);
 
-						var node_4 = $.child(button_2);
-
-						Icon(node_4, { name: 'refresh', size: 12 });
-						$.next();
-						$.reset(button_2);
-						$.template_effect(() => button_2.disabled = !$.get(s).url || !$.get(provider));
-						$.append($$anchor, button_2);
-					};
-
-					var alternate = ($$anchor) => {
-						var fragment_1 = $.comment();
-						var node_5 = $.first_child(fragment_1);
-
-						{
-							var consequent_2 = ($$anchor) => {
-								var button_3 = root_6();
-
-								button_3.__click = () => app.resume($.get(s).id);
-
-								var node_6 = $.child(button_3);
-
-								Icon(node_6, { name: 'globe', size: 13 });
-								$.next();
-								$.reset(button_3);
-								$.template_effect(() => button_3.disabled = !$.get(provider));
-								$.append($$anchor, button_3);
-							};
-
-							$.if(
-								node_5,
-								($$render) => {
-									if ($.get(s).status !== 'EXPIRED') $$render(consequent_2);
-								},
-								true
-							);
-						}
-
-						$.append($$anchor, fragment_1);
-					};
-
-					$.if(
-						node_3,
-						($$render) => {
-							if ($.get(s).status === 'PROVIDER_LOST') $$render(consequent_1); else $$render(alternate, false);
-						},
-						true
-					);
-				}
-
-				$.append($$anchor, fragment);
+				Icon(node_4, { name: 'globe', size: 13 });
+				$.next();
+				$.reset(button_3);
+				$.template_effect(() => button_3.disabled = !$.get(provider));
+				$.delegated('click', button_3, () => app.resume($.get(s).id));
+				$.append($$anchor, button_3);
 			};
 
 			$.if(node_1, ($$render) => {
-				if ($.get(s).status === 'ACTIVE') $$render(consequent); else $$render(alternate_1, false);
+				if ($.get(s).status === 'ACTIVE') $$render(consequent); else if ($.get(s).status === 'PROVIDER_LOST') $$render(consequent_1, 1); else if ($.get(s).status !== 'EXPIRED') $$render(consequent_2, 2);
 			});
 		}
 
-		var node_7 = $.sibling(node_1);
+		var node_5 = $.sibling(node_1);
 
 		{
 			var consequent_3 = ($$anchor) => {
-				var button_4 = root_7();
+				var button_4 = root_3();
+				var node_6 = $.child(button_4);
 
-				button_4.__click = () => app.ask('End this local session?', `End ${$.get(s).title || 'this conversation'} in Codemax. An active request will stop and its local continuity mapping will end. The website conversation will not be deleted.`, 'End session', () => app.perform('session.end', { session_id: $.get(s).id }));
-
-				var node_8 = $.child(button_4);
-
-				Icon(node_8, { name: 'close', size: 13 });
+				Icon(node_6, { name: 'close', size: 13 });
 				$.reset(button_4);
 				$.template_effect(() => $.set_attribute(button_4, 'aria-label', `End session ${$.get(s).id}`));
+				$.delegated('click', button_4, () => app.ask('End this local session?', `End ${$.get(s).title || 'this conversation'} in Codemax. An active request will stop and its local continuity mapping will end. The website conversation will not be deleted.`, 'End session', () => app.perform('session.end', { session_id: $.get(s).id })));
 				$.append($$anchor, button_4);
 			};
 
-			$.if(node_7, ($$render) => {
+			$.if(node_5, ($$render) => {
 				if ($.get(s).status !== 'EXPIRED') $$render(consequent_3);
 			});
 		}
@@ -268,7 +217,11 @@ export default function Sessions($$anchor, $$props) {
 				$.set_text(text_4, $.get(provider)?.label ?? 'Website removed');
 				$.set_text(text_5, $.get(s).turn_count);
 				$.set_text(text_6, $2);
-				classes_1 = $.set_class(span_5, 1, 'tag', null, classes_1, $3);
+
+				classes_1 = $.set_class(span_5, 1, 'tag', null, classes_1, {
+					ready: $.get(s).status === 'ACTIVE' || $.get(s).status === 'IDLE',
+					attention: $3
+				});
 
 				classes_2 = $.set_class(span_6, 1, 'dot', null, classes_2, {
 					busy: $.get(s).status === 'ACTIVE',
@@ -281,14 +234,13 @@ export default function Sessions($$anchor, $$props) {
 				() => dateTime($.get(s).last_used),
 				() => $.get(s).model.split('/').at(-1),
 				() => number($.get(s).context.estimated_used),
-				() => ({
-					ready: $.get(s).status === 'ACTIVE' || $.get(s).status === 'IDLE',
-					attention: ['PROVIDER_LOST', 'RATE_LIMITED'].includes($.get(s).status)
-				}),
+				() => ['PROVIDER_LOST', 'RATE_LIMITED'].includes($.get(s).status),
 				() => stateText($.get(s).status)
 			]
 		);
 
+		$.delegated('change', input_2, (event) => rename(event, $.get(s).id));
+		$.delegated('click', button, () => app.clipboard($.get(s).id));
 		$.append($$anchor, tr);
 	});
 
@@ -296,49 +248,41 @@ export default function Sessions($$anchor, $$props) {
 	$.reset(table);
 	$.reset(div_2);
 
-	var node_9 = $.sibling(div_2, 2);
+	var node_7 = $.sibling(div_2, 2);
 
 	{
 		var consequent_5 = ($$anchor) => {
-			var div_4 = root_8();
-			var node_10 = $.child(div_4);
+			var div_4 = root_7();
+			var node_8 = $.child(div_4);
 
-			Icon(node_10, { name: 'history', size: 29 });
+			Icon(node_8, { name: 'history', size: 29 });
 
-			var h2 = $.sibling(node_10);
-			var text_8 = $.child(h2, true);
-
-			$.reset(h2);
-
+			var h2 = $.sibling(node_8);
+			var text_8 = $.only_child(h2, true);
 			var p_1 = $.sibling(h2);
-			var text_9 = $.child(p_1, true);
-
-			$.reset(p_1);
-
-			var node_11 = $.sibling(p_1);
+			var text_9 = $.only_child(p_1, true);
+			var node_9 = $.sibling(p_1);
 
 			{
 				var consequent_4 = ($$anchor) => {
-					var button_5 = root_9();
+					var button_5 = root_5();
 
-					button_5.__click = () => app.sessionFilters = { query: '', status: 'all' };
+					$.delegated('click', button_5, () => app.sessionFilters = { query: '', status: 'all' });
 					$.append($$anchor, button_5);
 				};
 
-				var alternate_2 = ($$anchor) => {
-					var button_6 = root_10();
+				var alternate = ($$anchor) => {
+					var button_6 = root_6();
+					var node_10 = $.sibling($.child(button_6));
 
-					button_6.__click = () => app.navigate('harness');
-
-					var node_12 = $.sibling($.child(button_6));
-
-					Icon(node_12, { name: 'arrow', size: 14 });
+					Icon(node_10, { name: 'arrow', size: 14 });
 					$.reset(button_6);
+					$.delegated('click', button_6, () => app.navigate('harness'));
 					$.append($$anchor, button_6);
 				};
 
-				$.if(node_11, ($$render) => {
-					if (app.sessions.length) $$render(consequent_4); else $$render(alternate_2, false);
+				$.if(node_9, ($$render) => {
+					if (app.sessions.length) $$render(consequent_4); else $$render(alternate, -1);
 				});
 			}
 
@@ -355,23 +299,22 @@ export default function Sessions($$anchor, $$props) {
 			$.append($$anchor, div_4);
 		};
 
-		$.if(node_9, ($$render) => {
+		$.if(node_7, ($$render) => {
 			if (!$.get(visible).length) $$render(consequent_5);
 		});
 	}
 
-	var div_5 = $.sibling(node_9, 2);
+	var div_5 = $.sibling(node_7, 2);
 	var span_7 = $.child(div_5);
-	var text_10 = $.child(span_7);
+	var text_10 = $.only_child(span_7);
 
-	$.reset(span_7);
 	$.next();
 	$.reset(div_5);
 
 	var div_6 = $.sibling(div_5);
-	var node_13 = $.child(div_6);
+	var node_11 = $.child(div_6);
 
-	Icon(node_13, { name: 'shield', size: 16 });
+	Icon(node_11, { name: 'shield', size: 16 });
 	$.next();
 	$.reset(div_6);
 	$.reset(div);
@@ -379,12 +322,12 @@ export default function Sessions($$anchor, $$props) {
 
 	$.template_effect(
 		($0, $1) => {
-			classes = $.set_class(span_1, 1, 'dot', null, classes, $0);
+			classes = $.set_class(span_1, 1, 'dot', null, classes, { busy: $0 });
 			$.set_text(text, `${$1 ?? ''} running`);
 			$.set_text(text_10, `${$.get(visible).length ?? ''} conversations`);
 		},
 		[
-			() => ({ busy: app.sessions.some((s) => s.status === 'ACTIVE') }),
+			() => app.sessions.some((s) => s.status === 'ACTIVE'),
 			() => app.sessions.filter((s) => s.status === 'ACTIVE').length
 		]
 	);

@@ -4,16 +4,32 @@ export type Popup='add'|'commands'|'rotate-key'|'clear-profile'|'remove-provider
 export type SettingsSection='appearance'|'gateway'|'profiles'|'privacy'|'runtime';
 type Confirmation={title:string;description:string;label:string;danger:boolean;action:()=>Promise<unknown>|unknown};
 type ProviderDraft={label:string;hint:number;reasoning:string};
-const initial:Preferences={harness:'opencode',theme:'dark',compact:false,restore_tabs:true,auto_start:false,idle_minutes:30,logging:'INFO',fallback_enabled:false,fallback_model:'',default_model:'',raw_capture:false,developer_mode:false};
+const initial:Preferences={harness:'opencode',theme:'dark',compact:false,restore_tabs:true,auto_start:false,idle_minutes:30,logging:'INFO',fallback_enabled:false,fallback_model:'',default_model:'',ephemeral_chats:false,raw_capture:false,developer_mode:false};
 class Application {
   route=$state<Route>('browser');snapshot=$state<Snapshot|null>(null);host=$state<HostStatus>({state:'STARTING',code:null});
   selectedProvider=$state<number|null>(null);popup=$state<Popup>(null);popupProvider=$state<number|null>(null);
   confirmation=$state<Confirmation|null>(null);confirming=$state(false);
   error=$state('');popupError=$state('');notification=$state('');pending=$state(0);inspectorWidth=$state(272);
+  errorProvider=$state<number|null>(null);
   shelfVisible=$state(true);inspectorVisible=$state(false);inspectorTab=$state<'connection'|'browser'>('connection');
   focusAddress=$state(0);focusFind=$state(0);findVisible=$state(false);zoom=$state(100);zoomByProvider=$state<Record<number,number>>({});liveOrigins=$state<Record<number,string>>({});
   loading=$state<Record<number,boolean>>({});
+  loadingAt=$state<Record<number,number>>({});
+  /** Page-load flags with staleness decay. SPA navigations sometimes emit a
+   * load start without its finish; a flag older than 30s is a stuck signal,
+   * never an ongoing load, so it clears instead of spinning forever. Real
+   * loads finish in seconds and re-arm on every new start event. */
+  markLoading(id:number,on:boolean):void{
+    const now=Date.now();
+    if(on){this.loading={...this.loading,[id]:true};this.loadingAt={...this.loadingAt,[id]:now};return;}
+    const {[id]:_,...rest}=this.loading;const {[id]:__, ...restAt}=this.loadingAt;
+    this.loading=rest;this.loadingAt=restAt;
+    let changed=false;const live:Record<number,boolean>={...this.loading};const at:Record<number,number>={...this.loadingAt};
+    for(const key of Object.keys(live)){const started=at[Number(key)]??0;if(now-started>30000){delete live[Number(key)];delete at[Number(key)];changed=true;}}
+    if(changed){this.loading=live;this.loadingAt=at;}
+  }
   contextMenu=$state<{id:number;x:number;y:number}|null>(null);tabOrder=$state<number[]>([]);secret=$state('');
+  closedTabs=$state<number[]>([]);
   settingsSection=$state<SettingsSection>('appearance');providerSelection=$state<number|null>(null);clientModel=$state('');
   // Drafts live only in this process. Never persist tasks, commands or secrets in localStorage.
   providerDrafts=$state<Record<number,ProviderDraft>>({});
@@ -90,11 +106,19 @@ class Application {
     const ticket=this.activation;const index=this.tabs.findIndex(p=>p.id===id);
     const next=index<0?undefined:(this.tabs[index+1]??this.tabs[index-1]);
     if(await this.perform('provider.close',{provider_id:id})!==undefined){
-      this.loading={...this.loading,[id]:false};this.popup=null;
+      this.markLoading(id,false);this.popup=null;
+      this.closedTabs=[...this.closedTabs.filter(t=>t!==id),id].slice(-10);
       if(this.selectedProvider===id){this.selectedProvider=next?.id??null;if(this.route==='browser'&&ticket===this.activation){if(next)await this.openProvider(next.id);else this.newTab();}}
     }
   }
   newTab():void{this.selectedProvider=null;this.navigate('browser');this.focusAddress++;if(this.ready)void this.perform('workspace.focus',{provider_id:0});}
+  async reopenLastClosed():Promise<void>{
+    while(this.closedTabs.length){
+      const id=this.closedTabs.pop()!;
+      if(this.providers.some(p=>p.id===id)){await this.openProvider(id);return;}
+    }
+    this.notification='No recently closed website tabs.';
+  }
   address(input:string):URL{
     const text=input.trim();if(!text)throw Error('EMPTY_ADDRESS');
     if(/^[a-z][a-z\d+.-]*:/i.test(text)&&!/^(?:localhost|(?:[a-z\d-]+\.)+[a-z]+):\d/i.test(text)){
@@ -129,7 +153,7 @@ class Application {
     const id=this.provider.id;
     try{await bridge.browserControl(id,action);
       if(action.startsWith('zoom')){this.zoom=action==='zoom_reset'?100:Math.max(50,Math.min(200,this.zoom+(action==='zoom_in'?10:-10)));this.zoomByProvider={...this.zoomByProvider,[id]:this.zoom};}
-      if(action==='popup_once')this.notification='One sign-in popup allowed for 60 seconds. Try the sign-in button again.';
+      if(action==='popup_once')this.notification='One sign-in or sign-up popup allowed for 60 seconds. Try the website button again.';
       if(action==='download_once')this.notification='One download allowed for 60 seconds. Saved files will not run automatically.';
     }catch(error){this.error=String(error);}
   }

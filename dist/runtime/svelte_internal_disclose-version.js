@@ -1,6 +1,7 @@
-import { P as PUBLIC_VERSION } from './version-Byl1KxFg.js';
+// ../../Documents/codemax/node_modules/svelte/src/version.js
+var PUBLIC_VERSION = "5";
 
-if (typeof window !== 'undefined') {
-	// @ts-expect-error
-	((window.__svelte ??= {}).v ??= new Set()).add(PUBLIC_VERSION);
+// ../../Documents/codemax/node_modules/svelte/src/internal/disclose-version.js
+if (typeof window !== "undefined") {
+  ((window.__svelte ??= {}).v ??= /* @__PURE__ */ new Set()).add(PUBLIC_VERSION);
 }

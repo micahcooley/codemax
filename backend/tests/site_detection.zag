@@ -1,0 +1,193 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../core/json.zag") as json
+@import("../providers/registry.zag") as registry
+@import("../detector/symbolic.zag") as symbolic
+@import("../security/validation.zag") as validation
+// Per-site admission matrix: signed-in chat surfaces (English and Chinese),
+// signed-out anonymous surfaces, a login wall, and an ordinary search page.
+// Each observation mirrors the page agent's control shape. Run natively with
+// the pinned toolchain; no live website is contacted.
+fn check(value: bool, label: []u8) void { if (!value) { _zag_eprintln(label); _zag_exit(1); } }
+fn observe(r: *registry.Registry, index: i32, raw: []u8) void {
+    let p: *registry.Provider = &r.*.items[index];
+    let d: json.Document = json.parse(raw);
+    check(d.ok != 0, "site fixture JSON");
+    check(symbolic.observe(p, &d, 0), "site observation accepted");
+    json.free(&d);
+}
+fn admitted(r: *registry.Registry, index: i32, models: i32, label: []u8) void {
+    let p: *registry.Provider = &r.*.items[index];
+    check(p.*.detected && p.*.state == 4, label);
+    check(p.*.prompt > 0 && p.*.send > 0 && p.*.response > 0 && p.*.new_chat > 0 && p.*.model_control > 0, label);
+    check(p.*.model_count >= models, label);
+}
+fn flash_only(r: *registry.Registry, index: i32) void {
+    // Anonymous catalogs must contain nothing but the free-tier model.
+    let p: *registry.Provider = &r.*.items[index];
+    check(p.*.model_count >= 1, "anon catalog non-empty");
+    let m: i32 = 0;
+    while (m < p.*.model_count) {
+        let lower: buf.Buffer = buf.make(192); validation.ascii_lower(buf.view(&p.*.models[m].value), &lower);
+        let ok: bool = buf.find(buf.view(&lower), "flash", 0) >= 0;
+        buf.free(&lower);
+        check(ok, "anon catalog flash-only");
+        m = m + 1;
+    }
+}
+fn main() i32 {
+    let r: registry.Registry = registry.make();
+    let chatgpt: i32 = registry.add(&r, "https://chatgpt.com", "https://chatgpt.com/", "ChatGPT");
+    observe(&r, chatgpt, "{\"origin\":\"https://chatgpt.com\",\"document_id\":\"site-chatgpt\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New chat\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Choose model\",\"visible\":true,\"current_value\":\"GPT-5\"},{\"id\":4,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"GPT-5\",\"visible\":true,\"menu_owner\":3,\"value\":\"gpt-5\"},{\"id\":5,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"GPT-5 mini\",\"visible\":true,\"menu_owner\":3,\"value\":\"gpt-5-mini\"},{\"id\":6,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Ask anything\",\"visible\":true,\"editable\":true},{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send message\",\"visible\":true},{\"id\":8,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Stop generating\",\"visible\":true},{\"id\":9,\"tag\":\"input\",\"role\":\"\",\"label\":\"Attach files\",\"visible\":true,\"file_input\":true}]}");
+    admitted(&r, chatgpt, 2, "chatgpt admitted");
+    let chatgpt_p: *registry.Provider = &r.items[chatgpt];
+    check(chatgpt_p.*.stop > 0 && chatgpt_p.*.attachment > 0, "chatgpt stop and attachment mapped");
+    // Plan change without navigation: the reopened menu restates the whole
+    // exposed catalog, so the vanished model stops showing as available.
+    observe(&r, chatgpt, "{\"origin\":\"https://chatgpt.com\",\"document_id\":\"site-chatgpt\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New chat\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Choose model\",\"visible\":true,\"current_value\":\"GPT-5\"},{\"id\":4,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"GPT-5\",\"visible\":true,\"menu_owner\":3,\"value\":\"gpt-5\"},{\"id\":6,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Ask anything\",\"visible\":true,\"editable\":true},{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send message\",\"visible\":true}]}");
+    let downgraded: bool = false; let kept: bool = false;
+    let dm: i32 = 0; while (dm < chatgpt_p.*.model_count) {
+        if (buf.eq(buf.view(&chatgpt_p.*.models[dm].value), "gpt-5-mini")) { downgraded = !chatgpt_p.*.models[dm].available; }
+        if (buf.eq(buf.view(&chatgpt_p.*.models[dm].value), "gpt-5")) { kept = chatgpt_p.*.models[dm].available; }
+        dm = dm + 1;
+    }
+    check(downgraded && kept, "downgraded model retired, kept model stays available");
+    let claude: i32 = registry.add(&r, "https://claude.ai", "https://claude.ai/", "Claude");
+    observe(&r, claude, "{\"origin\":\"https://claude.ai\",\"document_id\":\"site-claude\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New chat\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Model menu\",\"visible\":true,\"current_value\":\"Claude Sonnet 4.5\"},{\"id\":4,\"tag\":\"div\",\"role\":\"option\",\"label\":\"Claude Sonnet 4.5\",\"visible\":true,\"menu_owner\":3,\"value\":\"claude-sonnet-4-5\"},{\"id\":5,\"tag\":\"div\",\"role\":\"option\",\"label\":\"Claude Haiku 4.5\",\"visible\":true,\"menu_owner\":3,\"value\":\"claude-haiku-4-5\"},{\"id\":6,\"tag\":\"div\",\"role\":\"\",\"label\":\"Write your prompt to Claude\",\"visible\":true,\"editable\":true},{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send message\",\"visible\":true}]}");
+    admitted(&r, claude, 2, "claude admitted");
+    let gemini: i32 = registry.add(&r, "https://gemini.google.com", "https://gemini.google.com/", "Gemini");
+    observe(&r, gemini, "{\"origin\":\"https://gemini.google.com\",\"document_id\":\"site-gemini\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New chat\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Gemini\",\"visible\":true,\"current_value\":\"Gemini 2.5 Flash\"},{\"id\":4,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"2.5 Flash\",\"visible\":true,\"menu_owner\":3,\"value\":\"gemini-2.5-flash\"},{\"id\":5,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"2.5 Pro\",\"visible\":true,\"menu_owner\":3,\"value\":\"gemini-2.5-pro\"},{\"id\":6,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Ask Gemini\",\"visible\":true,\"editable\":true},{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send message\",\"visible\":true}]}");
+    admitted(&r, gemini, 2, "gemini admitted");
+    let grok: i32 = registry.add(&r, "https://grok.com", "https://grok.com/", "Grok");
+    observe(&r, grok, "{\"origin\":\"https://grok.com\",\"document_id\":\"site-grok\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New chat\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Model\",\"visible\":true,\"current_value\":\"Grok 4\"},{\"id\":4,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Grok 4\",\"visible\":true,\"menu_owner\":3,\"value\":\"grok-4\"},{\"id\":5,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Grok 4 Heavy\",\"visible\":true,\"menu_owner\":3,\"value\":\"grok-4-heavy\"},{\"id\":6,\"tag\":\"button\",\"role\":\"switch\",\"label\":\"Think\",\"visible\":true},{\"id\":7,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Ask Grok\",\"visible\":true,\"editable\":true},{\"id\":8,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send\",\"visible\":true}]}");
+    admitted(&r, grok, 2, "grok admitted");
+    let grok_p: *registry.Provider = &r.items[grok];
+    check(grok_p.*.reasoning_control > 0, "grok think switch mapped");
+    let qwen: i32 = registry.add(&r, "https://chat.qwen.ai", "https://chat.qwen.ai/", "Qwen");
+    observe(&r, qwen, "{\"origin\":\"https://chat.qwen.ai\",\"document_id\":\"site-qwen\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"新对话\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"模型\",\"visible\":true,\"current_value\":\"Qwen3-Max\"},{\"id\":4,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Qwen3-Max\",\"visible\":true,\"menu_owner\":3,\"value\":\"qwen3-max\"},{\"id\":5,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Qwen3-235B\",\"visible\":true,\"menu_owner\":3,\"value\":\"qwen3-235b\"},{\"id\":6,\"tag\":\"button\",\"role\":\"switch\",\"label\":\"深度思考\",\"visible\":true},{\"id\":7,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"输入你的问题\",\"visible\":true,\"editable\":true},{\"id\":8,\"tag\":\"button\",\"role\":\"button\",\"label\":\"发送\",\"visible\":true},{\"id\":9,\"tag\":\"button\",\"role\":\"button\",\"label\":\"停止\",\"visible\":true},{\"id\":10,\"tag\":\"input\",\"role\":\"\",\"label\":\"上传附件\",\"visible\":true,\"file_input\":true}]}");
+    admitted(&r, qwen, 2, "qwen admitted");
+    let qwen_p: *registry.Provider = &r.items[qwen];
+    check(qwen_p.*.reasoning_control > 0 && qwen_p.*.stop > 0 && qwen_p.*.attachment > 0, "qwen think switch, stop and attachment mapped");
+    let kimi: i32 = registry.add(&r, "https://kimi.moonshot.cn", "https://kimi.moonshot.cn/", "Kimi");
+    observe(&r, kimi, "{\"origin\":\"https://kimi.moonshot.cn\",\"document_id\":\"site-kimi\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"新对话\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"模型\",\"visible\":true},{\"id\":4,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Kimi K2\",\"visible\":true,\"menu_owner\":3,\"value\":\"k2\"},{\"id\":5,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Kimi K2 Thinking\",\"visible\":true,\"menu_owner\":3,\"value\":\"k2-thinking\"},{\"id\":6,\"tag\":\"button\",\"role\":\"switch\",\"label\":\"深度思考\",\"visible\":true},{\"id\":7,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"问问Kimi\",\"visible\":true,\"editable\":true},{\"id\":8,\"tag\":\"button\",\"role\":\"button\",\"label\":\"发送\",\"visible\":true}]}");
+    admitted(&r, kimi, 2, "kimi admitted through menu options");
+    let zai: i32 = registry.add(&r, "https://chat.z.ai", "https://chat.z.ai/", "Z.ai");
+    observe(&r, zai, "{\"origin\":\"https://chat.z.ai\",\"document_id\":\"site-zai\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New Chat\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Model\",\"visible\":true,\"current_value\":\"GLM-4.6\"},{\"id\":4,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"GLM-4.6\",\"visible\":true,\"menu_owner\":3,\"value\":\"glm-4.6\"},{\"id\":5,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"GLM-4.5\",\"visible\":true,\"menu_owner\":3,\"value\":\"glm-4.5\"},{\"id\":6,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Send a message\",\"visible\":true,\"editable\":true},{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send\",\"visible\":true}]}");
+    admitted(&r, zai, 2, "zai admitted");
+    let anon: i32 = registry.add(&r, "https://chat.z.ai", "https://chat.z.ai/", "Z.ai anon");
+    observe(&r, anon, "{\"origin\":\"https://chat.z.ai\",\"document_id\":\"site-anon\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New Chat\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Model\",\"visible\":true,\"current_value\":\"GLM-5.3-Flash\"},{\"id\":4,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"GLM-5.3-Flash\",\"visible\":true,\"menu_owner\":3,\"value\":\"glm-5.3-flash\"},{\"id\":5,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Send a message\",\"visible\":true,\"editable\":true},{\"id\":6,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send\",\"visible\":true}]}");
+    admitted(&r, anon, 1, "anonymous surface admitted without sign-in");
+    flash_only(&r, anon);
+    let stepfun: i32 = registry.add(&r, "https://chat.stepfun.com", "https://chat.stepfun.com/", "StepFun");
+    observe(&r, stepfun, "{\"origin\":\"https://chat.stepfun.com\",\"document_id\":\"site-stepfun\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"新对话\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"模型\",\"visible\":true,\"current_value\":\"Step 3.5 Flash\"},{\"id\":4,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Step 3.5 Flash\",\"visible\":true,\"menu_owner\":3,\"value\":\"step-3.5-flash\"},{\"id\":5,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Step 2\",\"visible\":true,\"menu_owner\":3,\"value\":\"step-2\"},{\"id\":6,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"想知道什么\",\"visible\":true,\"editable\":true},{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"发送\",\"visible\":true}]}");
+    admitted(&r, stepfun, 2, "stepfun admitted");
+    let deepseek: i32 = registry.add(&r, "https://chat.deepseek.com", "https://chat.deepseek.com/", "DeepSeek");
+    observe(&r, deepseek, "{\"origin\":\"https://chat.deepseek.com\",\"document_id\":\"site-deepseek\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"新的对话\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"div\",\"role\":\"log\",\"label\":\"\",\"visible\":true,\"assistant\":true},{\"id\":4,\"tag\":\"button\",\"role\":\"button\",\"label\":\"深度思考\",\"visible\":true},{\"id\":5,\"tag\":\"button\",\"role\":\"button\",\"label\":\"联网搜索\",\"visible\":true},{\"id\":6,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"给 DeepSeek 发送消息\",\"visible\":true,\"editable\":true},{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"发送\",\"visible\":true}]}");
+    let dp: *registry.Provider = &r.items[deepseek];
+    check(dp.*.prompt > 0 && dp.*.send > 0 && dp.*.new_chat > 0 && dp.*.reasoning_control > 0, "deepseek controls mapped");
+    // DeepSeek exposes no model selector: the fixed-model flow names the site
+    // model explicitly (user supplied, never discovered), then admits on the
+    // next observation once conversation evidence exists.
+    buf.copy(&dp.*.manual_model, "DeepSeek-V3");
+    observe(&r, deepseek, "{\"origin\":\"https://chat.deepseek.com\",\"document_id\":\"site-deepseek\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"新的对话\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"div\",\"role\":\"log\",\"label\":\"\",\"visible\":true,\"assistant\":true},{\"id\":4,\"tag\":\"button\",\"role\":\"button\",\"label\":\"深度思考\",\"visible\":true},{\"id\":5,\"tag\":\"button\",\"role\":\"button\",\"label\":\"联网搜索\",\"visible\":true},{\"id\":6,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"给 DeepSeek 发送消息\",\"visible\":true,\"editable\":true},{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"发送\",\"visible\":true}]}");
+    check(dp.*.detected && dp.*.state == 4 && dp.*.model_count == 1, "deepseek fixed-model admission");
+    let minimax: i32 = registry.add(&r, "https://agent.minimax.io", "https://agent.minimax.io/", "MiniMax");
+    observe(&r, minimax, "{\"origin\":\"https://agent.minimax.io\",\"document_id\":\"site-minimax\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New chat\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Model\",\"visible\":true,\"current_value\":\"MiniMax M2\"},{\"id\":4,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"MiniMax M2\",\"visible\":true,\"menu_owner\":3,\"value\":\"minimax-m2\"},{\"id\":5,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"MiniMax M2-her\",\"visible\":true,\"menu_owner\":3,\"value\":\"minimax-m2-her\"},{\"id\":6,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Ask MiniMax\",\"visible\":true,\"editable\":true},{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send message\",\"visible\":true}]}");
+    admitted(&r, minimax, 2, "minimax admitted");
+    let mistral: i32 = registry.add(&r, "https://chat.mistral.ai", "https://chat.mistral.ai/", "Mistral");
+    observe(&r, mistral, "{\"origin\":\"https://chat.mistral.ai\",\"document_id\":\"site-mistral\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New chat\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Model\",\"visible\":true,\"current_value\":\"Mistral Large\"},{\"id\":4,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Mistral Large\",\"visible\":true,\"menu_owner\":3,\"value\":\"mistral-large\"},{\"id\":5,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Mistral Medium\",\"visible\":true,\"menu_owner\":3,\"value\":\"mistral-medium\"},{\"id\":6,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Ask Mistral\",\"visible\":true,\"editable\":true},{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send message\",\"visible\":true}]}");
+    admitted(&r, mistral, 2, "mistral admitted");
+    let copilot: i32 = registry.add(&r, "https://copilot.microsoft.com", "https://copilot.microsoft.com/", "Copilot");
+    observe(&r, copilot, "{\"origin\":\"https://copilot.microsoft.com\",\"document_id\":\"site-copilot\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New chat\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Model\",\"visible\":true,\"current_value\":\"GPT-5\"},{\"id\":4,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"GPT-5\",\"visible\":true,\"menu_owner\":3,\"value\":\"gpt-5\"},{\"id\":5,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Think Deeper\",\"visible\":true,\"menu_owner\":3,\"value\":\"think-deeper\"},{\"id\":6,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Ask me anything\",\"visible\":true,\"editable\":true},{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send message\",\"visible\":true}]}");
+    // Case-only duplicates fold (GPT-5 + gpt-5 are one model); Think Deeper
+    // is reasoning, so a single model entry remains.
+    admitted(&r, copilot, 1, "copilot admitted");
+    // Mixed menu split: Think Deeper is reasoning, not a phantom model. It
+    // shares the model menu control so the harness shows one native
+    // reasoning toggle instead of confusing modes with models.
+    let cop_p: *registry.Provider = &r.items[copilot];
+    let ci: i32 = 0;
+    while (ci < cop_p.*.model_count) {
+        let cl: buf.Buffer = buf.make(192); validation.ascii_lower(buf.view(&cop_p.*.models[ci].value), &cl);
+        check(buf.find(buf.view(&cl), "think-deeper", 0) < 0, "copilot think-deeper not a model");
+        buf.free(&cl); ci = ci + 1;
+    }
+    check(buf.find(buf.view(&cop_p.*.reasoning_modes), "think-deeper", 0) >= 0, "copilot think-deeper is reasoning");
+    // Separate reasoning menu: Auto / Thinking / Fast are options for each
+    // model and must surface as the harness native reasoning toggle, never
+    // as phantom models. Lives in the second registry so the primary
+    // 16-provider admission matrix keeps its capacity.
+    let wall_registry_early: registry.Registry = registry.make();
+    let modessite: i32 = registry.add(&wall_registry_early, "https://modes.example", "https://modes.example/", "Modes");
+    observe(&wall_registry_early, modessite, "{\"origin\":\"https://modes.example\",\"document_id\":\"site-modes\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New chat\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Model\",\"visible\":true,\"current_value\":\"GLM-4.6\"},{\"id\":4,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"GLM-4.6\",\"visible\":true,\"menu_owner\":3,\"value\":\"glm-4.6\"},{\"id\":5,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"GLM-4.5\",\"visible\":true,\"menu_owner\":3,\"value\":\"glm-4.5\"},{\"id\":6,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Thinking mode\",\"visible\":true,\"current_value\":\"Auto\"},{\"id\":7,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Auto\",\"visible\":true,\"menu_owner\":6,\"value\":\"auto\"},{\"id\":8,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Thinking\",\"visible\":true,\"menu_owner\":6,\"value\":\"thinking\"},{\"id\":9,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Fast\",\"visible\":true,\"menu_owner\":6,\"value\":\"fast\"},{\"id\":10,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Send a message\",\"visible\":true,\"editable\":true},{\"id\":11,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send\",\"visible\":true}]}");
+    admitted(&wall_registry_early, modessite, 2, "modes site admitted");
+    let modes_p: *registry.Provider = &wall_registry_early.items[modessite];
+    check(modes_p.*.reasoning_control > 0 && modes_p.*.reasoning_control != modes_p.*.model_control, "modes reasoning control distinct");
+    let mi: i32 = 0;
+    while (mi < modes_p.*.model_count) {
+        let ml: buf.Buffer = buf.make(192); validation.ascii_lower(buf.view(&modes_p.*.models[mi].value), &ml);
+        check(!buf.eq(buf.view(&ml), "auto") && !buf.eq(buf.view(&ml), "thinking") && !buf.eq(buf.view(&ml), "fast"), "modes options not models");
+        buf.free(&ml); mi = mi + 1;
+    }
+    check(buf.find(buf.view(&modes_p.*.reasoning_modes), "auto", 0) >= 0, "modes auto is reasoning");
+    check(buf.find(buf.view(&modes_p.*.reasoning_modes), "thinking", 0) >= 0, "modes thinking is reasoning");
+    check(buf.find(buf.view(&modes_p.*.reasoning_modes), "fast", 0) >= 0, "modes fast is reasoning");
+    let mj: i32 = 0;
+    while (mj < modes_p.*.model_count) {
+        if (modes_p.*.models[mj].available) {
+            check(modes_p.*.models[mj].reasoning_observed, "modes reasoning shared per model");
+            check(buf.find(buf.view(&modes_p.*.models[mj].reasoning_modes), "thinking", 0) >= 0, "modes per-model reasoning");
+        }
+        mj = mj + 1;
+    }
+    let ghcopilot: i32 = registry.add(&r, "https://github.com", "https://github.com/copilot", "GitHub Copilot");
+    observe(&r, ghcopilot, "{\"origin\":\"https://github.com\",\"document_id\":\"site-ghcopilot\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New chat\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Model\",\"visible\":true,\"current_value\":\"GPT-5\"},{\"id\":4,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"GPT-5\",\"visible\":true,\"menu_owner\":3,\"value\":\"gpt-5\"},{\"id\":5,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Claude Sonnet 4.5\",\"visible\":true,\"menu_owner\":3,\"value\":\"claude-sonnet-4-5\"},{\"id\":6,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Ask Copilot\",\"visible\":true,\"editable\":true},{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send message\",\"visible\":true}]}");
+    admitted(&r, ghcopilot, 2, "github copilot admitted");
+    let perplexity: i32 = registry.add(&r, "https://perplexity.ai", "https://perplexity.ai/", "Perplexity");
+    observe(&r, perplexity, "{\"origin\":\"https://perplexity.ai\",\"document_id\":\"site-perplexity\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New Thread\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Model\",\"visible\":true,\"current_value\":\"Sonar\"},{\"id\":4,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Sonar\",\"visible\":true,\"menu_owner\":3,\"value\":\"sonar\"},{\"id\":5,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Claude Sonnet 4.5\",\"visible\":true,\"menu_owner\":3,\"value\":\"claude-sonnet-4-5\"},{\"id\":6,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Ask anything\",\"visible\":true,\"editable\":true},{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send message\",\"visible\":true}]}");
+    admitted(&r, perplexity, 2, "perplexity admitted");
+    let meta: i32 = registry.add(&r, "https://meta.ai", "https://meta.ai/", "Meta AI");
+    observe(&r, meta, "{\"origin\":\"https://meta.ai\",\"document_id\":\"site-meta\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New chat\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":6,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Ask Meta AI\",\"visible\":true,\"editable\":true},{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send message\",\"visible\":true}]}");
+    let mp: *registry.Provider = &r.items[meta];
+    check(mp.*.prompt > 0 && mp.*.send > 0 && mp.*.new_chat > 0 && !mp.*.detected, "meta ai maps controls without a model menu");
+    let wall_registry: registry.Registry = registry.make();
+    let wall: i32 = registry.add(&wall_registry, "https://claude.ai", "https://claude.ai/login", "Login wall");    observe(&wall_registry, wall, "{\"origin\":\"https://claude.ai\",\"document_id\":\"site-wall\",\"password_fields_present\":true,\"controls\":[{\"id\":1,\"tag\":\"main\",\"role\":\"main\",\"label\":\"Welcome\",\"visible\":true},{\"id\":2,\"tag\":\"input\",\"role\":\"\",\"label\":\"Email\",\"visible\":true,\"editable\":true},{\"id\":3,\"tag\":\"input\",\"role\":\"\",\"label\":\"密码\",\"visible\":true,\"editable\":true},{\"id\":4,\"tag\":\"button\",\"role\":\"button\",\"label\":\"登录\",\"visible\":true}]}");
+    let wall_p: *registry.Provider = &wall_registry.items[wall];
+    check(!wall_p.*.detected && wall_p.*.state == 2 && wall_p.*.model_count == 0, "signed-out login wall stays login-required");
+    let search: i32 = registry.add(&wall_registry, "https://search.example", "https://search.example/", "Search");
+    observe(&wall_registry, search, "{\"origin\":\"https://search.example\",\"document_id\":\"site-search\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"input\",\"role\":\"\",\"label\":\"搜索问题\",\"visible\":true,\"editable\":true},{\"id\":2,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Search\",\"visible\":true},{\"id\":3,\"tag\":\"main\",\"role\":\"main\",\"label\":\"Results\",\"visible\":true}]}");
+    let search_p: *registry.Provider = &wall_registry.items[search];
+    check(!search_p.*.detected && search_p.*.model_count == 0, "ordinary search page not admitted");
+    // Conversation lock: the model and reasoning controls turn off after the
+    // first exchange (Z.ai behavior). Mappings survive, the catalog freezes,
+    // and the lock flags surface for dispatch and display.
+    let locked: i32 = registry.add(&wall_registry, "https://chat.z.ai", "https://chat.z.ai/c/locked", "Z.ai locked");
+    observe(&wall_registry, locked, "{\"origin\":\"https://chat.z.ai\",\"document_id\":\"site-zai-locked\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New Chat\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"div\",\"role\":\"log\",\"label\":\"\",\"visible\":true,\"assistant\":true},{\"id\":4,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Model\",\"visible\":true,\"disabled\":true,\"locked\":true,\"current_value\":\"GLM-4.6\"},{\"id\":5,\"tag\":\"button\",\"role\":\"switch\",\"label\":\"Think\",\"visible\":true,\"disabled\":true,\"locked\":true},{\"id\":6,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Send a message\",\"visible\":true,\"editable\":true},{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send\",\"visible\":true}]}");
+    let lp: *registry.Provider = &wall_registry.items[locked];
+    check(lp.*.detected && lp.*.state == 4, "locked conversation stays admitted");
+    check(lp.*.model_locked && lp.*.reasoning_locked, "lock flags recorded");
+    check(lp.*.prompt > 0 && lp.*.send > 0, "locked mappings retained");
+    let snap: buf.Buffer = buf.make(1048576); registry.snapshot(&wall_registry, &snap);
+    check(buf.find(buf.view(&snap), "\"model_locked\":true", 0) >= 0, "snapshot carries model lock");
+    check(buf.find(buf.view(&snap), "\"reasoning_locked\":true", 0) >= 0, "snapshot carries reasoning lock");
+    buf.free(&snap);
+    // Duplicate folding: a short display value plus its affordance-laden menu
+    // option ("Set as default" + description) is one model, and case-only
+    // variants fold too. Humans see the short name; dispatch keeps the exact
+    // observed identity. A closed tab still names its models for provisioning.
+    let dupe: i32 = registry.add(&wall_registry, "https://dupe.example", "https://dupe.example/", "Dupe");
+    observe(&wall_registry, dupe, "{\"origin\":\"https://dupe.example\",\"document_id\":\"site-dupe\",\"password_fields_present\":false,\"controls\":[{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New chat\",\"visible\":true},{\"id\":1,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":2,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Ask anything\",\"visible\":true,\"editable\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send message\",\"visible\":true},{\"id\":4,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Model\",\"visible\":true,\"current_value\":\"Qwen3.8-Max\"},{\"id\":5,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Qwen3.8-MaxSet as defaultThe flagship of Qwen3.8.\",\"visible\":true,\"menu_owner\":4,\"value\":\"Qwen3.8-MaxSet as defaultThe flagship of Qwen3.8.\"},{\"id\":6,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"GPT-5\",\"visible\":true,\"menu_owner\":4,\"value\":\"gpt-5\"}]}");
+    let dupe_p: *registry.Provider = &wall_registry.items[dupe];
+    check(dupe_p.*.model_count == 2, "chrome and case duplicates fold to two models");
+    let snap2: buf.Buffer = buf.make(1048576); registry.snapshot(&wall_registry, &snap2);
+    check(buf.find(buf.view(&snap2), "\"display_name\":\"Qwen3.8-Max\"", 0) >= 0, "snapshot shows the short display name");
+    buf.free(&snap2);
+    observe(&wall_registry, dupe, "{\"origin\":\"https://dupe.example\",\"document_id\":\"site-dupe\",\"password_fields_present\":false,\"controls\":[{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New chat\",\"visible\":true},{\"id\":1,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":2,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Ask anything\",\"visible\":true,\"editable\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send message\",\"visible\":true},{\"id\":4,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Model\",\"visible\":true,\"current_value\":\"Qwen3.8-Max\"},{\"id\":5,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Qwen3.8-MaxSet as defaultThe flagship of Qwen3.8.\",\"visible\":true,\"menu_owner\":4,\"value\":\"Qwen3.8-MaxSet as defaultThe flagship of Qwen3.8.\"}]}");
+    check(registry.find_model(&wall_registry, "p4/gpt-5") < 0, "retired model leaves the live catalog");
+    check(registry.find_known(&wall_registry, "p4/gpt-5") >= 0, "retired model stays known for tab provisioning");
+    registry.free(&r);
+    registry.free(&wall_registry);
+    registry.free(&wall_registry_early);
+    _zag_println("native site admission matrix passed");
+    return 0;
+}

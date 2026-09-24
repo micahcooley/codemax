@@ -1,17 +1,32 @@
 /* Codemax Local Tools: an independent, native stdio MCP server.
 * The Zag backend owns task state, consent, routing and the tool-call policy.
 * This process implements bounded OS operations; it is not the app backend.
+* Builds on Linux (x86_64) and macOS (arm64/x86_64). Linux uses kernel
+* openat2/renameat2/prctl containment; macOS emulates it with a component-wise
+* fd-relative O_NOFOLLOW walk plus renameatx_np(RENAME_EXCL), and proves the
+* emulation with a startup probe. No unsafe fallback on either platform.
 * Copyright 2026 Codemax contributors. SPDX-License-Identifier: MIT
 */
+#ifndef __APPLE__
 #define _GNU_SOURCE
+#endif
 #include <json-c/json.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifndef __APPLE__
 #include <sys/syscall.h>
+#endif
 #include <sys/wait.h>
 #include <sys/resource.h>
+#ifndef __APPLE__
 #include <sys/prctl.h>
 #include <linux/openat2.h>
+#else
+#include <sys/random.h>
+#ifndef RENAME_EXCL
+#define RENAME_EXCL 0x4
+#endif
+#endif
 #include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
@@ -33,6 +48,7 @@
 #define MAX_OUTPUT 16000
 #define MAX_ENTRIES 512
 static int root_fd = -1;
+static dev_t root_dev;
 static bool writes_allowed, commands_allowed, legacy_initialized, legacy_pending;
 static char workspace[PATH_MAX];
 static volatile sig_atomic_t interrupted;
@@ -157,10 +173,18 @@ static bool random_name(char out[65]) {
     unsigned char d[24];
     size_t n=0;
     while(n<sizeof d) {
+#ifdef __APPLE__
+        if(getentropy(d+n,sizeof d-n)) {
+            if(errno==EINTR)continue;
+            return false;
+        }
+        n=sizeof d;
+#else
         ssize_t r=syscall(SYS_getrandom,d+n,sizeof d-n,0);
         if(r<0&&errno==EINTR)continue;
         if(r<=0)return false;
         n+=(size_t)r;
+#endif
     }
     memcpy(out,".codemax-",9);
     for(size_t i=0;i<sizeof d;i++)snprintf(out+9+i*2,3,"%02x",d[i]);
@@ -188,6 +212,106 @@ static bool valid_path(const char *p,bool dot) {
     }
     return true;
 }
+#ifdef __APPLE__
+/* macOS has no openat2(2). This emulates
+ * RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS|RESOLVE_NO_XDEV with a component-wise
+ * fd-relative walk: every directory component is opened O_NOFOLLOW and must
+ * be a real directory on the workspace device; the final component is opened
+ * O_NOFOLLOW and the resulting fd must live on the workspace device.
+ * Symlinks fail with ELOOP, cross-device escapes with EXDEV. Callers reject
+ * absolute paths and "." / ".." components via valid_path() first. */
+static int open_beneath(int base,const char *path,int flags,mode_t mode) {
+    char copy[PATH_MAX];
+    if(strlen(path)>=sizeof copy) {
+        errno=ENAMETOOLONG;
+        return -1;
+    }
+    strcpy(copy,path);
+    char *names[512];
+    size_t count=0;
+    for(char *p=copy;;) {
+        char *slash=strchr(p,'/');
+        if(slash)*slash=0;
+        if(!*p||count>=sizeof names/sizeof *names) {
+            errno=!*p?EINVAL:ENAMETOOLONG;
+            return -1;
+        }
+        names[count++]=p;
+        if(!slash)break;
+        p=slash+1;
+    }
+    /* Defense in depth: valid_path() already rejects dot segments for every
+     * tool path, but the emulation itself must never let ".." escape the
+     * workspace the way RESOLVE_BENEATH guarantees on Linux. "." is a no-op. */
+    size_t kept=0;
+    for(size_t i=0;i<count;i++) {
+        if(!strcmp(names[i],"..")) {
+            errno=EINVAL;
+            return -1;
+        }
+        if(strcmp(names[i],"."))names[kept++]=names[i];
+    }
+    count=kept;
+    int cur=fcntl(base,F_DUPFD_CLOEXEC,3);
+    if(cur<0)return -1;
+    if(!count)return cur;
+    for(size_t i=0;i+1<count;i++) {
+        int next=openat(cur,names[i],O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
+        if(next<0) {
+            int e=errno;
+            close(cur);
+            errno=e;
+            return -1;
+        }
+        struct stat st;
+        if(fstat(next,&st)) {
+            int e=errno;
+            close(next);
+            close(cur);
+            errno=e;
+            return -1;
+        }
+        if(!S_ISDIR(st.st_mode)||st.st_dev!=root_dev) {
+            bool xdev=st.st_dev!=root_dev;
+            close(next);
+            close(cur);
+            errno=xdev?EXDEV:ENOTDIR;
+            return -1;
+        }
+        close(cur);
+        cur=next;
+    }
+    int fd;
+    do {
+        fd=openat(cur,names[count-1],flags|O_NOFOLLOW|O_CLOEXEC,mode);
+    }
+    while(fd<0&&errno==EINTR);
+    int e=errno;
+    close(cur);
+    if(fd<0) {
+        errno=e;
+        return -1;
+    }
+    struct stat st;
+    if(fstat(fd,&st)) {
+        e=errno;
+        close(fd);
+        errno=e;
+        return -1;
+    }
+    if(st.st_dev!=root_dev) {
+        close(fd);
+        errno=EXDEV;
+        return -1;
+    }
+    if((flags&O_DIRECTORY)&&!S_ISDIR(st.st_mode)) {
+        close(fd);
+        errno=ENOTDIR;
+        return -1;
+    }
+    return fd;
+}
+#else
 static int open_beneath(int base,const char *path,int flags,mode_t mode) {
     struct open_how how= {
         .flags=(uint64_t)(flags|O_CLOEXEC|O_NOFOLLOW),.mode=mode,.resolve=RESOLVE_BENEATH|RESOLVE_NO_MAGICLINKS|RESOLVE_NO_SYMLINKS|RESOLVE_NO_XDEV
@@ -199,6 +323,7 @@ static int open_beneath(int base,const char *path,int flags,mode_t mode) {
     while(fd<0&&errno==EINTR);
     return fd;
 }
+#endif
 static int open_parent(const char *path,char leaf[NAME_MAX+1]) {
     if(!valid_path(path,false)) {
         errno=EPERM;
@@ -221,6 +346,15 @@ static int open_parent(const char *path,char leaf[NAME_MAX+1]) {
 static bool regular_private(int fd,struct stat *st) {
     return !fstat(fd,st)&&S_ISREG(st->st_mode)&&st->st_nlink==1&&st->st_size>=0&&st->st_size<=MAX_FILE;
 }
+static bool stat_unchanged(const struct stat *a,const struct stat *b) {
+#ifdef __APPLE__
+    return a->st_ctimespec.tv_sec==b->st_ctimespec.tv_sec&&a->st_ctimespec.tv_nsec==b->st_ctimespec.tv_nsec&&
+        a->st_mtimespec.tv_sec==b->st_mtimespec.tv_sec&&a->st_mtimespec.tv_nsec==b->st_mtimespec.tv_nsec;
+#else
+    return a->st_ctim.tv_sec==b->st_ctim.tv_sec&&a->st_ctim.tv_nsec==b->st_ctim.tv_nsec&&
+        a->st_mtim.tv_sec==b->st_mtim.tv_sec&&a->st_mtim.tv_nsec==b->st_mtim.tv_nsec;
+#endif
+}
 static unsigned char *read_all(int fd,size_t *length) {
     struct stat before,after;
     if(!regular_private(fd,&before)) {
@@ -241,7 +375,7 @@ static unsigned char *read_all(int fd,size_t *length) {
         }
         n+=(size_t)r;
     }
-    if(fstat(fd,&after)||before.st_dev!=after.st_dev||before.st_ino!=after.st_ino||before.st_size!=after.st_size||after.st_nlink!=1||before.st_ctim.tv_sec!=after.st_ctim.tv_sec||before.st_ctim.tv_nsec!=after.st_ctim.tv_nsec||before.st_mtim.tv_sec!=after.st_mtim.tv_sec||before.st_mtim.tv_nsec!=after.st_mtim.tv_nsec) {
+    if(fstat(fd,&after)||before.st_dev!=after.st_dev||before.st_ino!=after.st_ino||before.st_size!=after.st_size||after.st_nlink!=1||!stat_unchanged(&before,&after)) {
         free(b);
         errno=ESTALE;
         return NULL;
@@ -292,6 +426,23 @@ static bool expected(J *args,const unsigned char *data,size_t n) {
 static bool same_inode(int parent,const char *leaf,int fd) {
     struct stat a,b;
     return !fstat(fd,&a)&&!fstatat(parent,leaf,&b,AT_SYMLINK_NOFOLLOW)&&a.st_dev==b.st_dev&&a.st_ino==b.st_ino&&a.st_nlink==1&&S_ISREG(b.st_mode);
+}
+/* Atomic rename with optional no-overwrite. Linux uses renameat2;
+ * macOS uses renameatx_np with RENAME_EXCL. */
+static int rename_noreplace(int oldfd,const char *oldpath,int newfd,const char *newpath,bool noreplace) {
+    int r;
+#ifdef __APPLE__
+    do {
+        r=renameatx_np(oldfd,oldpath,newfd,newpath,noreplace?RENAME_EXCL:0);
+    }
+    while(r<0&&errno==EINTR);
+#else
+    do {
+        r=(int)syscall(SYS_renameat2,oldfd,oldpath,newfd,newpath,noreplace?RENAME_NOREPLACE:0);
+    }
+    while(r<0&&errno==EINTR);
+#endif
+    return r;
 }
 static J *read_file(J *args) {
     const char *p=text(args,"path");
@@ -386,7 +537,7 @@ static J *write_bytes(J *args,const unsigned char *bytes,size_t n,bool edit) {
     if(ok && fsync(fd))ok=false;
     if(close(fd))ok=false;
     if(ok&&exists)ok=same_inode(parent,leaf,current);
-    if(ok)ok=syscall(SYS_renameat2,parent,temp,parent,leaf,exists?0:RENAME_NOREPLACE)==0;
+    if(ok)ok=rename_noreplace(parent,temp,parent,leaf,!exists)==0;
     if(exists)close(current);
     if(!ok) {
         unlinkat(parent,temp,0);
@@ -508,7 +659,7 @@ static J *delete_file(J *args) {
     }
     char name[65];
     ok=random_name(name);
-    if(ok)ok=syscall(SYS_renameat2,p,leaf,trash,name,RENAME_NOREPLACE)==0;
+    if(ok)ok=rename_noreplace(p,leaf,trash,name,true)==0;
     close(fd);
     bool synced=ok&&fsync(p)==0&&fsync(trash)==0;
     close(p);
@@ -541,7 +692,7 @@ static J *move_file(J *args) {
         close(b);
         return failure("REVISION_CONFLICT");
     }
-    ok=syscall(SYS_renameat2,a,from,b,to,RENAME_NOREPLACE)==0;
+    ok=rename_noreplace(a,from,b,to,true)==0;
     close(fd);
     bool synced=ok&&fsync(a)==0&&fsync(b)==0;
     const char *code=io_code();
@@ -675,8 +826,19 @@ static J *run_command(J *args) {
     const char *command=text(args,"command");
     int64_t timeout=number(args,"timeout_ms",30000);
     if(!command||!*command||strlen(command)>8192||timeout<100||timeout>120000)return failure("COMMAND_LIMIT_OR_INVALID");
-    int pipes[2];
+    int pipes[2]= {-1,-1};
+#ifdef __APPLE__
+    if(!pipe(pipes)) {
+        if(fcntl(pipes[0],F_SETFD,FD_CLOEXEC)||fcntl(pipes[1],F_SETFD,FD_CLOEXEC)) {
+            close(pipes[0]);
+            close(pipes[1]);
+            pipes[0]=-1;
+        }
+    }
+    if(pipes[0]<0)return failure("PIPE_FAILED");
+#else
     if(pipe2(pipes,O_CLOEXEC))return failure("PIPE_FAILED");
+#endif
     pid_t child=fork();
     if(child<0) {
         close(pipes[0]);
@@ -685,7 +847,13 @@ static J *run_command(J *args) {
     }
     if(child==0) {
         setpgid(0,0);
+#ifdef __APPLE__
+        /* No PR_SET_PDEATHSIG on macOS. While this server is alive the child
+         * process group is killed on timeout, cancellation and interrupt;
+         * only a dead server can orphan a child here. */
+#else
         prctl(PR_SET_PDEATHSIG,SIGKILL);
+#endif
         if(getppid()==1)_exit(126);
         if(fchdir(root_fd))_exit(126);
         int zero=open("/dev/null",O_RDONLY);
@@ -702,8 +870,18 @@ static J *run_command(J *args) {
             0,0
         };
         if(setrlimit(RLIMIT_CPU,&cpu)||setrlimit(RLIMIT_AS,&mem)||setrlimit(RLIMIT_NOFILE,&fds)||setrlimit(RLIMIT_FSIZE,&file)||setrlimit(RLIMIT_CORE,&core))_exit(126);
+#ifdef __APPLE__
+        /* No PR_SET_NO_NEW_PRIVS on macOS; the child inherits the user's own
+         * credentials and this server never installs privileged helpers. */
+        {
+            long open_max=sysconf(_SC_OPEN_MAX);
+            if(open_max<0||open_max>4096)open_max=4096;
+            for(int fd=3;fd<open_max;fd++)close(fd);
+        }
+#else
         if(prctl(PR_SET_NO_NEW_PRIVS,1,0,0,0))_exit(126);
         if(syscall(SYS_close_range,3,UINT_MAX,0))_exit(126);
+#endif
         char *argv[]= {
             "sh","-c",(char*)command,NULL
         };
@@ -1175,13 +1353,52 @@ int main(int argc,char **argv) {
         if(root_fd>=0)close(root_fd);
         return 77;
     }
+    root_dev=st.st_dev;
     int probe=open_beneath(root_fd,".",O_RDONLY|O_DIRECTORY,0);
     if(probe<0) {
+#ifdef __APPLE__
+        fputs("macOS path-containment probe failed; no unsafe fallback.\n",stderr);
+#else
         fputs("Kernel openat2 containment is required; no unsafe fallback.\n",stderr);
+#endif
         close(root_fd);
         return 77;
     }
     close(probe);
+#ifdef __APPLE__
+    /* openat2 is emulated on macOS: prove the emulation rejects a symlink
+     * escape and that RENAME_EXCL refuses to overwrite. */
+    {
+        bool containment_ok=false;
+        unlinkat(root_fd,".codemax-probe-link",0);
+        if(symlinkat("/",root_fd,".codemax-probe-link")==0) {
+            int bad=open_beneath(root_fd,".codemax-probe-link",O_RDONLY|O_NONBLOCK,0);
+            if(bad<0)containment_ok=true;
+            else close(bad);
+            unlinkat(root_fd,".codemax-probe-link",0);
+        }
+        if(containment_ok) {
+            int pa=open_beneath(root_fd,".codemax-probe-a",O_WRONLY|O_CREAT|O_EXCL|O_CLOEXEC,0600);
+            int pb=open_beneath(root_fd,".codemax-probe-b",O_WRONLY|O_CREAT|O_EXCL|O_CLOEXEC,0600);
+            if(pa>=0)close(pa);
+            if(pb>=0)close(pb);
+            if(pa>=0&&pb>=0) {
+                if(rename_noreplace(root_fd,".codemax-probe-a",root_fd,".codemax-probe-b",true)<0&&errno==EEXIST) {
+                    /* expected: refused to overwrite */
+                }
+                else containment_ok=false;
+            }
+            else containment_ok=false;
+            unlinkat(root_fd,".codemax-probe-a",0);
+            unlinkat(root_fd,".codemax-probe-b",0);
+        }
+        if(!containment_ok) {
+            fputs("macOS path-containment probe failed; no unsafe fallback.\n",stderr);
+            close(root_fd);
+            return 77;
+        }
+    }
+#endif
     umask(0077);
     struct sigaction sa= {
         .sa_handler=on_signal

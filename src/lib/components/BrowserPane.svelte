@@ -8,7 +8,13 @@
   let element:HTMLDivElement;let mounted=$state(false);let frame=0;let disposed=false;
   function measure(){cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{
     if(disposed||!element)return;const r=element.getBoundingClientRect();
-    void bridge.position({provider_id:provider.id,x:r.x,y:r.y,width:r.width,height:r.height,
+    // Snap to the device-pixel grid so Retina (DPR 2) live-resizes don't spam
+    // the native host with sub-pixel rects. Every measurement is sent: popups
+    // and route changes also hide the surface out-of-band (hideProviders),
+    // so skipping "unchanged" rects here can stick on a stale send. The
+    // native host owns no-op suppression (it tracks placed/shown per view).
+    const dpr=window.devicePixelRatio||1;const snap=(v:number)=>Math.round(v*dpr)/dpr;
+    void bridge.position({provider_id:provider.id,x:snap(r.x),y:snap(r.y),width:snap(r.width),height:snap(r.height),
       visible:app.route==='browser'&&app.popup===null&&app.ready&&r.width>1&&r.height>1})
       .catch(error=>{app.error=String(error);});
   });}

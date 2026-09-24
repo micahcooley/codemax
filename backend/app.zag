@@ -153,7 +153,24 @@ fn begin_generation(a: *App, index: i32, protocol: i32) void {
             log_event(a, a.*.providers.items[alternate / 32].id, "WARN", "routing.fallback", "Explicit fallback selected before request dispatch");
         }
     }
-    if (model < 0) { http_error(c, 404, "MODEL_UNAVAILABLE"); return; }
+    if (model < 0) {
+        // Lazy tab provisioning: a known model on a closed website still
+        // routes. The automation opens the website itself and the parked
+        // client resumes with full fresh validation once observations arrive.
+        // A closed tab never reports, so the park cannot loop: resume only
+        // runs the normal path, which needs an open tab to proceed.
+        let known: i32 = registry.find_known(&a.*.providers, buf.view(&r.*.model));
+        if (known >= 0 && !a.*.providers.items[known / 32].open_tab) {
+            let pp: *registry.Provider = &a.*.providers.items[known / 32];
+            host_event(a, "browser.open", pp);
+            c.*.provider = known / 32; c.*.model = known % 32; c.*.session = 0 - 1;
+            c.*.phase = 4; c.*.deadline = _zag_clock_monotonic_ms() + 45000; c.*.generation_limit = _zag_clock_monotonic_ms() + 3600000;
+            pp.*.active_request = index;
+            log_event(a, pp.*.id, "INFO", "request.provisioning", buf.view(&r.*.model));
+            a.*.snapshot_pending = true; return;
+        }
+        http_error(c, 404, "MODEL_UNAVAILABLE"); return;
+    }
     let provider_index: i32 = model / 32; let p: *registry.Provider = &a.*.providers.items[provider_index];
     if (p.*.quota != 0) { http_error(c, 429, "PROVIDER_RATE_LIMITED"); return; }
     if (p.*.state == 2) { http_error(c, 401, "AUTH_REQUIRED"); return; }
@@ -179,6 +196,12 @@ fn begin_generation(a: *App, index: i32, protocol: i32) void {
     }
     let item: *sessions.Session = &a.*.sessions.items[session];
     if (item.*.provider_id != p.*.id || (!is_new && p.*.session != session)) { if (is_new) { sessions.discard_unstarted(&a.*.sessions, session); } http_error(c, 409, "PROVIDER_CONVERSATION_LOST"); return; }
+    // A site-locked conversation keeps its model and reasoning: switching
+    // either mid-conversation cannot reach the page, so refuse explicitly
+    // instead of failing at the disabled control. Fresh conversations are
+    // unaffected; new chats unlock the website controls again.
+    if (!is_new && p.*.model_locked && !buf.eq(buf.view(&item.*.model), buf.view(&r.*.model))) { http_error(c, 409, "MODEL_LOCKED"); return; }
+    if (!is_new && p.*.reasoning_locked && r.*.reasoning.len > 0) { http_error(c, 422, "REASONING_LOCKED"); return; }
     let offset: i32 = sessions.prepare(item, r);
     if (offset < 0) { if (is_new) { sessions.discard_unstarted(&a.*.sessions, session); } http_error(c, 409, "SESSION_HISTORY_CONFLICT"); return; }
     buf.copy(&r.*.session_hint, buf.view(&item.*.id));
@@ -187,13 +210,23 @@ fn begin_generation(a: *App, index: i32, protocol: i32) void {
     if (r.*.reasoning.len > 0 && p.*.reasoning_control <= 0) { if (is_new) { sessions.discard_unstarted(&a.*.sessions, session); } http_error(c, 422, "REASONING_UNAVAILABLE"); return; }
     if (r.*.pending_files.len > 2 && p.*.attachment <= 0) { if (is_new) { sessions.discard_unstarted(&a.*.sessions, session); } http_error(c, 422, "ATTACHMENT_CONTROL_REQUIRED"); return; }
     c.*.provider = provider_index; c.*.model = model % 32; c.*.session = session;
+    // High-watermark tripwire: warn once per session at 75% of a known
+    // budget so long tasks compact or restart before the hard refusal below.
+    // Unknown budgets cannot trip it; the estimate itself stays conservative.
+    if (!item.*.warned) {
+        let budget: i64 = registry.model_context(p, c.*.model);
+        if (context.watermark(item.*.estimated_used, budget)) {
+            item.*.warned = true; a.*.dirty = true; a.*.snapshot_pending = true;
+            log_event(a, p.*.id, "WARN", "context.high_watermark", "Context use passed 75% of the known budget; start a new session before requests are refused at the limit.");
+        }
+    }
     tools.free(&c.*.parser); c.*.parser = tools.make(buf.view(&r.*.nonce), buf.view(&r.*.tool_names), r.*.has_tools);
     buf.copy(&c.*.calls, "["); buf.copy(&c.*.segments, "["); c.*.phase = 2; c.*.deadline = _zag_clock_monotonic_ms() + 600000;c.*.generation_limit=_zag_clock_monotonic_ms()+3600000;
     p.*.active_request = index; p.*.session = session; item.*.status = 1;
     p.*.preparing = is_new; p.*.prepared = false;
     let dispatched: bool = false;
     if (is_new) { dispatched = actions.new_chat(p, buf.view(&r.*.id), &a.*.ipc_out); }
-    else { dispatched = actions.generate(p, c.*.model, buf.view(&r.*.id), buf.view(&r.*.prompt), buf.view(&r.*.reasoning), buf.view(&r.*.pending_files), false, &a.*.ipc_out); }
+    else { dispatched = actions.generate(p, c.*.model, buf.view(&r.*.id), buf.view(&r.*.prompt), buf.view(&r.*.reasoning), buf.view(&r.*.pending_files), false, "", &a.*.ipc_out); }
     if (!dispatched) { cancel(a, index, "ACTION_DENIED", 409); return; }
     buf.copy(&item.*.url, buf.view(&p.*.current_url));
     if (item.*.title.len == 0) { buf.copy(&item.*.title, "Session "); buf.integer(&item.*.title, (session + 1) as i64); }
@@ -302,7 +335,31 @@ fn observe(a: *App, provider_id: i32, d: *json.Document, event: i32) void {
             let sd: json.Document = json.parse(buf.view(&safe));
             let was_detected: bool = p.*.detected;
             if (symbolic.observe(p, &sd, 0)) {
-                actions.investigate(p, &a.*.ipc_out);
+                let parked: bool = false; let pw: i32 = 0;
+                while (pw < 32) {
+                    if (a.*.clients[pw].fd >= 0 && a.*.clients[pw].phase == 4 && a.*.clients[pw].provider == provider_index) { parked = true; }
+                    pw = pw + 1;
+                }
+                actions.investigate(p, &a.*.ipc_out, parked);
+                // Provisioned generations resume with full fresh validation
+                // once the opened website reports. Resume fires only into a
+                // live catalog entry: while the model menu is still closed the
+                // client stays parked across menu-inspection rounds instead of
+                // dying on the first observation, up to the provision deadline.
+                if (p.*.open_tab && !p.*.browser_busy && p.*.prompt > 0 && p.*.send > 0 && p.*.response > 0) {
+                    let w: i32 = 0;
+                    while (w < 32) {
+                        if (a.*.clients[w].fd >= 0 && a.*.clients[w].phase == 4 && a.*.clients[w].provider == provider_index &&
+                            (p.*.active_request < 0 || p.*.active_request == w)) {
+                            let want: buf.Buffer = buf.make(256); buf.copy(&want, buf.view(&a.*.clients[w].request.model));
+                            let proto: i32 = a.*.clients[w].request.protocol;
+                            let ready: bool = registry.find_model(&a.*.providers, buf.view(&want)) >= 0;
+                            buf.free(&want);
+                            if (ready) { a.*.clients[w].phase = 0; begin_generation(a, w, proto); }
+                        }
+                        w = w + 1;
+                    }
+                }
                 if (!p.*.scan_enabled || p.*.dismissed) {
                     buf.add(&a.*.ipc_out,"{\"type\":\"action\",\"provider_id\":");buf.integer(&a.*.ipc_out,p.*.id as i64);
                     buf.add(&a.*.ipc_out,",\"action\":{\"type\":\"discovery_policy\",\"document_id\":");buf.json(&a.*.ipc_out,buf.view(&p.*.document));buf.add(&a.*.ipc_out,",\"enabled\":false}}\n");
@@ -311,7 +368,12 @@ fn observe(a: *App, provider_id: i32, d: *json.Document, event: i32) void {
                 if (p.*.preparing && p.*.prepared && p.*.active_request >= 0 && p.*.state == 4) {
                     let index: i32 = p.*.active_request; let c: *connection.Client = &a.*.clients[index];
                     p.*.preparing = false; p.*.prepared = false;
-                    if (!actions.generate(p, c.*.model, buf.view(&c.*.request.id), buf.view(&c.*.request.prompt), buf.view(&c.*.request.reasoning), buf.view(&c.*.request.pending_files), false, &a.*.ipc_out)) { cancel(a, index, "ACTION_DENIED", 409); }
+                    // Temporary chats apply only to a fresh website conversation
+                    // (first turn) and only when the user enabled the preference.
+                    // Anything else leaves the website's own toggle alone.
+                    let ephemeral: []u8 = "";
+                    if (a.*.settings.ephemeral_chats && c.*.session >= 0 && a.*.sessions.items[c.*.session].turns == 0) { ephemeral = actions.ephemeral_mode(p, true); }
+                    if (!actions.generate(p, c.*.model, buf.view(&c.*.request.id), buf.view(&c.*.request.prompt), buf.view(&c.*.request.reasoning), buf.view(&c.*.request.pending_files), false, ephemeral, &a.*.ipc_out)) { cancel(a, index, "ACTION_DENIED", 409); }
                 }
                 if (p.*.state == 4 && p.*.session >= 0 && a.*.sessions.items[p.*.session].status == 5 &&
                     buf.eq(buf.view(&p.*.current_url), buf.view(&a.*.sessions.items[p.*.session].url))) { a.*.sessions.items[p.*.session].status = 0; a.*.dirty = true; }
@@ -706,6 +768,20 @@ fn ipc(a: *App, frame: []u8) void {
 }
 fn read_client(a: *App, index: i32) void {
     let c: *connection.Client = &a.*.clients[index];
+    // Parked for tab provisioning: the client sent its whole request already.
+    // A disconnect unblocks the provider; anything else is pipelining.
+    // Nothing here cancels: nothing has dispatched yet.
+    if (c.*.phase == 4) {
+        let probe: buf.Buffer = buf.make(1); let rc: i64 = net.recv(c.*.fd, probe.data, 1); buf.free(&probe);
+        if (rc == 0 || (rc < 0 && !net.would_block(rc))) {
+            if (c.*.provider >= 0) { a.*.providers.items[c.*.provider].active_request = 0 - 1; }
+            release(a, index);
+        } else if (rc > 0) {
+            if (c.*.provider >= 0) { a.*.providers.items[c.*.provider].active_request = 0 - 1; }
+            http_error(c, 400, "PIPELINING_DENIED");
+        }
+        return;
+    }
     if (c.*.phase >= 2) {
         let byte: buf.Buffer = buf.make(1); let rc: i64 = net.recv(c.*.fd, byte.data, 1); buf.free(&byte);
         if (rc == 0 || (rc < 0 && !net.would_block(rc))) { release(a, index); }
@@ -793,20 +869,22 @@ fn drive_mcp(a: *App) void {
         let slot: i32=0;while (slot<32 && a.*.clients[slot].fd>=0) { slot=slot+1; }
         if (slot==32) { mcp_run.terminal(&a.*.mcp_run,6,"CLIENT_LIMIT"); }
         else {
-            let pair: *i32=_zag_malloc(8) as *i32;let rc: i64=_zag_raw_syscall(53,1,1 | 2048 | 524288,0,pair as i64,0,0);
-            if (rc!=0) { mcp_run.terminal(&a.*.mcp_run,6,"PRIVATE_CLIENT_TRANSPORT_FAILED"); }
+            // Loopback TCP pair: socketpair(2) cannot reach Darwin, and both
+            // ends return nonblocking exactly like the old pair.
+            let pair: net.Address = net.local_pair();
+            if (pair.low as i64<0) { mcp_run.terminal(&a.*.mcp_run,6,"PRIVATE_CLIENT_TRANSPORT_FAILED"); }
             else {
-                a.*.mcp_run.fd=pair[0] as i64;
-                if (!mcp_run.request(&a.*.mcp_run,buf.view(&a.*.key),a.*.port)) { net.close(pair[1] as i64);if (a.*.mcp_run.state!=8) { mcp_run.terminal(&a.*.mcp_run,6,"MCP_REQUEST_LIMIT"); } }
-                else { a.*.clients[slot]=connection.make(pair[1] as i64); }
-            }_zag_free(pair as *i8);
+                a.*.mcp_run.fd=pair.low as i64;
+                if (!mcp_run.request(&a.*.mcp_run,buf.view(&a.*.key),a.*.port)) { net.close(pair.high as i64);if (a.*.mcp_run.state!=8) { mcp_run.terminal(&a.*.mcp_run,6,"MCP_REQUEST_LIMIT"); } }
+                else { a.*.clients[slot]=connection.make(pair.high as i64); }
+            }
         }
     }
     if (a.*.mcp.changed || a.*.mcp_run.changed) { a.*.snapshot_pending=true;a.*.mcp.changed=false;a.*.mcp_run.changed=false; }
 }
 
 fn run(a: *App) void {
-    let entries: *u64 = _zag_malloc(36 * 8) as *u64;
+    let i: i32 = 0;
     while (a.*.running) {
         pump_ipc(a); drive_mcp(a); let now: i64 = _zag_clock_monotonic_ms(); suspend_idle(a, now);
         if (a.*.dirty) {
@@ -814,7 +892,11 @@ fn run(a: *App) void {
             a.*.dirty = false;
         }
         if (a.*.persistence_failed || a.*.ipc_out.ok == 0 || a.*.ipc_in.ok == 0) { _zag_eprintln("BOUNDED_STATE_OR_IPC_FAILURE"); a.*.running = false; break; }
-        if (a.*.snapshot_pending && now - a.*.last_snapshot >= 200) {
+        // Snapshots are idempotent state syncs: while the host pipe is deeply
+        // backed up, skip (do not drop the pending flag) instead of flooding
+        // it toward a fatal HOST_BACKPRESSURE exit that would also kill live
+        // client streams. Targeted host actions bypass this coalescing.
+        if (a.*.snapshot_pending && now - a.*.last_snapshot >= 200 && a.*.ipc_out.len < 1048576) {
             let state: buf.Buffer = buf.make(1048576); snapshot(a, &state);
             if (state.ok != 0) { buf.add(&a.*.ipc_out, "{\"type\":\"event\",\"name\":\"snapshot\",\"data\":"); buf.add(&a.*.ipc_out, buf.view(&state)); buf.add(&a.*.ipc_out, "}\n"); }
             else { a.*.running = false; }
@@ -822,79 +904,91 @@ fn run(a: *App) void {
         }
         flush_ipc(a);
         if (a.*.ipc_out.len > 0 && now - a.*.last_ipc_write > 5000) { _zag_eprintln("HOST_BACKPRESSURE"); a.*.running = false; break; }
-        // No active work: block in poll indefinitely. Pending state and live
+        // No active work: sleep in bounded quanta. Pending state and live
         // requests add only bounded deadline/heartbeat wake-ups, not UI polling.
         let timeout: i32 = 0 - 1;
         if (a.*.settings.idle_minutes > 0 && a.*.providers.count > 0) { timeout = 30000; }
         if (a.*.snapshot_pending) { timeout = 200; }
         if (buf.find(buf.view(&a.*.ipc_in), "\n", 0) >= 0) { timeout = 0; }
         if (a.*.ipc_out.len > 0) { timeout = 1000; }
-        entries[0] = net.poll_entry(0, 1); entries[1] = net.poll_entry(a.*.listener, 1);
-        if (a.*.ipc_out.len > 0) { entries[2] = net.poll_entry(1, 4); } else { entries[2] = net.poll_entry(0 - 1, 0); }
-        let i: i32 = 0;
-        while (i < 32) {
-            let c: *connection.Client = &a.*.clients[i];
-            if (c.*.fd >= 0) {
-                if (timeout < 0 || timeout > 1000) { timeout = 1000; }
-                let events: u64 = 1; if (c.*.output.len > 0) { events = events | 4; }
-                entries[i + 3] = net.poll_entry(c.*.fd, events);
-            } else { entries[i + 3] = net.poll_entry(0 - 1, 0); }
-            i = i + 1;
+        // No active work: sleep in bounded quanta. Every descriptor is
+        // nonblocking, so readiness is probed with cheap syscalls instead of
+        // the old 36-entry poll vector, which cannot reach Darwin (only a
+        // single pollfd is admitted there).
+        let quantum: i32 = 25;
+        if (timeout >= 0 && timeout < quantum) { quantum = timeout; }
+        if (timeout != 0) {
+            if (quantum < 1) { quantum = 1; }
+            let one: u64 = net.poll_entry(0, 1);
+            let slept: i64 = net.poll(&one, 1, quantum);
+            if (slept < 0 && slept != 0 - 4) { a.*.running = false; break; }
         }
-        let mcp_events: u64=1;if (a.*.mcp_run.offset<a.*.mcp_run.outgoing.len) { mcp_events=mcp_events | 4; }
-        entries[35]=net.poll_entry(a.*.mcp_run.fd,mcp_events);
-        if ((mcp_run.active(&a.*.mcp_run) || mcp.busy(&a.*.mcp)) && (timeout<0 || timeout>1000)) { timeout=1000; }
-        let ready: i64 = net.poll(entries, 36, timeout);
-        if (ready < 0 && ready != 0 - 4) { a.*.running = false; break; }
-        let input_events: i32 = net.poll_revents(entries[0]);
-        if ((input_events & 1) != 0) {
-            let space: i32 = a.*.ipc_in.cap - a.*.ipc_in.len;
-            if (space <= 0) { a.*.running = false; break; }
-            if (space > 65536) { space = 65536; }
-            let got: i64 = _zag_raw_syscall(0, 0, (a.*.ipc_in.data as i64) + a.*.ipc_in.len as i64, space as i64, 0, 0, 0);
-            if (got > 0) { a.*.ipc_in.len = a.*.ipc_in.len + got as i32; }
-            else if (got == 0 || !net.would_block(got)) { a.*.running = false; }
-        } else if ((input_events & 24) != 0) { a.*.running = false; }
+        let space: i32 = a.*.ipc_in.cap - a.*.ipc_in.len;
+        if (space <= 0) { a.*.running = false; break; }
+        if (space > 65536) { space = 65536; }
+        let got: i64 = _zag_raw_syscall(0, 0, (a.*.ipc_in.data as i64) + a.*.ipc_in.len as i64, space as i64, 0, 0, 0);
+        if (got > 0) { a.*.ipc_in.len = a.*.ipc_in.len + got as i32; }
+        else if (got == 0 || !net.would_block(got)) { a.*.running = false; }
         pump_ipc(a);
-        if ((net.poll_revents(entries[1]) & 1) != 0) {
-            let accepted: i32 = 0;
-            while (accepted < 8) {
-                let fd: i64 = net.accept(a.*.listener); if (fd < 0) { break; }
-                let slot: i32 = 0; while (slot < 32 && a.*.clients[slot].fd >= 0) { slot = slot + 1; }
-                if (slot == 32) { net.close(fd); } else { a.*.clients[slot] = connection.make(fd); }
-                accepted = accepted + 1;
-            }
+        let accepted: i32 = 0;
+        while (accepted < 8) {
+            let fd: i64 = net.accept(a.*.listener); if (fd < 0) { break; }
+            if (!net.nonblocking(fd)) { net.close(fd); break; }
+            let slot: i32 = 0; while (slot < 32 && a.*.clients[slot].fd >= 0) { slot = slot + 1; }
+            if (slot == 32) { net.close(fd); } else { a.*.clients[slot] = connection.make(fd); }
+            accepted = accepted + 1;
         }
         i = 0; now = _zag_clock_monotonic_ms();
         while (i < 32) {
-            let c: *connection.Client = &a.*.clients[i]; let flags: i32 = net.poll_revents(entries[i + 3]);
-            if ((entries[i + 3] & 4294967295) != ((c.*.fd as u64) & 4294967295)) { flags = 0; }
+            let c: *connection.Client = &a.*.clients[i];
+            if (c.*.fd >= 0) { read_client(a, i); }
+            if (c.*.fd >= 0 && c.*.output.len > 0) {
+                let written: i64 = net.send(c.*.fd, c.*.output.data, c.*.output.len);
+                if (written > 0) { buf.drop_prefix(&c.*.output, written as i32); c.*.last_write = now; }
+                else if (!net.would_block(written)) { release(a, i); }
+            }
             if (c.*.fd >= 0) {
-                if ((flags & 1) != 0) { read_client(a, i); }
-                if (c.*.fd >= 0 && (flags & 24) != 0) { release(a, i); }
-                if (c.*.fd >= 0 && c.*.output.len > 0) {
-                    let written: i64 = net.send(c.*.fd, c.*.output.data, c.*.output.len);
-                    if (written > 0) { buf.drop_prefix(&c.*.output, written as i32); c.*.last_write = now; }
-                    else if (!net.would_block(written)) { release(a, i); }
-                }
-                if (c.*.fd >= 0) {
-                    if (c.*.phase == 3 && c.*.output.len == 0) { release(a, i); }
-                    else if (now > c.*.deadline || (c.*.phase==2 && now>c.*.generation_limit) || (c.*.output.len > 0 && now - c.*.last_write > 5000)) {
-                        if (c.*.phase == 2) { cancel(a, i, "TIMEOUT", 504); } else { release(a, i); }
-                    } else if (c.*.phase == 2 && c.*.stream_open && now - c.*.last_ping >= 15000) {
-                        if (c.*.output.len == 0) { c.*.last_write = now; }
-                        sse.heartbeat(&c.*.output); c.*.last_ping = now;
-                    }
+                // A tab that never reports leaves provisioning via a terminal
+                // timeout, unblocking the provider for the next request.
+                if (c.*.phase == 4 && now > c.*.deadline) {
+                    if (c.*.provider >= 0) { a.*.providers.items[c.*.provider].active_request = 0 - 1; }
+                    http_error(c, 504, "TIMEOUT");
+                } else if (c.*.phase == 3 && c.*.output.len == 0) { release(a, i); }
+                else if (now > c.*.deadline || (c.*.phase==2 && now>c.*.generation_limit) || (c.*.output.len > 0 && now - c.*.last_write > 5000)) {
+                    if (c.*.phase == 2) { cancel(a, i, "TIMEOUT", 504); } else { release(a, i); }
+                } else if (c.*.phase == 2 && c.*.stream_open && now - c.*.last_ping >= 15000) {
+                    if (c.*.output.len == 0) { c.*.last_write = now; }
+                    sse.heartbeat(&c.*.output); c.*.last_ping = now;
                 }
             }
             i = i + 1;
         }
     }
-    _zag_free(entries as *i8);
+}
+// Best-effort terminal delivery: queued HTTP/SSE error bytes are pushed to
+// live clients before their descriptors close, so a fatal backend exit still
+// surfaces a real error instead of a bare socket close on the harness side.
+fn drain_clients(a: *App) void {
+    let pass: i32 = 0; let pending: bool = true;
+    while (pass < 200 && pending) {
+        pending = false; let i: i32 = 0;
+        while (i < 32) {
+            if (a.*.clients[i].fd >= 0 && a.*.clients[i].output.len > 0) {
+                let wrote: i64 = net.send(a.*.clients[i].fd, a.*.clients[i].output.data, a.*.clients[i].output.len);
+                if (wrote > 0) { buf.drop_prefix(&a.*.clients[i].output, wrote as i32); }
+                if (a.*.clients[i].output.len > 0) { pending = true; }
+            }
+            i = i + 1;
+        }
+        pass = pass + 1;
+    }
 }
 fn free(a: *App) void {
     let i: i32 = 0;
-    while (i < 32) { if (a.*.clients[i].fd >= 0) { if (a.*.clients[i].phase == 2) { cancel(a, i, "CANCELLED", 503); } connection.free(&a.*.clients[i]); } i = i + 1; }
+    while (i < 32) { if (a.*.clients[i].fd >= 0) { if (a.*.clients[i].phase == 2) { cancel(a, i, "CANCELLED", 503); } } i = i + 1; }
+    drain_clients(a);
+    i = 0;
+    while (i < 32) { if (a.*.clients[i].fd >= 0) { connection.free(&a.*.clients[i]); } i = i + 1; }
     if (a.*.listener >= 0) { net.close(a.*.listener); a.*.listener = 0 - 1; }
     if (a.*.lock_fd >= 0) { let unpublished: bool = publish_connection(a); }
     // Try to deliver Stop actions once without blocking process termination.

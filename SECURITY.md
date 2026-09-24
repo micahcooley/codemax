@@ -42,3 +42,19 @@ The file and Git library recipes require a specific absolute folder and reject f
 One-click client setup retrieves the local key only after a successful health check and revalidation. It is never rendered by that operation. The command is shell-quoted, but contains the key in clipboard/terminal history and can expose it through process environment visibility. Use only in a trusted local terminal. Page destruction or changed model/endpoint/client invalidates late setup work before key retrieval/copy. Existing configuration files are not replaced.
 
 Safe budget continuation never preserves broader task grants. Grant expiration returns the next call to approval instead of terminating a task during user thinking time. Only matched progress refreshes a tool inactivity deadline, and an independent absolute ceiling remains. No delayed or completed tool is automatically replayed after a fault.
+
+## Site icons and loading indicators
+
+Tabs, the provider shelf, the provider list and the shortcut tiles render
+vendored website icons from `public/site-icons`, mapped by origin in
+`src/lib/site-icons.ts`. Each file was fetched once from the site itself or
+a brand-icon source at authoring time; the running app performs no icon
+fetching, so icons work offline and disclose nothing, and the desktop CSP
+needs no remote image source. Hosts without a vendored file fall back to
+the letter mark. A node test pins the map: every supported origin resolves
+to a file that exists and decodes, and the component contains no fetch.
+
+Page-load indicators decay: a load flag older than 30 seconds clears instead
+of spinning forever, because single-page navigations sometimes emit a load
+start without its finish. Real loads finish in seconds and re-arm on every
+new start event, so nothing in flight is hidden.

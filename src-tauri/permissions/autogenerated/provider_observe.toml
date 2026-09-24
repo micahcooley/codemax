@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-provider-observe"
+description = "Enables the provider_observe command without any pre-configured scope."
+commands.allow = ["provider_observe"]
+
+[[permission]]
+identifier = "deny-provider-observe"
+description = "Denies the provider_observe command without any pre-configured scope."
+commands.deny = ["provider_observe"]

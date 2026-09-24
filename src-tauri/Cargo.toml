@@ -14,7 +14,21 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["process", "io-util", "sync", "time", "rt", "macros", "net"] }
 url = "2"
-rfd = { version = "0.17", default-features = false, features = ["xdg-portal", "tokio"] }
+rfd = { version = "0.17" }
+zeroize = "1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+rusqlite = { version = "0.32", features = ["bundled"] }
+security-framework = "3"
+aes-gcm = "0.10"
+aes = "0.8"
+cbc = "0.1"
+cipher = "0.4"
+pbkdf2 = "0.12"
+hmac = "0.12"
+sha1 = "0.10"
+sha2 = "0.10"
+time = "0.3"
 
 [profile.release]
 codegen-units = 1

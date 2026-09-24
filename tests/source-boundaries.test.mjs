@@ -53,7 +53,7 @@ test('static: synthetic-file broker is Zag-only, one-use, expiry and exact-path 
  const code=read('backend/security/file_probe.zag');for(const check of ['!p.*.granted','p.*.reads!=0','_zag_clock_monotonic_ms()>=p.*.deadline','provider!=p.*.provider','!buf.eq(model,buf.view(&p.*.model))','!buf.eq(path,"bridge-probe.txt")','stat[2]==1'])assert(code.includes(check),check);
  assert.match(code,/131072 \| 524288 \| 2048/);assert.match(code,/p\.\*\.granted=false/);
  assert.doesNotMatch(code,/_zag_exec|sh -c|\/etc\/|\/home\//);
- const server=read('backend/app.zag');assert(!server.includes('/filesystem/'));assert(server.includes('_zag_raw_syscall(53,1,1 | 2048 | 524288'));
+ const server=read('backend/app.zag');assert(!server.includes('/filesystem/'));assert(server.includes('net.local_pair()'), 'private MCP transport without socketpair(2), which cannot reach Darwin');
 });
 test('static: tab activity includes manual generation and no polling-based fake activity',()=>{
  const tab=read('src/lib/components/TabActivity.svelte');assert(tab.includes('provider.browser_busy'));assert(!tab.includes('setInterval'));

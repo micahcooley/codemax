@@ -13,11 +13,12 @@ fn safe_id(s: []u8) bool {
 fn provider_origin(url: []u8, dev: bool, out: *buf.Buffer) bool {
     buf.clear(out); let n: i32 = _zag_strlen(url);
     if (n < 9 || n > 2048) { return false; }
+    // Plain HTTP origins are never providers, even with the legacy dev flag.
+    // main.zag already starts with dev disabled; the bypass stays removed so
+    // the parameter only preserves the call shape.
+    if (!dev && dev) { return false; }
+    if (!buf.prefix(url, "https://")) { return false; }
     let offset: i32 = 8;
-    if (!buf.prefix(url, "https://")) {
-        if (!dev || !buf.prefix(url, "http://127.0.0.1:")) { return false; }
-        offset = 7;
-    }
     let end: i32 = offset;
     while (end < n && url[end] != 47) { end = end + 1; }
     if (end == offset) { return false; }
@@ -36,8 +37,49 @@ fn ascii_lower(s: []u8, out: *buf.Buffer) void {
     while (i < _zag_strlen(s)) { let c: u8 = s[i]; if (c >= 65 && c <= 90) { c = c + 32; } buf.byte(out, c); i = i + 1; }
 }
 fn contains(s: []u8, needle: []u8) bool { return buf.find(s, needle, 0) >= 0; }
+// Model-shaped identities (letter + digit + separator) stay models even when
+// they mention thinking (Kimi K2 Thinking). Shared by live detection and
+// state-load pruning so a persisted reasoning phantom cleans up on boot
+// instead of lingering as a model.
+fn model_shaped(text: []u8) bool {
+    if (_zag_strlen(text) < 3 || _zag_strlen(text) > 96) { return false; }
+    let letter: bool = false; let digit: bool = false; let separator: bool = false; let i: i32 = 0;
+    while (i < _zag_strlen(text)) { let c: u8 = text[i]; if (c >= 97 && c <= 122) { letter = true; } if (c >= 48 && c <= 57) { digit = true; } if (c == 45 || c == 46) { separator = true; } i = i + 1; }
+    return letter && digit && separator;
+}
+// Reasoning modes (Auto / Thinking / Fast / Think Deeper / effort levels)
+// must never become models. Genuine variants (K2 vs K2 Thinking) are
+// model-shaped and never match here.
+fn reasoning_mode_text(lower: []u8) bool {
+    if (contains(lower, "reason") || contains(lower, "think") || contains(lower, "思考") || contains(lower, "推理") || contains(lower, "deeper")) { return true; }
+    if (buf.eq(lower, "auto") || buf.eq(lower, "fast") || buf.eq(lower, "slow") || buf.eq(lower, "normal") || buf.eq(lower, "on") || buf.eq(lower, "off") || buf.eq(lower, "enabled") || buf.eq(lower, "disabled") || buf.eq(lower, "high") || buf.eq(lower, "low") || buf.eq(lower, "medium") || buf.eq(lower, "minimal") || buf.eq(lower, "max") || buf.eq(lower, "think deeper") || buf.eq(lower, "deep think")) { return true; }
+    return false;
+}
+fn reasoning_option(value: []u8, label: []u8) bool {
+    let vl: buf.Buffer = buf.make(256); let ll: buf.Buffer = buf.make(256);
+    ascii_lower(value, &vl); ascii_lower(label, &ll);
+    let shaped: bool = model_shaped(buf.view(&vl)) || model_shaped(buf.view(&ll));
+    let out: bool = false;
+    if (!shaped) {
+        if (reasoning_mode_text(buf.view(&vl)) || reasoning_mode_text(buf.view(&ll))) { out = true; }
+    }
+    buf.free(&vl); buf.free(&ll); return out;
+}
+fn pure_model_option(value: []u8, label: []u8) bool {
+    let vl: buf.Buffer = buf.make(256); let ll: buf.Buffer = buf.make(256);
+    ascii_lower(value, &vl); ascii_lower(label, &ll);
+    let shaped: bool = model_shaped(buf.view(&vl)) || model_shaped(buf.view(&ll));
+    let out: bool = false;
+    if (shaped) {
+        if (!reasoning_mode_text(buf.view(&vl)) && !reasoning_mode_text(buf.view(&ll))) { out = true; }
+    }
+    buf.free(&vl); buf.free(&ll); return out;
+}
 fn sensitive_label(lower: []u8) bool {
     return contains(lower, "password") || contains(lower, "credit card") || contains(lower, "billing") ||
         contains(lower, "delete account") || contains(lower, "security code") || contains(lower, "verification code") ||
-        contains(lower, "one-time") || contains(lower, "payment") || contains(lower, "sign out");
+        contains(lower, "one-time") || contains(lower, "payment") || contains(lower, "sign out") ||
+        contains(lower, "密码") || contains(lower, "登录") || contains(lower, "登陆") || contains(lower, "注册") ||
+        contains(lower, "账号") || contains(lower, "帳號") || contains(lower, "手机号") || contains(lower, "验证码") ||
+        contains(lower, "微信") || contains(lower, "扫码");
 }

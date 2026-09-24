@@ -94,7 +94,7 @@ with sync_playwright() as pw:
  def optional_library(p):
   route(p,'Tools & MCP');expect(p.get_by_role('region',name='Tool library',exact=True)).to_have_count(0)
   expect(p.get_by_role('textbox',name='MCP executable')).to_have_count(0);expect(p.get_by_role('spinbutton',name='Task turn budget')).not_to_be_visible()
-  p.get_by_role('button',name='Tool library',exact=True).click();expect(p.locator('.recipe-row')).to_have_count(5)
+  p.get_by_role('button',name='Tool library',exact=True).click();expect(p.locator('.recipe-row')).to_have_count(6)
   assert not ops(p,'mcp.server.add') and not ops(p,'mcp.server.connect')
  run(browser,'Tool library and technical task settings are opt-in; browsing recipes never installs code',optional_library)
  def file_recipe(p):

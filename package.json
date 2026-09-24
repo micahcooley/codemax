@@ -12,6 +12,7 @@
     "tauri": "tauri",
     "desktop": "tauri dev",
     "package:linux": "bash scripts/package-linux.sh",
+    "package:mac": "bash scripts/package-mac.sh",
     "doctor": "python3 scripts/doctor.py",
     "build:backend": "bash scripts/build-backend.sh",
     "release:gate": "python3 scripts/release-gate.py",

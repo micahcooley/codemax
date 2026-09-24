@@ -1,9 +1,10 @@
-use crate::{framing::Frames, views};
+use crate::{fallback, framing::Frames, views};
 use serde_json::{json, Value};
-use std::{collections::{HashMap, VecDeque}, path::PathBuf, process::Stdio, sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU64, Ordering}}, time::{Duration, Instant}};
+use std::{collections::{HashMap, VecDeque}, path::PathBuf, process::Stdio, sync::{Arc, atomic::{AtomicBool, AtomicU64, Ordering}}, time::{Duration, Instant}};
+use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_shell::ShellExt;
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, sync::{mpsc, oneshot, Notify}};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, sync::{mpsc, oneshot, Notify, Mutex as AsyncMutex}};
 
 pub struct Host {
     pub root: PathBuf,
@@ -17,12 +18,39 @@ pub struct Host {
     next_id: AtomicU64,
     pub status: Mutex<Value>,
     pub mcp: Mutex<HashMap<u32, crate::mcp_transport::ProcessHandle>>,
+    pub fallback: AtomicBool,
+    pub fallback_store: AsyncMutex<fallback::Store>,
 }
 impl Host {
     pub fn new(root: PathBuf, dev_fixture: bool) -> (Arc<Self>, mpsc::Receiver<Vec<u8>>) {
         let (sender, receiver) = mpsc::channel(128);
+        let store = fallback::load(&root);
         (Arc::new(Self { mcp: Mutex::new(HashMap::new()), root, dev_fixture, views: Mutex::new(HashMap::new()), ready: AtomicBool::new(false), closing: AtomicBool::new(false), restart: Notify::new(), sender,
-            pending: Mutex::new(HashMap::new()), next_id: AtomicU64::new(1), status: Mutex::new(json!({"state":"STARTING","code":null})) }), receiver)
+            pending: Mutex::new(HashMap::new()), next_id: AtomicU64::new(1), status: Mutex::new(json!({"state":"STARTING","code":null})), fallback: AtomicBool::new(false), fallback_store: AsyncMutex::new(store) }), receiver)
+    }
+    pub fn is_fallback(&self) -> bool {
+        self.fallback.load(Ordering::Acquire)
+    }
+    /// Enter browsing-only fallback so websites keep working while Zag is
+    /// unavailable. This never claims the loopback gateway is running and
+    /// never invents models. The real sidecar keeps being retried.
+    pub fn enter_fallback(&self, app: &AppHandle) {
+        if self.fallback.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        // Refresh persisted fallback providers (created while we were down).
+        // Best-effort: if the async store is locked, keep the in-memory copy.
+        if let Ok(mut store) = self.fallback_store.try_lock() {
+            let fresh = fallback::load(&self.root);
+            *store = fresh;
+            let data = fallback::snapshot(&store);
+            let _ = app.emit_to(tauri::EventTarget::Webview { label: "main".into() }, "bridge:snapshot", data);
+        }
+        self.ready.store(true, Ordering::Release);
+        self.set_status(app, "READY", Some("FALLBACK_MODE"));
+    }
+    pub fn exit_fallback(&self) {
+        self.fallback.store(false, Ordering::Release);
     }
     pub fn set_status(&self, app: &AppHandle, state: &str, code: Option<&str>) {
         let value = json!({"state":state,"code":code});
@@ -72,7 +100,10 @@ async fn handle_frame(app: &AppHandle, host: &Arc<Host>, bytes: &[u8], hello: &m
     let kind = value.get("type").and_then(Value::as_str).ok_or("INVALID_BACKEND_FRAME")?;
     if !*hello {
         if kind != "hello" || value["protocol"] != 1 || value["backend"] != "zag" { return Err("BACKEND_PROTOCOL_MISMATCH".into()); }
-        *hello = true; host.ready.store(true, Ordering::Release); host.set_status(app, "READY", None);
+        *hello = true;
+        // A real Zag backend supersedes fallback browsing mode.
+        host.exit_fallback();
+        host.ready.store(true, Ordering::Release); host.set_status(app, "READY", None);
         views::rescan_all(app, host);
         return Ok(());
     }
@@ -114,28 +145,83 @@ async fn handle_frame(app: &AppHandle, host: &Arc<Host>, bytes: &[u8], hello: &m
 
 pub async fn supervise(app: AppHandle, host: Arc<Host>, mut outgoing: mpsc::Receiver<Vec<u8>>) {
     let mut crashes = VecDeque::new();
+    let mut consecutive_missing: u32 = 0;
     loop {
         if host.closing.load(Ordering::Acquire) { break; }
         while outgoing.try_recv().is_ok() {} // Never replay requests after a crash.
-        host.set_status(&app, "STARTING", None);
+        if !host.is_fallback() {
+            host.set_status(&app, "STARTING", None);
+        }
         // Let Tauri resolve the bundled sidecar, then use Tokio for bounded,
         // cancellable stdio. No shell interpretation or PATH lookup is used.
         let command = match app.shell().sidecar("bridge-zag") {
             Ok(cmd) => cmd.env_clear().env("BRIDGE_STATE_DIR", &host.root)
                 .env("BRIDGE_DEV_FIXTURE", if host.dev_fixture { "1" } else { "0" }),
-            Err(_) => { host.set_status(&app, "FAILED", Some("SIDECAR_MISSING")); host.restart.notified().await; continue; }
+            Err(_) => {
+                consecutive_missing += 1;
+                if consecutive_missing >= 2 || host.is_fallback() {
+                    host.enter_fallback(&app);
+                } else {
+                    host.set_status(&app, "FAILED", Some("SIDECAR_MISSING"));
+                }
+                // Resilient: keep retrying with backoff instead of parking
+                // forever on a manual restart. backend_restart short-circuits.
+                let delay = std::cmp::min(2000 + 1000 * consecutive_missing as u64, 10_000);
+                tokio::select! {
+                    _ = host.restart.notified() => { consecutive_missing = 0; continue; }
+                    _ = tokio::time::sleep(Duration::from_millis(delay)) => { continue; }
+                }
+            }
         };
         let std_command: std::process::Command = command.into();
         let mut command = tokio::process::Command::from(std_command);
         command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
+        let started = Instant::now();
         let mut child = match command.spawn() {
-            Ok(child) => child,
-            Err(_) => { host.set_status(&app, "FAILED", Some("SIDECAR_SPAWN_FAILED")); host.restart.notified().await; continue; }
+            Ok(child) => { consecutive_missing = 0; child },
+            Err(_) => {
+                consecutive_missing += 1;
+                if host.is_fallback() {
+                    // Stay in browsing mode, retry in background.
+                    let delay = std::cmp::min(2000 + 1000 * consecutive_missing as u64, 10_000);
+                    tokio::select! {
+                        _ = host.restart.notified() => { consecutive_missing = 0; continue; }
+                        _ = tokio::time::sleep(Duration::from_millis(delay)) => { continue; }
+                    }
+                }
+                host.set_status(&app, "FAILED", Some("SIDECAR_SPAWN_FAILED"));
+                let delay = std::cmp::min(2000 + 1000 * consecutive_missing as u64, 10_000);
+                tokio::select! {
+                    _ = host.restart.notified() => { consecutive_missing = 0; continue; }
+                    _ = tokio::time::sleep(Duration::from_millis(delay)) => {
+                        if consecutive_missing >= 2 { host.enter_fallback(&app); }
+                        continue;
+                    }
+                }
+            }
         };
         let (Some(mut stdin), Some(mut stdout), Some(mut stderr)) = (child.stdin.take(), child.stdout.take(), child.stderr.take()) else {
-            let _ = child.kill().await; host.set_status(&app, "FAILED", Some("SIDECAR_PIPE_FAILED")); return;
+            let _ = child.kill().await;
+            if host.is_fallback() {
+                tokio::select! {
+                    _ = host.restart.notified() => { continue; }
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => { continue; }
+                }
+            }
+            host.set_status(&app, "FAILED", Some("SIDECAR_PIPE_FAILED"));
+            tokio::select! {
+                _ = host.restart.notified() => { continue; }
+                _ = tokio::time::sleep(Duration::from_secs(5)) => {
+                    host.enter_fallback(&app);
+                    continue;
+                }
+            }
         };
         let mut frames = Frames::default(); let mut bytes = [0u8; 16_384]; let mut errors = [0u8; 1024];
+        // Last bytes of sidecar diagnostics, kept process-local only (never
+        // emitted to the UI): a crashing backend otherwise leaves no trace.
+        // Filtered to printable ASCII so no binary payload can slip in.
+        let mut err_tail: Vec<u8> = Vec::new();
         let mut hello = false; let mut stderr_open = true; let handshake = tokio::time::sleep(Duration::from_secs(10)); tokio::pin!(handshake);
         let mut reason = "BACKEND_EXITED"; let mut requested = false;
         loop {
@@ -159,7 +245,16 @@ pub async fn supervise(app: AppHandle, host: Arc<Host>, mut outgoing: mpsc::Rece
                 }
                 read = stderr.read(&mut errors), if stderr_open => {
                     // Drain but do not publish arbitrary process bytes or secrets.
-                    if matches!(read, Ok(0) | Err(_)) { stderr_open = false; }
+                    match read {
+                        Ok(0) | Err(_) => { stderr_open = false; }
+                        Ok(n) => {
+                            err_tail.extend(errors[..n].iter().filter(
+                                |b| **b == b'\n' || (**b >= 32 && **b < 127)));
+                            if err_tail.len() > 2048 {
+                                err_tail.drain(..err_tail.len() - 2048);
+                            }
+                        }
+                    }
                 }
                 message = outgoing.recv(), if hello => {
                     let Some(message) = message else { requested = true; break; };
@@ -169,7 +264,25 @@ pub async fn supervise(app: AppHandle, host: Arc<Host>, mut outgoing: mpsc::Rece
                 }
             }
         }
-        crate::mcp_transport::stop_all(&host); host.ready.store(false, Ordering::Release); host.fail_pending();
+        if requested {
+            eprintln!("codemax: backend restart requested");
+        } else {
+            eprintln!("codemax: backend loop ended: {reason} (recent exits in window: {})",
+                crashes.len());
+            if !err_tail.is_empty() {
+                eprintln!("codemax: backend stderr tail: {}",
+                    String::from_utf8_lossy(&err_tail));
+            }
+        }
+        crate::mcp_transport::stop_all(&host);
+        // If fallback browsing is active, keep it usable while the real
+        // backend is down. Do not clear ready/fallback here; the next loop
+        // iteration retries the sidecar in the background.
+        let was_fallback = host.is_fallback();
+        if !was_fallback {
+            host.ready.store(false, Ordering::Release);
+        }
+        host.fail_pending();
         // Closing stdin is Zag's graceful-stop signal. A stuck child is killed
         // and reaped after a finite grace period, independently of pipe writes.
         let _ = stdin.shutdown().await; drop(stdin);
@@ -178,9 +291,33 @@ pub async fn supervise(app: AppHandle, host: Arc<Host>, mut outgoing: mpsc::Rece
         if !requested {
             let now = Instant::now(); crashes.push_back(now);
             while crashes.front().is_some_and(|t| now.duration_since(*t) > Duration::from_secs(60)) { crashes.pop_front(); }
-            host.set_status(&app, "LOST", Some(reason));
-            if crashes.len() >= 3 { host.set_status(&app, "FAILED", Some("RESTART_BUDGET_EXHAUSTED")); host.restart.notified().await; crashes.clear(); }
-            else { tokio::time::sleep(Duration::from_millis(250 * crashes.len() as u64)).await; }
+            // A stub that exits immediately (macOS dev) or a repeatedly
+            // crashing sidecar must not dead-end the UI. After 3 crashes in
+            // 60s, enter browsing-only fallback and keep retrying.
+            let fast_exit = started.elapsed() < Duration::from_secs(2) && !hello;
+            if crashes.len() >= 3 || (fast_exit && crashes.len() >= 2) {
+                host.enter_fallback(&app);
+                // Back off but keep retrying automatically; manual restart
+                // short-circuits the wait.
+                crashes.clear();
+                tokio::select! {
+                    _ = host.restart.notified() => {}
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            } else {
+                if !was_fallback {
+                    host.set_status(&app, "LOST", Some(reason));
+                }
+                let backoff = 250 * crashes.len() as u64;
+                tokio::select! {
+                    _ = host.restart.notified() => {}
+                    _ = tokio::time::sleep(Duration::from_millis(backoff)) => {}
+                }
+            }
+        } else if requested && reason == "RESTART_REQUESTED" {
+            // Explicit restart: drop crash history so a fixed backend recovers
+            // immediately instead of inheriting a stale budget.
+            crashes.clear();
         }
     }
     crate::mcp_transport::stop_all(&host); host.ready.store(false, Ordering::Release); host.fail_pending(); host.set_status(&app, "STOPPED", None);

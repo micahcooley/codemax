@@ -1,8 +1,8 @@
 import '../../../runtime/svelte_internal_disclose-version.js';
 import * as $ from '../../../runtime/svelte_internal_client.js';
 
-var root_1 = $.from_html(`<span class="activity-mark">!</span>`);
-var root = $.from_html(`<span role="img"><span class="activity-ring"></span><!></span>`);
+var root = $.from_html(`<span class="activity-mark">!</span>`);
+var root_1 = $.from_html(`<span role="img"><span class="activity-ring"></span><!></span>`);
 
 export default function TabActivity($$anchor, $$props) {
 	$.push($$props, true);
@@ -31,13 +31,13 @@ export default function TabActivity($$anchor, $$props) {
 							? 'Observing controls'
 							: $$props.provider.open_tab ? 'Idle' : 'Sleeping');
 
-	var span = root();
+	var span = root_1();
 	let classes;
 	var node = $.sibling($.child(span));
 
 	{
 		var consequent = ($$anchor) => {
-			var span_1 = root_1();
+			var span_1 = root();
 
 			$.append($$anchor, span_1);
 		};

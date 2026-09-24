@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-browser-list-sources"
+description = "Enables the browser_list_sources command without any pre-configured scope."
+commands.allow = ["browser_list_sources"]
+
+[[permission]]
+identifier = "deny-browser-list-sources"
+description = "Denies the browser_list_sources command without any pre-configured scope."
+commands.deny = ["browser_list_sources"]

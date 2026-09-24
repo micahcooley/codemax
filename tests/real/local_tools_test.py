@@ -2,14 +2,20 @@
 """Black-box tests of the real compiled MCP executable and real kernel I/O.
 No fake model, tool server or filesystem implementation is used.
 """
-import hashlib, json, os, pathlib, select, shutil, subprocess, tempfile, time, unittest
+import hashlib, json, os, pathlib, pwd, grp, select, shutil, subprocess, tempfile, time, unittest
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 BINARY=pathlib.Path(os.environ.get('CODEMAX_TOOLS_BINARY',ROOT/'build/codemax-local-tools'))
 META={'io.modelcontextprotocol/protocolVersion':'2026-07-28','io.modelcontextprotocol/clientInfo':{'name':'native-test','version':'1'},'io.modelcontextprotocol/clientCapabilities':{}}
+def _drop_ids():
+  # Drop privileges when running as root. Resolve 'nobody' by name so the
+  # test works on Linux (uid/gid 65534) and macOS (uid/gid 99).
+  if os.geteuid()!=0: return {}
+  try: return {'user':pwd.getpwnam('nobody').pw_uid,'group':grp.getgrnam('nobody').gr_gid,'extra_groups':[]}
+  except KeyError: return {'user':65534,'group':65534,'extra_groups':[]}
 class NativeProcess:
  def __init__(self, path, grants=(), legacy=False):
   self.seq=0; self.legacy=legacy
-  kw={'user':65534,'group':65534,'extra_groups':[]} if os.geteuid()==0 else {}
+  kw=_drop_ids()
   self.p=subprocess.Popen([str(BINARY),'--workspace',str(path),*grants],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,bufsize=1,env={'PATH':'/usr/bin:/bin','HOME':'/nonexistent','CANARY_SECRET':'must-not-leak'},**kw)
  def raw(self, value):
   self.p.stdin.write(value+'\n'); self.p.stdin.flush()

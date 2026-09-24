@@ -8,7 +8,7 @@
 @import("../detector/recorder.zag") as recorder
 // Persistent state excludes message bodies, tool arguments/results and remote
 // credentials. Only canonical-message digests and safe conversation URLs survive restart.
-fn save(root: []u8, port: i32, providers: *registry.Registry, s: *sessions.Sessions) bool {
+fn save(root: @borrows []u8, port: i32, providers: @borrows *registry.Registry, s: @borrows *sessions.Sessions) bool {
     let out: buf.Buffer = buf.make(1048576); buf.add(&out, "{\"schema\":1,\"port\":"); buf.integer(&out, port as i64); buf.add(&out, ",\"next_provider_id\":"); buf.integer(&out, providers.*.next_id as i64); buf.add(&out, ",\"providers\":["); let i: i32 = 0;
     while (i < providers.*.count) {
         let p: *registry.Provider = &providers.*.items[i]; if (i > 0) { buf.byte(&out, 44); }
@@ -41,7 +41,7 @@ fn save(root: []u8, port: i32, providers: *registry.Registry, s: *sessions.Sessi
     buf.add(&out, "],\"sessions\":"); sessions.snapshot(s, &out); buf.byte(&out, 125);
     let ok: bool = out.ok != 0 && files.save(root, "state.json", buf.view(&out)); buf.free(&out); return ok;
 }
-fn load(root: []u8, dev: bool, port: *i32, providers: *registry.Registry, s: *sessions.Sessions) bool {
+fn load(root: @borrows []u8, dev: bool, port: @borrows_mut *i32, providers: @borrows_mut *registry.Registry, s: @borrows_mut *sessions.Sessions) bool {
     let bytes: buf.Buffer = buf.make(1048576); let rc: i32 = files.load(root, "state.json", &bytes);
     if (rc == 0) { buf.free(&bytes); return true; } if (rc < 0) { buf.free(&bytes); return false; }
     let d: json.Document = json.parse(buf.view(&bytes)); let value: i64 = json.number(&d, json.get(&d, 0, "port"), 0);
@@ -77,7 +77,17 @@ fn load(root: []u8, dev: bool, port: *i32, providers: *registry.Registry, s: *se
                 let catalog: i32 = json.get(&d, i, "models");
                 if (json.kind(&d, catalog) == 2 && d.tokens[catalog].size <= 32) {
                     let m: i32 = catalog + 1;
-                    while (m < d.tokens[catalog].next) { json.field_text(&d, m, "value", &url); json.field_text(&d, m, "label", &label); if (url.ok != 0 && label.ok != 0) { registry.model(p, buf.view(&url), buf.view(&label), 0); p.*.models[p.*.model_count - 1].enabled = json.kind(&d, json.get(&d, m, "enabled")) != 6; p.*.models[p.*.model_count - 1].available = false; } m = d.tokens[m].next; }
+                    while (m < d.tokens[catalog].next) {
+                        json.field_text(&d, m, "value", &url); json.field_text(&d, m, "label", &label);
+                        // Persisted reasoning phantoms (Auto/Thinking/Fast
+                        // stored as models by older detectors) never reload as
+                        // models; live observation re-derives them as modes.
+                        if (url.ok != 0 && label.ok != 0 && !validation.reasoning_option(buf.view(&url), buf.view(&label))) {
+                            let slot: i32 = registry.model(p, buf.view(&url), buf.view(&label), 0);
+                            if (slot >= 0) { p.*.models[slot].enabled = json.kind(&d, json.get(&d, m, "enabled")) != 6; p.*.models[slot].available = false; }
+                        }
+                        m = d.tokens[m].next;
+                    }
                 }
 
             }

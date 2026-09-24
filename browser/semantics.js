@@ -2,7 +2,9 @@
 (() => {
   'use strict';
   const encoder = new TextEncoder();
-  const sensitive = /password|passcode|credit.?card|card.?number|security.?code|verification.?code|one.?time|billing|payment|delete.?account|sign.?out|log.?out|sign.?in|log.?in|sign.?up|authori[sz]e|grant.?access|continue.?with|subscribe|purchase|upgrade|oauth|secret/i;
+  // Auth words stay out of evidence in English and Chinese: login buttons and
+  // credential-adjacent labels must never become control mappings or facts.
+  const sensitive = /password|passcode|credit.?card|card.?number|security.?code|verification.?code|one.?time|billing|payment|delete.?account|sign.?out|log.?out|sign.?in|log.?in|sign.?up|authori[sz]e|grant.?access|continue.?with|subscribe|purchase|upgrade|oauth|secret|密码|登录|登陆|注册|账号|帳號|手机号|驗證|验证码|微信|扫码/i;
   const isSensitive = value => sensitive.test(String(value));
   const redact = value => String(value ?? '')
     .replace(/\b(?:sk-[A-Za-z0-9_-]{8,}|Bearer\s+\S+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\b/g, '[redacted]')

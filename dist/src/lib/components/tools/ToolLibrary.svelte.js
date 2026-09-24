@@ -4,12 +4,12 @@ import { chooseDirectory } from '../../api/bridge.js';
 import Icon from '../Icon.svelte.js';
 import { toolRecipes, recipeDefinition } from '../../tool-recipes.js';
 
-var root_1 = $.from_html(`<button><!><span><strong> </strong><small> </small></span><!></button>`);
-var root_3 = $.from_html(`<label class="field"><span>Folder to share</span><input aria-label="Tool folder" placeholder="/home/you/projects/my-project" autocomplete="off" spellcheck="false"/><button class="secondary" type="button"> </button><span class="field-hint">Use a specific project folder rather than your home directory. This path is passed as one argument, never a shell command.</span></label>`);
-var root_4 = $.from_html(`<label class="setting-line"><div><strong>Allow project changes</strong><p>Enable file writes, edits, moves and recoverable deletion. Each tool call still needs your approval.</p></div><input type="checkbox" aria-label="Enable project changes"/></label> <details class="advanced-client"><summary>Advanced · trusted command execution</summary><label class="setting-line"><div><strong>Enable shell commands</strong><p>Commands run as your user, not in an operating-system sandbox. They can read or change files outside this project and access the network. Only enable this for trusted tasks.</p></div><input type="checkbox" aria-label="Enable trusted commands"/></label></details>`, 1);
-var root_5 = $.from_html(`<p class="form-error" role="alert"> </p>`);
-var root_2 = $.from_html(`<div class="recipe-review"><h3> </h3><p class="field-hint"> </p> <!> <!> <details class="advanced-client"><summary>Executable and pinned version</summary><pre class="code"> </pre></details> <!> <div class="button-group"><button class="primary">Use this definition</button><button class="secondary">Cancel</button></div></div>`);
-var root = $.from_html(`<section class="tool-library" aria-label="Tool library"><p class="field-hint">Add only what you need. Local project tools are bundled. Other entries are optional external servers. Nothing runs until you approve its local process.</p> <div class="recipe-list"></div> <!></section>`);
+var root = $.from_html(`<button><!><span><strong> </strong><small> </small></span><!></button>`);
+var root_1 = $.from_html(`<label class="field"><span>Folder to share</span><input aria-label="Tool folder" placeholder="/home/you/projects/my-project" autocomplete="off" spellcheck="false"/><button class="secondary" type="button"> </button><span class="field-hint">Use a specific project folder rather than your home directory. This path is passed as one argument, never a shell command.</span></label>`);
+var root_2 = $.from_html(`<label class="setting-line"><div><strong>Allow project changes</strong><p>Enable file writes, edits, moves and recoverable deletion. Each tool call still needs your approval.</p></div><input type="checkbox" aria-label="Enable project changes"/></label> <details class="advanced-client"><summary>Advanced · trusted command execution</summary><label class="setting-line"><div><strong>Enable shell commands</strong><p>Commands run as your user, not in an operating-system sandbox. They can read or change files outside this project and access the network. Only enable this for trusted tasks.</p></div><input type="checkbox" aria-label="Enable trusted commands"/></label></details>`, 1);
+var root_3 = $.from_html(`<p class="form-error" role="alert"> </p>`);
+var root_4 = $.from_html(`<div class="recipe-review"><h3> </h3><p class="field-hint"> </p> <!> <!> <details class="advanced-client"><summary>Executable and pinned version</summary><pre class="code"> </pre></details> <!> <div class="button-group"><button class="primary">Use this definition</button><button class="secondary">Cancel</button></div></div>`);
+var root_5 = $.from_html(`<section class="tool-library" aria-label="Tool library"><p class="field-hint">Add only what you need. Local project tools are bundled. Other entries are optional external servers. Nothing runs until you approve its local process.</p> <div class="recipe-list"></div> <!></section>`);
 
 export default function ToolLibrary($$anchor, $$props) {
 	$.push($$props, true);
@@ -51,21 +51,12 @@ export default function ToolLibrary($$anchor, $$props) {
 		}
 	}
 
-	var section = root();
+	var section = root_5();
 	var div = $.sibling($.child(section), 2);
 
 	$.each(div, 21, () => toolRecipes, (recipe) => recipe.id, ($$anchor, recipe) => {
-		var button = root_1();
+		var button = root();
 		let classes;
-
-		button.__click = () => {
-			$.set(selection, $.get(recipe).id, true);
-			$.set(folder, '');
-			$.set(error, '');
-			$.set(write, false);
-			$.set(commands, false);
-		};
-
 		var node = $.child(button);
 
 		Icon(node, {
@@ -77,14 +68,10 @@ export default function ToolLibrary($$anchor, $$props) {
 
 		var span = $.sibling(node);
 		var strong = $.child(span);
-		var text = $.child(strong, true);
-
-		$.reset(strong);
-
+		var text = $.only_child(strong, true);
 		var small = $.sibling(strong);
-		var text_1 = $.child(small, true);
+		var text_1 = $.only_child(small, true);
 
-		$.reset(small);
 		$.reset(span);
 
 		var node_1 = $.sibling(span);
@@ -100,6 +87,14 @@ export default function ToolLibrary($$anchor, $$props) {
 			$.set_text(text_1, $.get(recipe).description);
 		});
 
+		$.delegated('click', button, () => {
+			$.set(selection, $.get(recipe).id, true);
+			$.set(folder, '');
+			$.set(error, '');
+			$.set(write, false);
+			$.set(commands, false);
+		});
+
 		$.append($$anchor, button);
 	});
 
@@ -109,33 +104,23 @@ export default function ToolLibrary($$anchor, $$props) {
 
 	{
 		var consequent_3 = ($$anchor) => {
-			var div_1 = root_2();
+			var div_1 = root_4();
 			var h3 = $.child(div_1);
-			var text_2 = $.child(h3, true);
-
-			$.reset(h3);
-
+			var text_2 = $.only_child(h3, true);
 			var p = $.sibling(h3);
-			var text_3 = $.child(p, true);
-
-			$.reset(p);
-
+			var text_3 = $.only_child(p, true);
 			var node_3 = $.sibling(p, 2);
 
 			{
 				var consequent = ($$anchor) => {
-					var label = root_3();
+					var label = root_1();
 					var input = $.sibling($.child(label));
 
 					$.remove_input_defaults(input);
 
 					var button_1 = $.sibling(input);
+					var text_4 = $.only_child(button_1, true);
 
-					button_1.__click = pick;
-
-					var text_4 = $.child(button_1, true);
-
-					$.reset(button_1);
 					$.next();
 					$.reset(label);
 
@@ -145,6 +130,7 @@ export default function ToolLibrary($$anchor, $$props) {
 					});
 
 					$.bind_value(input, () => $.get(folder), ($$value) => $.set(folder, $$value));
+					$.delegated('click', button_1, pick);
 					$.append($$anchor, label);
 				};
 
@@ -157,7 +143,7 @@ export default function ToolLibrary($$anchor, $$props) {
 
 			{
 				var consequent_1 = ($$anchor) => {
-					var fragment = root_4();
+					var fragment = root_2();
 					var label_1 = $.first_child(fragment);
 					var input_1 = $.sibling($.child(label_1));
 
@@ -183,19 +169,17 @@ export default function ToolLibrary($$anchor, $$props) {
 
 			var details_1 = $.sibling(node_4, 2);
 			var pre = $.sibling($.child(details_1));
-			var text_5 = $.child(pre);
+			var text_5 = $.only_child(pre);
 
-			$.reset(pre);
 			$.reset(details_1);
 
 			var node_5 = $.sibling(details_1, 2);
 
 			{
 				var consequent_2 = ($$anchor) => {
-					var p_1 = root_5();
-					var text_6 = $.child(p_1, true);
+					var p_1 = root_3();
+					var text_6 = $.only_child(p_1, true);
 
-					$.reset(p_1);
 					$.template_effect(() => $.set_text(text_6, $.get(error)));
 					$.append($$anchor, p_1);
 				};
@@ -207,12 +191,8 @@ export default function ToolLibrary($$anchor, $$props) {
 
 			var div_2 = $.sibling(node_5, 2);
 			var button_2 = $.child(div_2);
-
-			button_2.__click = use;
-
 			var button_3 = $.sibling(button_2);
 
-			button_3.__click = () => $.set(selection, '');
 			$.reset(div_2);
 			$.reset(div_1);
 
@@ -233,6 +213,8 @@ ${$0 ?? ''}`);
 				]
 			);
 
+			$.delegated('click', button_2, use);
+			$.delegated('click', button_3, () => $.set(selection, ''));
 			$.append($$anchor, div_1);
 		};
 

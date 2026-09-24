@@ -1,0 +1,41 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../providers/registry.zag") as registry
+@import("../sessions/manager.zag") as sessions
+@import("../storage/files.zag") as files
+@import("../storage/state.zag") as state
+// Storage probe: an old detector persisted reasoning modes as models. Boot
+// must prune them while keeping real models (short names, long-chrome
+// names, and genuine thinking variants). Run only with a newly created
+// 0700 temp root, like the file probe.
+fn check(ok: bool, label: []u8) void { if (!ok) { _zag_eprintln(label); _zag_exit(1); } }
+fn main() i32 {
+    if (_zag_argc() != 2) { _zag_eprintln("Expected isolated temporary directory"); return 64; }
+    let root: []u8 = _zag_arg(1);
+    let doc: buf.Buffer = buf.make(2048);
+    buf.add(&doc, "{\"schema\":1,\"port\":7341,\"next_provider_id\":2,\"providers\":[{\"id\":1,\"url\":\"https://dupe.example/\",\"label\":\"Dupe\",\"recipes\":[],\"manual_model\":\"\",\"current_url\":\"https://dupe.example/\",\"reasoning_value\":\"\",\"context_hint\":0,\"open_tab\":false,\"pinned\":false,\"detected\":true,\"exposed\":true,\"scan_enabled\":true,\"dismissed\":false,\"models\":[");
+    buf.add(&doc, "{\"value\":\"Auto\",\"label\":\"Auto\",\"enabled\":true},");
+    buf.add(&doc, "{\"value\":\"Thinking\",\"label\":\"Thinking\",\"enabled\":true},");
+    buf.add(&doc, "{\"value\":\"Fast\",\"label\":\"Fast\",\"enabled\":true},");
+    buf.add(&doc, "{\"value\":\"Qwen3.8-Max\",\"label\":\"Qwen3.8-Max\",\"enabled\":true},");
+    buf.add(&doc, "{\"value\":\"k2-thinking\",\"label\":\"Kimi K2 Thinking\",\"enabled\":true}");
+    buf.add(&doc, "]}],\"sessions\":[]}");
+    check(doc.ok != 0, "fixture fits");
+    check(files.save(root, "state.json", buf.view(&doc)), "fixture persists");
+    buf.free(&doc);
+    let r: registry.Registry = registry.make();
+    let s: sessions.Sessions = sessions.make();
+    let port: i32 = 0;
+    check(state.load(root, false, &port, &r, &s), "state loads");
+    check(port == 7341, "port restored");
+    let rp: *registry.Registry = &r;
+    check(rp.*.count == 1, "provider restored");
+    let pp: *registry.Provider = &rp.*.items[0];
+    check(pp.*.model_count == 2, "reasoning phantoms pruned, real models kept");
+    check(registry.find_known(&r, "p1/Qwen3.8-Max") >= 0, "short model kept");
+    check(registry.find_known(&r, "p1/k2-thinking") >= 0, "thinking variant kept");
+    check(registry.find_known(&r, "p1/Auto") < 0, "auto phantom gone");
+    check(registry.find_known(&r, "p1/Thinking") < 0, "thinking phantom gone");
+    check(registry.find_known(&r, "p1/Fast") < 0, "fast phantom gone");
+    _zag_println("native storage prune fixture passed"); return 0;
+}

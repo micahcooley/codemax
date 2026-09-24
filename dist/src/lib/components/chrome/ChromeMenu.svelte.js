@@ -5,12 +5,11 @@ import { app } from '../../state/app.svelte.js';
 import { routes } from '../../types/bridge.js';
 import Icon from '../Icon.svelte.js';
 
-var root_1 = $.from_html(`<button role="menuitem"><!><span>Open website</span></button> <button role="menuitem"><!><span> </span></button> <button role="menuitem"><!><span>Move tab left</span></button> <button role="menuitem"><!><span>Move tab right</span></button> <button role="menuitem"><!><span>Inspect connector</span></button> <button role="menuitem"><!><span>Close tab</span><kbd>Ctrl W</kbd></button> <hr/> <button role="menuitem"><!><span>Clear local profile</span></button> <button role="menuitem" class="danger-text"><!><span>Remove website</span></button>`, 1);
-var root_4 = $.from_html(`<small> </small>`);
-var root_6 = $.from_html(`<small> </small>`);
-var root_3 = $.from_html(`<button role="menuitem"><!><span> </span><!></button>`);
-var root_2 = $.from_html(`<button role="menuitem"><!><span>New tab</span><kbd>Ctrl T</kbd></button> <button role="menuitem"><!><span> </span></button> <button role="menuitem"><!><span>Connection inspector</span></button> <hr/> <!> <hr/> <button role="menuitem"><!><span>Settings</span></button> <button role="menuitem"><!><span>Commands</span><kbd>Ctrl K</kbd></button> <button role="menuitem"><!><span>Keyboard shortcuts</span></button>`, 1);
-var root = $.from_html(`<dialog class="chrome-menu"><div class="chrome-menu-heading"><strong> </strong><small> </small></div> <div role="menu"><!></div></dialog>`);
+var root = $.from_html(`<button role="menuitem"><!><span>Open website</span></button> <button role="menuitem"><!><span> </span></button> <button role="menuitem"><!><span>Move tab left</span></button> <button role="menuitem"><!><span>Move tab right</span></button> <button role="menuitem"><!><span>Inspect connector</span></button> <button role="menuitem"><!><span>Close tab</span><kbd>Ctrl W</kbd></button> <hr/> <button role="menuitem"><!><span>Clear local profile</span></button> <button role="menuitem" class="danger-text"><!><span>Remove website</span></button>`, 1);
+var root_1 = $.from_html(`<small> </small>`);
+var root_2 = $.from_html(`<button role="menuitem"><!><span> </span><!></button>`);
+var root_3 = $.from_html(`<button role="menuitem"><!><span>New tab</span><kbd>Ctrl T</kbd></button> <button role="menuitem"><!><span> </span></button> <button role="menuitem"><!><span>Connection inspector</span></button> <hr/> <!> <hr/> <button role="menuitem"><!><span>Settings</span></button> <button role="menuitem"><!><span>Commands</span><kbd>Ctrl K</kbd></button> <button role="menuitem"><!><span>Keyboard shortcuts</span></button>`, 1);
+var root_4 = $.from_html(`<dialog class="chrome-menu"><div class="chrome-menu-heading"><strong> </strong><small> </small></div> <div role="menu"><!></div></dialog>`);
 
 export default function ChromeMenu($$anchor, $$props) {
 	$.push($$props, true);
@@ -102,25 +101,14 @@ export default function ChromeMenu($$anchor, $$props) {
 		}
 	}
 
-	var dialog_1 = root();
-
-	dialog_1.__keydown = keys;
-
-	dialog_1.__click = (event) => {
-		if (event.target === dialog) dismiss();
-	};
-
+	var dialog_1 = root_4();
 	let styles;
 	var div = $.child(dialog_1);
 	var strong = $.child(div);
-	var text = $.child(strong, true);
-
-	$.reset(strong);
-
+	var text = $.only_child(strong, true);
 	var small = $.sibling(strong);
-	var text_1 = $.child(small, true);
+	var text_1 = $.only_child(small, true);
 
-	$.reset(small);
 	$.reset(div);
 
 	var div_1 = $.sibling(div, 2);
@@ -128,11 +116,8 @@ export default function ChromeMenu($$anchor, $$props) {
 
 	{
 		var consequent = ($$anchor) => {
-			var fragment = root_1();
+			var fragment = root();
 			var button = $.first_child(fragment);
-
-			button.__click = () => app.openProvider($.get(provider).id);
-
 			var node_1 = $.child(button);
 
 			Icon(node_1, { name: 'globe', size: 15 });
@@ -140,23 +125,16 @@ export default function ChromeMenu($$anchor, $$props) {
 			$.reset(button);
 
 			var button_1 = $.sibling(button, 2);
-
-			button_1.__click = togglePinned;
-
 			var node_2 = $.child(button_1);
 
 			Icon(node_2, { name: 'pin', size: 15 });
 
 			var span = $.sibling(node_2);
-			var text_2 = $.child(span, true);
+			var text_2 = $.only_child(span, true);
 
-			$.reset(span);
 			$.reset(button_1);
 
 			var button_2 = $.sibling(button_1, 2);
-
-			button_2.__click = () => move(-1);
-
 			var node_3 = $.child(button_2);
 
 			Icon(node_3, { name: 'back', size: 15 });
@@ -164,9 +142,6 @@ export default function ChromeMenu($$anchor, $$props) {
 			$.reset(button_2);
 
 			var button_3 = $.sibling(button_2, 2);
-
-			button_3.__click = () => move(1);
-
 			var node_4 = $.child(button_3);
 
 			Icon(node_4, { name: 'arrow', size: 15 });
@@ -174,12 +149,6 @@ export default function ChromeMenu($$anchor, $$props) {
 			$.reset(button_3);
 
 			var button_4 = $.sibling(button_3, 2);
-
-			button_4.__click = () => {
-				app.selectedProvider = $.get(provider).id;
-				app.navigate('detector');
-			};
-
 			var node_5 = $.child(button_4);
 
 			Icon(node_5, { name: 'scan', size: 15 });
@@ -187,9 +156,6 @@ export default function ChromeMenu($$anchor, $$props) {
 			$.reset(button_4);
 
 			var button_5 = $.sibling(button_4, 2);
-
-			button_5.__click = () => app.closeProvider($.get(provider).id);
-
 			var node_6 = $.child(button_5);
 
 			Icon(node_6, { name: 'close', size: 15 });
@@ -197,9 +163,6 @@ export default function ChromeMenu($$anchor, $$props) {
 			$.reset(button_5);
 
 			var button_6 = $.sibling(button_5, 4);
-
-			button_6.__click = () => app.showPopup('clear-profile', $.get(provider).id);
-
 			var node_7 = $.child(button_6);
 
 			Icon(node_7, { name: 'refresh', size: 15 });
@@ -207,9 +170,6 @@ export default function ChromeMenu($$anchor, $$props) {
 			$.reset(button_6);
 
 			var button_7 = $.sibling(button_6, 2);
-
-			button_7.__click = () => app.showPopup('remove-provider', $.get(provider).id);
-
 			var node_8 = $.child(button_7);
 
 			Icon(node_8, { name: 'trash', size: 15 });
@@ -222,15 +182,25 @@ export default function ChromeMenu($$anchor, $$props) {
 				button_3.disabled = $.get(position) < 0 || $.get(position) >= app.tabs.length - 1;
 			});
 
+			$.delegated('click', button, () => app.openProvider($.get(provider).id));
+			$.delegated('click', button_1, togglePinned);
+			$.delegated('click', button_2, () => move(-1));
+			$.delegated('click', button_3, () => move(1));
+
+			$.delegated('click', button_4, () => {
+				app.selectedProvider = $.get(provider).id;
+				app.navigate('detector');
+			});
+
+			$.delegated('click', button_5, () => app.closeProvider($.get(provider).id));
+			$.delegated('click', button_6, () => app.showPopup('clear-profile', $.get(provider).id));
+			$.delegated('click', button_7, () => app.showPopup('remove-provider', $.get(provider).id));
 			$.append($$anchor, fragment);
 		};
 
-		var alternate_1 = ($$anchor) => {
-			var fragment_1 = root_2();
+		var alternate = ($$anchor) => {
+			var fragment_1 = root_3();
 			var button_8 = $.first_child(fragment_1);
-
-			button_8.__click = () => app.newTab();
-
 			var node_9 = $.child(button_8);
 
 			Icon(node_9, { name: 'plus', size: 15 });
@@ -238,30 +208,16 @@ export default function ChromeMenu($$anchor, $$props) {
 			$.reset(button_8);
 
 			var button_9 = $.sibling(button_8, 2);
-
-			button_9.__click = () => {
-				app.toggleShelf();
-				dismiss();
-			};
-
 			var node_10 = $.child(button_9);
 
 			Icon(node_10, { name: 'panel', size: 15 });
 
 			var span_1 = $.sibling(node_10);
-			var text_3 = $.child(span_1, true);
+			var text_3 = $.only_child(span_1, true);
 
-			$.reset(span_1);
 			$.reset(button_9);
 
 			var button_10 = $.sibling(button_9, 2);
-
-			button_10.__click = () => {
-				app.navigate('browser');
-				app.inspectorVisible = !app.inspectorVisible;
-				app.saveLayout();
-			};
-
 			var node_11 = $.child(button_10);
 
 			Icon(node_11, { name: 'scan', size: 15 });
@@ -271,10 +227,7 @@ export default function ChromeMenu($$anchor, $$props) {
 			var node_12 = $.sibling(button_10, 4);
 
 			$.each(node_12, 17, () => pages, (page) => page.id, ($$anchor, page) => {
-				var button_11 = root_3();
-
-				button_11.__click = () => app.navigate($.get(page).id);
-
+				var button_11 = root_2();
 				let classes;
 				var node_13 = $.child(button_11);
 
@@ -286,50 +239,28 @@ export default function ChromeMenu($$anchor, $$props) {
 				});
 
 				var span_2 = $.sibling(node_13);
-				var text_4 = $.child(span_2, true);
-
-				$.reset(span_2);
-
+				var text_4 = $.only_child(span_2, true);
 				var node_14 = $.sibling(span_2);
 
 				{
 					var consequent_1 = ($$anchor) => {
-						var small_1 = root_4();
-						var text_5 = $.child(small_1, true);
+						var small_1 = root_1();
+						var text_5 = $.only_child(small_1, true);
 
-						$.reset(small_1);
 						$.template_effect(() => $.set_text(text_5, app.detectedProviders.length));
 						$.append($$anchor, small_1);
 					};
 
-					var alternate = ($$anchor) => {
-						var fragment_2 = $.comment();
-						var node_15 = $.first_child(fragment_2);
+					var consequent_2 = ($$anchor) => {
+						var small_2 = root_1();
+						var text_6 = $.only_child(small_2, true);
 
-						{
-							var consequent_2 = ($$anchor) => {
-								var small_2 = root_6();
-								var text_6 = $.child(small_2, true);
-
-								$.reset(small_2);
-								$.template_effect(() => $.set_text(text_6, app.models.length));
-								$.append($$anchor, small_2);
-							};
-
-							$.if(
-								node_15,
-								($$render) => {
-									if ($.get(page).id === 'models') $$render(consequent_2);
-								},
-								true
-							);
-						}
-
-						$.append($$anchor, fragment_2);
+						$.template_effect(() => $.set_text(text_6, app.models.length));
+						$.append($$anchor, small_2);
 					};
 
 					$.if(node_14, ($$render) => {
-						if ($.get(page).id === 'providers') $$render(consequent_1); else $$render(alternate, false);
+						if ($.get(page).id === 'providers') $$render(consequent_1); else if ($.get(page).id === 'models') $$render(consequent_2, 1);
 					});
 				}
 
@@ -341,44 +272,52 @@ export default function ChromeMenu($$anchor, $$props) {
 					$.set_text(text_4, $.get(page).title);
 				});
 
+				$.delegated('click', button_11, () => app.navigate($.get(page).id));
 				$.append($$anchor, button_11);
 			});
 
 			var button_12 = $.sibling(node_12, 4);
+			var node_15 = $.child(button_12);
 
-			button_12.__click = () => app.navigate('settings');
-
-			var node_16 = $.child(button_12);
-
-			Icon(node_16, { name: 'settings', size: 15 });
+			Icon(node_15, { name: 'settings', size: 15 });
 			$.next();
 			$.reset(button_12);
 
 			var button_13 = $.sibling(button_12, 2);
+			var node_16 = $.child(button_13);
 
-			button_13.__click = () => app.showPopup('commands');
-
-			var node_17 = $.child(button_13);
-
-			Icon(node_17, { name: 'command', size: 15 });
+			Icon(node_16, { name: 'command', size: 15 });
 			$.next(2);
 			$.reset(button_13);
 
 			var button_14 = $.sibling(button_13, 2);
+			var node_17 = $.child(button_14);
 
-			button_14.__click = () => app.showPopup('shortcuts');
-
-			var node_18 = $.child(button_14);
-
-			Icon(node_18, { name: 'key', size: 15 });
+			Icon(node_17, { name: 'key', size: 15 });
 			$.next();
 			$.reset(button_14);
 			$.template_effect(() => $.set_text(text_3, app.shelfVisible ? 'Hide provider sidebar' : 'Show provider sidebar'));
+			$.delegated('click', button_8, () => app.newTab());
+
+			$.delegated('click', button_9, () => {
+				app.toggleShelf();
+				dismiss();
+			});
+
+			$.delegated('click', button_10, () => {
+				app.navigate('browser');
+				app.inspectorVisible = !app.inspectorVisible;
+				app.saveLayout();
+			});
+
+			$.delegated('click', button_12, () => app.navigate('settings'));
+			$.delegated('click', button_13, () => app.showPopup('commands'));
+			$.delegated('click', button_14, () => app.showPopup('shortcuts'));
 			$.append($$anchor, fragment_1);
 		};
 
 		$.if(node, ($$render) => {
-			if ($.get(provider)) $$render(consequent); else $$render(alternate_1, false);
+			if ($.get(provider)) $$render(consequent); else $$render(alternate, -1);
 		});
 	}
 
@@ -400,7 +339,13 @@ export default function ChromeMenu($$anchor, $$props) {
 			: 'Codemax pages and actions');
 	});
 
+	$.delegated('keydown', dialog_1, keys);
 	$.event('cancel', dialog_1, dismiss);
+
+	$.delegated('click', dialog_1, (event) => {
+		if (event.target === dialog) dismiss();
+	});
+
 	$.append($$anchor, dialog_1);
 	$.pop();
 }

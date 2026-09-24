@@ -2,15 +2,8 @@
 @import("../core/buffer.zag") as buf
 @import("../storage/files.zag") as files
 fn generate(out: *buf.Buffer) bool {
-    let random: buf.Buffer = buf.make(32); let n: i32 = 0; let calls: i32 = 0;
-    while (n < 32 && calls < 16) {
-        let rc: i64 = _zag_raw_syscall(318, (random.data as i64) + n as i64, (32 - n) as i64, 0, 0, 0, 0);
-        calls = calls + 1;
-        if (rc == 0 - 4) { continue; }
-        if (rc <= 0) { buf.free(&random); return false; }
-        n = n + rc as i32;
-    }
-    if (n != 32) { buf.free(&random); return false; }
+    let random: buf.Buffer = buf.make(32);
+    if (!files.random_fill(random.data, 32)) { buf.free(&random); return false; }
     buf.clear(out); buf.add(out, "sk-local-"); let hex: []u8 = "0123456789abcdef"; let i: i32 = 0;
     while (i < 32) { buf.byte(out, hex[(random.data[i] / 16) as i32]); buf.byte(out, hex[(random.data[i] % 16) as i32]); random.data[i] = 0; i = i + 1; }
     buf.free(&random); return out.*.ok != 0;

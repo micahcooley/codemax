@@ -2,9 +2,10 @@ import {invoke,isTauri,listen,type UnlistenFn} from './native';
 import type {HostStatus,Snapshot} from '../types/bridge';
 export const native=():boolean=>isTauri();
 export const request=<T>(op:string,params:Record<string,unknown>={}):Promise<T>=>invoke<T>('bridge_request',{op,params});
+export type BrowserShortcut='address'|'commands'|'close-tab'|'reopen-tab'|'new-tab'|'next-tab'|'prev-tab'|`tab-${1|2|3|4|5|6|7|8|9}`;
 export interface Events {
-  snapshot(state:Snapshot):void;host(state:HostStatus):void;error(error:string):void;
-  notice(message:string):void;shortcut(key:'address'|'commands'):void;browser(id:number,origin:string,loading:boolean):void;
+  snapshot(state:Snapshot):void;host(state:HostStatus):void;error(error:string,providerId?:number):void;
+  notice(message:string):void;shortcut(key:BrowserShortcut):void;browser(id:number,origin:string,loading:boolean):void;
 }
 export async function observe(events:Events):Promise<UnlistenFn>{
   if(!native()){events.host({state:'BROWSER_ONLY',code:'NATIVE_HOST_REQUIRED'});return ()=>{};}
@@ -15,9 +16,9 @@ export async function observe(events:Events):Promise<UnlistenFn>{
       events.snapshot(data);
     }));
     cleanup.push(await listen<HostStatus>('bridge:host',event=>events.host(event.payload)));
-    cleanup.push(await listen<{code:string}>('bridge:browser-error',event=>events.error(event.payload.code)));
+    cleanup.push(await listen<{code:string;provider_id?:number}>('bridge:browser-error',event=>events.error(event.payload.code,event.payload.provider_id)));
     cleanup.push(await listen<{message:string}>('bridge:notice',event=>events.notice(event.payload.message)));
-    cleanup.push(await listen<{key:'address'|'commands'}>('bridge:shortcut',event=>events.shortcut(event.payload.key)));
+    cleanup.push(await listen<{key:BrowserShortcut}>('bridge:shortcut',event=>events.shortcut(event.payload.key)));
     cleanup.push(await listen<{provider_id:number;origin:string;loading?:boolean}>('bridge:browser',event=>events.browser(event.payload.provider_id,event.payload.origin,event.payload.loading===true)));
     events.host(await invoke<HostStatus>('host_status'));
     try{events.snapshot(await request<Snapshot>('state.get'));}catch{ /* Startup is driven by the subsequent push handshake, never by polling. */ }

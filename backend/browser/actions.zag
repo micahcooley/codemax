@@ -6,7 +6,7 @@
 fn allowed(p: *registry.Provider) bool {
     return registry.publishable(p) && p.*.quota == 0 && p.*.prompt > 0 && p.*.send > 0 && p.*.response > 0 && p.*.document.len > 0;
 }
-fn generate(p: *registry.Provider, model_index: i32, request_id: []u8, prompt: []u8, reasoning: []u8, files: []u8, new_chat: bool, out: *buf.Buffer) bool {
+fn generate(p: *registry.Provider, model_index: i32, request_id: []u8, prompt: []u8, reasoning: []u8, files: []u8, new_chat: bool, ephemeral: []u8, out: *buf.Buffer) bool {
     if (!allowed(p) || model_index < 0 || model_index >= p.*.model_count || _zag_strlen(prompt) > 131072) { return false; }
     buf.add(out, "{\"type\":\"action\",\"provider_id\":"); buf.integer(out, p.*.id as i64);
     buf.add(out, ",\"action\":{\"type\":\"generate\",\"document_id\":"); buf.json(out, buf.view(&p.*.document));
@@ -19,9 +19,30 @@ fn generate(p: *registry.Provider, model_index: i32, request_id: []u8, prompt: [
     buf.add(out, ",\"reasoning_value\":"); if (_zag_strlen(reasoning) > 0) { buf.json(out, reasoning); } else { buf.json(out, buf.view(&p.*.reasoning_value)); }
     buf.add(out, ",\"attachment_node\":"); buf.integer(out, p.*.attachment as i64);
     buf.add(out, ",\"attachments\":"); buf.add(out, files);
+    buf.add(out, ",\"ephemeral_control\":"); buf.integer(out, p.*.ephemeral as i64);
+    buf.add(out, ",\"ephemeral\":"); buf.json(out, ephemeral);
     buf.add(out, ",\"bindings\":"); bindings(p, out);
     buf.add(out, ",\"new_chat\":"); if (new_chat) { buf.integer(out, p.*.new_chat as i64); } else { buf.add(out, "0"); }
     buf.add(out, "}}\n"); return out.*.ok != 0;
+}
+// Temporary-chat mode for a fresh conversation only. Returns "on" when the
+// mapped control is a switch or checkbox the automation can flip safely;
+// any other control kind yields "" so the request proceeds normally instead
+// of clicking an unknown element. Mid-conversation flips never happen here.
+fn ephemeral_mode(p: *registry.Provider, fresh: bool) []u8 {
+    if (!fresh || p.*.ephemeral <= 0) { return ""; }
+    let d: json.Document = json.parse(buf.view(&p.*.evidence)); let controls: i32 = json.get(d, 0, "controls"); let mode: []u8 = "";
+    if (d.ok != 0 && json.kind(d, controls) == 2) {
+        let i: i32 = controls + 1;
+        while (i < d.tokens[controls].next) {
+            if (json.number(&d, json.get(d, i, "id"), 0) == p.*.ephemeral as i64 &&
+                (json.is_text(d, json.get(d, i, "role"), "switch") || json.is_text(d, json.get(d, i, "role"), "checkbox"))) {
+                mode = "on";
+            }
+            i = d.tokens[i].next;
+        }
+    }
+    json.free(&d); return mode;
 }
 fn stop(p: *registry.Provider, request_id: []u8, out: *buf.Buffer) void {
     buf.add(out, "{\"type\":\"action\",\"provider_id\":"); buf.integer(out, p.*.id as i64);
@@ -48,10 +69,21 @@ fn new_chat(p: *registry.Provider, request_id: []u8, out: *buf.Buffer) bool {
 
 // Bounded, non-destructive discovery. Never authorizes accounts, sends prompts,
 // changes a model/reasoning choice, or runs a tool. Browser revalidates idleness.
-fn investigate(p: *registry.Provider, out: *buf.Buffer) void {
+// Auto-opening stops once the provider is admitted with a catalog: further
+// menus flap under the user's cursor and steal focus, while any menu the user
+// opens themselves is still observed. Undetected providers keep the bounded
+// budget below.
+fn investigate(p: *registry.Provider, out: *buf.Buffer, parked: bool) void {
     let now: i64 = _zag_clock_monotonic_ms();
-    if (!p.*.scan_enabled || p.*.dismissed || p.*.active_request >= 0 || p.*.browser_busy || p.*.preparing ||
+    // A stale catalog (detected, but nothing currently available) still
+    // earns menu inspection: reopened tabs restate their options on their
+    // own. Parked provisioning requests do not block inspection either;
+    // nothing has dispatched yet, so opening the menu cannot disturb a turn.
+    let has_available: bool = false; let av: i32 = 0;
+    while (av < p.*.model_count) { if (p.*.models[av].available && p.*.models[av].enabled) { has_available = true; } av = av + 1; }
+    if (!p.*.scan_enabled || p.*.dismissed || (p.*.active_request >= 0 && !parked) || p.*.browser_busy || p.*.preparing ||
         p.*.prompt <= 0 || p.*.send <= 0 || p.*.response <= 0 || p.*.model_control <= 0 ||
+        (p.*.detected && has_available) ||
         p.*.investigation_count >= 4 || now - p.*.investigation_at < 5000 || p.*.state == 2 || p.*.quota != 0) { return; }
     let node: i32 = p.*.model_control;
     if (p.*.investigation_node == node) { node = p.*.reasoning_control; }

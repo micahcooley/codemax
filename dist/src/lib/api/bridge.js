@@ -16,7 +16,7 @@ export async function observe(events) {
             events.snapshot(data);
         }));
         cleanup.push(await listen('bridge:host', event => events.host(event.payload)));
-        cleanup.push(await listen('bridge:browser-error', event => events.error(event.payload.code)));
+        cleanup.push(await listen('bridge:browser-error', event => events.error(event.payload.code, event.payload.provider_id)));
         cleanup.push(await listen('bridge:notice', event => events.notice(event.payload.message)));
         cleanup.push(await listen('bridge:shortcut', event => events.shortcut(event.payload.key)));
         cleanup.push(await listen('bridge:browser', event => events.browser(event.payload.provider_id, event.payload.origin, event.payload.loading === true)));

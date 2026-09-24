@@ -18,6 +18,7 @@
   for (const event of ['pointerdown','keydown','input']) document.addEventListener(event,e=>{if(e.isTrusted)lastUserInteraction=performance.now();},true);
   let picker = null; let lastMenuTrigger = null; let lastMenuAt = 0; let discoveryEnabled = true;
   let lastSnapshot = ''; let stopped = false; let sending = false;
+  let conversationStarted = false;
   const queue = []; const MAX_QUEUE = 128;
   const transport = event => {
     // This is the sole command permitted to remote provider webviews. The Rust
@@ -46,7 +47,20 @@
     if (!(node instanceof Element) || !node.isConnected || node.closest('[hidden],[aria-hidden="true"],[inert]')) return false;
     const rect = node.getBoundingClientRect();
     const style = getComputedStyle(node);
-    return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+    if (rect.width <= 0 || rect.height <= 0 || style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return false;
+    // Opacity-hidden elements (e.g. cross-fading send/stop buttons that swap
+    // via transparency instead of display) still occupy layout, so rect-only
+    // checks mistake them for live controls and the page reads as permanently
+    // busy. Computed self opacity covers class-based fades; the cheap inline
+    // ancestor walk covers style-attribute cross-fades without a costly
+    // full ancestor style resolution. Mid-transition values stay visible.
+    let depth = 0, at = node;
+    while (at instanceof Element && depth < 5) {
+      const raw = at === node ? style.opacity : (at.style ? at.style.opacity : '');
+      if (raw !== undefined && raw !== null && raw !== '' && Number(raw) <= 0) return false;
+      at = at.parentElement; depth++;
+    }
+    return true;
   }
   function id(node) {
     if (!ids.has(node)) ids.set(node, nextId++);
@@ -75,9 +89,11 @@
     const by = node.getAttribute('aria-labelledby');
     const related = by ? by.split(/\s+/).slice(0, 3).map(k => document.getElementById(k)?.textContent || '').join(' ') : '';
     const formLabel = node.labels ? Array.from(node.labels).slice(0, 2).map(x => x.textContent).join(' ') : '';
-    // Never read .value or editor text for evidence.
+    // Never read .value or editor text for evidence. data-testid is a
+    // developer string (never credentials); it only fills in when no human
+    // label exists, which is common for icon-only React controls.
     return redact(node.getAttribute('aria-label') || related || formLabel || node.getAttribute('placeholder') ||
-      node.getAttribute('title') || (!editable(node) && (['BUTTON', 'OPTION'].includes(node.tagName) || ['option','menuitemradio','menuitem'].includes(node.getAttribute('role'))) ? node.textContent : '') || '');
+      node.getAttribute('title') || node.getAttribute('data-testid') || (!editable(node) && (['BUTTON', 'OPTION'].includes(node.tagName) || ['option','menuitemradio','menuitem'].includes(node.getAttribute('role'))) ? node.textContent : '') || '');
   }
   function forbidden(node) {
     if (!(node instanceof Element)) return true;
@@ -110,17 +126,30 @@
     const options = node instanceof HTMLSelectElement ? Array.from(node.options).slice(0, 32).map(option => ({
       value: redact(option.value).slice(0, 180), label: redact(option.textContent), disabled: option.disabled, selected: option.selected
     })) : [];
-    return {id: id(node), tag: node.tagName.toLowerCase(), role: semanticRole(node), label: label(node),
-      visible: isVisible, editable: editable(node), disabled: !!node.disabled || node.getAttribute('aria-disabled') === 'true',
+    const role = semanticRole(node);
+    const lbl = label(node);
+    const off = !!node.disabled || node.getAttribute('aria-disabled') === 'true';
+    // A model/reasoning control that turns off after the first exchange is a
+    // website conversation lock (model and reasoning stay put until a new
+    // chat), not a broken mapping. It only fires once assistant content
+    // exists, so login-time disabled controls never read as locked.
+    const locked = off && conversationStarted && ['button', 'combobox'].includes(role) &&
+      (/(\bmodels?\b|模型)/i.test(lbl) || /(reason|think|思考|推理)/i.test(lbl));
+    return {id: id(node), tag: node.tagName.toLowerCase(), role, label: lbl,
+      visible: isVisible, editable: editable(node), disabled: off,
       live: node.getAttribute('aria-live') || '', busy: node.getAttribute('aria-busy') === 'true',
-      current_value: controlValue(node),
+      current_value: controlValue(node), locked,
       selected: node.matches('[aria-checked="true"],[aria-selected="true"],[aria-pressed="true"]'), menu_owner: menuOwner(node),
       value: ['option','menuitemradio','menuitem'].includes(node.getAttribute('role')) ? redact(node.getAttribute('data-value') || label(node)).slice(0,180) : '',
       popup: node.getAttribute('aria-haspopup') || '', file_input: fileInput,
       assistant: node.matches('[data-message-author-role="assistant"],[data-role="assistant"]'), options};
   }
+  // Control-name patterns cover English and Chinese UIs. CJK scripts have no
+  // word boundaries, so the Chinese alternatives match without \b anchors.
+  const MODEL_WORD = /(\bmodels?\b|模型)/i;
+  const REASON_WORD = /(reason|think|思考|推理)/i;
   function modelContextFacts(controls) {
-    const modelControls = controls.filter(c=>c.visible && ['button','combobox'].includes(c.role) && /\bmodel\b/i.test(c.label));
+    const modelControls = controls.filter(c=>c.visible && ['button','combobox'].includes(c.role) && MODEL_WORD.test(c.label));
     const owners = new Set(modelControls.map(c=>c.id));
     const facts=[];
     for (const c of controls) {
@@ -139,6 +168,9 @@
   }
   function snapshot() {
     if (stopped || !discoveryEnabled || location.origin !== config.origin) return;
+    // Assistant content marks a started conversation; model/reasoning
+    // controls observed as disabled from here on read as website locks.
+    try { conversationStarted = !!document.querySelector(assistantSelector); } catch { conversationStarted = false; }
     // Bound traversal work even on very large pages. Skip page text and input values.
     const candidates = document.querySelectorAll('textarea,input,[contenteditable]:not([contenteditable="false"]),button,select,[role="button"],[role="combobox"],[role="option"],[role="menuitemradio"],[role="menuitem"],[role="switch"],[role="checkbox"],[aria-label],[title],[aria-haspopup],[tabindex],main,[role="main"],[role="log"],[aria-live],[data-message-author-role="assistant"],[data-role="assistant"]');
     const controls = []; let examined = 0;
@@ -205,7 +237,7 @@
     const mapped = nodes.get(nodeId);
     if (mapped && visible(mapped) && !forbidden(mapped) && !mapped.disabled) return mapped;
     const matches = Array.from(document.querySelectorAll('button,[role="button"]')).slice(0,256)
-      .filter(node => visible(node) && !forbidden(node) && !node.disabled && /^(stop|stop generating|stop response|cancel generation)$/i.test(label(node).trim()));
+      .filter(node => visible(node) && !forbidden(node) && !node.disabled && /^(stop|stop generating|stop response|cancel generation|停止|停止生成|取消生成)$/i.test(label(node).trim()));
     return matches.length === 1 ? matches[0] : null;
   }
   const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -258,7 +290,7 @@
     picker.host.remove(); picker = null;
   }
   function beginPicker(mapping) {
-    if (!['prompt','send','response','stop','new_chat','model','reasoning','attachment'].includes(mapping) || generation) throw new Error('PICKER_DENIED');
+    if (!['prompt','send','response','stop','new_chat','model','reasoning','attachment','ephemeral'].includes(mapping) || generation) throw new Error('PICKER_DENIED');
     endPicker(); const host = document.createElement('div');
     host.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483647';
     const shadow = host.attachShadow({mode:'closed'});
@@ -271,7 +303,7 @@
       if (forbidden(node)) return false;
       if (mapping === 'prompt') return editable(node);
       if (mapping === 'response') return node.matches('main,[role="main"],[role="log"],'+assistantSelector);
-      if (mapping === 'model' || mapping === 'reasoning') return node.matches('select,button,[role="button"],[role="combobox"],[role="switch"]');
+      if (mapping === 'model' || mapping === 'reasoning' || mapping === 'ephemeral') return node.matches('select,button,[role="button"],[role="combobox"],[role="switch"]');
       return node.matches('button,[role="button"]');
     };
     const move = event => {
@@ -383,7 +415,7 @@
       if (Array.from(document.querySelectorAll('textarea,[contenteditable="true"]')).some(node=>visible(node)&&(node.value||node.textContent||'').trim())) return;
       const node = target(action.node);
       if (!['button','combobox'].includes(semanticRole(node)) || !['menu','listbox','true'].includes(node.getAttribute('aria-haspopup'))) return;
-      if (!/model|reason|think/i.test(label(node)) && !/^[a-z][a-z0-9 ._-]*[0-9][a-z0-9 ._-]*$/i.test(controlValue(node))) return;
+      if (!REASON_WORD.test(label(node)) && !MODEL_WORD.test(label(node)) && !/^[a-z][a-z0-9 ._-]*[0-9][a-z0-9 ._-]*$/i.test(controlValue(node))) return;
       const previous = document.activeElement; investigating = true;
       try {
         lastMenuTrigger=node;lastMenuAt=Date.now();node.click();await settle();await pause(150);lastSnapshot='';snapshot();
@@ -412,6 +444,25 @@
       if (action.reasoning_value) {
         if (!action.reasoning_control) throw new Error('REASONING_UNAVAILABLE');
         await choose(action,'reasoning',action.reasoning_control,action.reasoning_value); checkPreparing();
+      }
+      // Temporary chats apply once, before composing, and only to switch or
+      // checkbox controls the backend verified. Anything else fails closed
+      // rather than clicking an unknown element.
+      if (action.ephemeral === 'on') {
+        if (!action.ephemeral_control) throw new Error('EPHEMERAL_UNAVAILABLE');
+        const toggle = resolve(action, 'ephemeral', action.ephemeral_control);
+        if (!['switch', 'checkbox'].includes(toggle.getAttribute('role'))) throw new Error('EPHEMERAL_UNSUPPORTED');
+        const isOn = toggle.getAttribute('aria-checked') === 'true' ||
+          toggle.getAttribute('aria-pressed') === 'true' ||
+          (toggle instanceof HTMLInputElement && toggle.checked);
+        if (!isOn) {
+          toggle.click(); await settle(); checkPreparing();
+          const nowOn = toggle.getAttribute('aria-checked') === 'true' ||
+            toggle.getAttribute('aria-pressed') === 'true' ||
+            (toggle instanceof HTMLInputElement && toggle.checked);
+          if (!nowOn) throw new Error('SELECTION_FAILED');
+        }
+        checkPreparing();
       }
       await attach(action); checkPreparing();
     } finally { if (preparingRequest === preparing) preparingRequest = null; }
@@ -534,9 +585,28 @@
     const original = history[method];
     history[method] = function(...args) { const result = Reflect.apply(original, this, args); scheduleSnapshot(); return result; };
   }
+  // Browser-reserved shortcuts work from inside provider pages too: the
+  // main window never sees these keystrokes (separate native webview), so
+  // trusted modifier combos are forwarded as named UI actions. isTrusted is
+  // required so a website can never synthesize UI gestures (e.g. closing
+  // your tab). Page text editing keys are never touched.
+  const shortcutName = (key, shift) => {
+    if (key === 'w' && !shift) return 'close-tab';
+    if (key === 't' && !shift) return 'new-tab';
+    if (key === 't' && shift) return 'reopen-tab';
+    if (key === 'tab') return shift ? 'prev-tab' : 'next-tab';
+    if (/^[1-9]$/.test(key)) return 'tab-' + key;
+    return null;
+  };
   document.addEventListener('keydown', event => {
-    if (!event.isTrusted || !(event.metaKey || event.ctrlKey) || !['l','k'].includes(event.key.toLowerCase())) return;
-    event.preventDefault(); emit({type:'shortcut',key:event.key.toLowerCase()==='l'?'address':'commands'});
+    if (!event.isTrusted || !(event.metaKey || event.ctrlKey)) return;
+    const key = event.key.toLowerCase();
+    if (key === 'l' || key === 'k') {
+      event.preventDefault(); emit({type:'shortcut',key:key==='l'?'address':'commands'}); return;
+    }
+    const name = shortcutName(key, event.shiftKey);
+    if (!name) return;
+    event.preventDefault(); emit({type:'shortcut',key:name});
   }, true);
   window.addEventListener('popstate', scheduleSnapshot);
   window.addEventListener('pagehide', () => {endPicker();stopGeneration('NAVIGATED');});

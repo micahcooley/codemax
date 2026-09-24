@@ -1,3 +1,14 @@
+/** Multi-model opencode.json. The default model must be one of the included
+ * models; every included model becomes selectable inside OpenCode. */
+export function buildOpencodeConfig(endpoint, defaultModelId, models) {
+    if (!/^http:\/\/127\.0\.0\.1:\d{4,5}$/.test(endpoint) || !defaultModelId || !models.length || !models.some(m => m.id === defaultModelId))
+        throw Error('INVALID_OPENCODE_CONFIG');
+    for (const m of models) {
+        if (!m.id || !m.providerLabel || !m.displayName)
+            throw Error('INVALID_OPENCODE_CONFIG');
+    }
+    return { $schema: 'https://opencode.ai/config.json', model: `codemax/${defaultModelId}`, provider: { codemax: { npm: '@ai-sdk/openai-compatible', name: 'Codemax websites', options: { baseURL: `${endpoint}/v1`, apiKey: '{env:CODEMAX_API_KEY}' }, models: Object.fromEntries(models.map(m => [m.id, { name: `${m.providerLabel} / ${m.displayName}` }])) } } };
+}
 export function shellQuote(value) { return "'" + value.replaceAll("'", "'\\''") + "'"; }
 export function privateLaunch(client, endpoint, model, key, config) {
     if (!/^http:\/\/127\.0\.0\.1:\d{4,5}$/.test(endpoint) || !model || !key || /[\r\n\0]/.test(key))

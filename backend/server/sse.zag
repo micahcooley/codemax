@@ -1,7 +1,7 @@
 @import("../core/runtime.zag")
 @import("../core/buffer.zag") as buf
-fn emit(out: *buf.Buffer, name: []u8, payload: []u8) void {
+fn emit(out: @borrows_mut *buf.Buffer, name: @borrows []u8, payload: @borrows []u8) void {
     if (_zag_strlen(name) > 0) { buf.add(out, "event: "); buf.add(out, name); buf.byte(out, 10); }
     buf.add(out, "data: "); buf.add(out, payload); buf.add(out, "\n\n");
 }
-fn heartbeat(out: *buf.Buffer) void { buf.add(out, ": bridge keepalive\n\n"); }
+fn heartbeat(out: @borrows_mut *buf.Buffer) void { buf.add(out, ": bridge keepalive\n\n"); }

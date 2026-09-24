@@ -21,6 +21,20 @@ test('catalog: empty means empty, not a manufactured model',()=>assert.deepEqual
 test('catalog: unknown context/output limits remain zero sentinels, not guessed sizes',()=>{const m=parseCodemaxModels(catalog([model({})]))[0];assert.equal(m.contextWindow,0);assert.equal(m.maxOutputTokens,0);assert.equal(m.contextVerified,false);assert.deepEqual(m.reasoningLevels,[]);assert.equal(m.tokenizer.exact_counting,false);});
 test('catalog: exact observed reasoning values retained',()=>{const m=parseCodemaxModels(catalog([model({reasoning:{control_observed:true,supported:true,modes:[{value:'Deep Think',label:'Deep Think'},{value:'Max',label:'Max'}]}})]))[0];assert.deepEqual(m.reasoningLevels,['Deep Think','Max']);});
 test('catalog: mode names without a discovered control do not become actions',()=>assert.deepEqual(parseCodemaxModels(catalog([model({reasoning:{supported:true,modes:[{value:'high',label:'high'}]}})]))[0].reasoningLevels,[]));
+test('catalog: Auto Thinking Fast surface as the native reasoning toggle for each model',()=>{
+  const modes=[{value:'Auto',label:'Auto'},{value:'Thinking',label:'Thinking'},{value:'Fast',label:'Fast'}];
+  const models=parseCodemaxModels(catalog([
+    model({id:'p1/glm-4.6',display_name:'GLM-4.6',reasoning:{control_observed:true,supported:true,modes}}),
+    model({id:'p1/glm-4.5',display_name:'GLM-4.5',reasoning:{control_observed:true,supported:true,modes}}),
+  ]));
+  assert.equal(models.length,2,'two models, not five: modes are not models');
+  for(const m of models){
+    assert.equal(m.canReason,true,'reasoning toggle available');
+    assert.deepEqual(m.reasoningLevels,['Auto','Thinking','Fast'],'harness native reasoning toggle');
+    assert.deepEqual(m.reasoningModes,modes);
+  }
+  assert.ok(!models.some(m=>/^(auto|thinking|fast)$/i.test(m.id)),'no phantom Auto/Thinking/Fast models');
+});
 test('catalog: only observed numeric context is trusted, not a user override',()=>{for(const source of ['WEBSITE_REPORTED','USER_OVERRIDE']){const m=parseCodemaxModels(catalog([model({context:{nominal:131072,source}})]))[0];assert.equal(m.contextWindow,131072);assert.equal(m.contextVerified,source==='WEBSITE_REPORTED');}});
 test('catalog: duplicate IDs and invalid framing rejected',()=>{assert.throws(()=>parseCodemaxModels(catalog([model({}),model({})])));assert.throws(()=>parseCodemaxModels({object:'list',data:[]}));assert.throws(()=>parseCodemaxModels(catalog([model({id:'unsafe\nname'})])));});
 test('messages: real wire serialization preserves system, IDs and arguments',()=>{const m=encodeCodemaxMessages([{role:'assistant',content:'',tool_calls:[{id:'c1',name:'read_file',input:{path:'notes.txt'}}]},{role:'tool',content:[{type:'text',text:'actual tool output'}],tool_call_id:'c1'}]);assert.equal(m[1].tool_call_id,'c1');assert.equal(m[1].content,'actual tool output');assert.deepEqual(JSON.parse(m[0].tool_calls[0].function.arguments),{path:'notes.txt'});});

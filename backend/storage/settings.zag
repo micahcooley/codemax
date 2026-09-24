@@ -5,15 +5,15 @@
 // UI preferences and routing policy are persisted by Zag, never by browser pages.
 struct Settings {
     harness: i32, theme: i32, compact: bool, restore_tabs: bool, auto_start: bool,
-    idle_minutes: i32, log_level: i32, fallback_enabled: bool, developer_mode: bool,
+    idle_minutes: i32, log_level: i32, fallback_enabled: bool, developer_mode: bool, ephemeral_chats: bool,
     fallback_model: buf.Buffer, default_model: buf.Buffer,
 }
 fn make() Settings {
     return Settings{.harness = 0, .theme = 0, .compact = false, .restore_tabs = true, .auto_start = false,
-        .idle_minutes = 30, .log_level = 2, .fallback_enabled = false, .developer_mode = false,
+        .idle_minutes = 30, .log_level = 2, .fallback_enabled = false, .developer_mode = false, .ephemeral_chats = false,
         .fallback_model = buf.make(256), .default_model = buf.make(256)};
 }
-fn boolean(out: *buf.Buffer, value: bool) void { if (value) { buf.add(out, "true"); } else { buf.add(out, "false"); } }
+fn boolean(out: @borrows_mut *buf.Buffer, value: bool) void { if (value) { buf.add(out, "true"); } else { buf.add(out, "false"); } }
 fn theme_name(n: i32) []u8 { if (n == 1) { return "light"; } if (n == 2) { return "system"; } return "dark"; }
 fn log_name(n: i32) []u8 { if (n == 0) { return "ERROR"; } if (n == 1) { return "WARN"; } if (n == 3) { return "DEBUG"; } return "INFO"; }
 fn harness_name(n: i32) []u8 { if (n == 5) { return "koryphaios"; } if (n == 1) { return "claude"; } if (n == 2) { return "chat"; } if (n == 3) { return "responses"; } if (n == 4) { return "messages"; } return "opencode"; }
@@ -28,6 +28,7 @@ fn render(s: *Settings, out: *buf.Buffer) void {
     buf.add(out, ",\"fallback_model\":"); buf.json(out, buf.view(&s.*.fallback_model));
     buf.add(out, ",\"default_model\":"); buf.json(out, buf.view(&s.*.default_model));
     buf.add(out, ",\"developer_mode\":"); boolean(out, s.*.developer_mode);
+    buf.add(out, ",\"ephemeral_chats\":"); boolean(out, s.*.ephemeral_chats);
     buf.add(out, ",\"raw_capture\":false}");
 }
 fn bool_field(d: *json.Document, object: i32, key: []u8, old: bool) bool {
@@ -38,7 +39,7 @@ fn valid_bool(d: *json.Document, object: i32, key: []u8) bool {
 }
 fn update(s: *Settings, d: *json.Document, object: i32) bool {
     if (json.kind(d, object) != 1 || !valid_bool(d, object, "compact") || !valid_bool(d, object, "restore_tabs") ||
-        !valid_bool(d, object, "auto_start") || !valid_bool(d, object, "fallback_enabled") || !valid_bool(d, object, "developer_mode")) { return false; }
+        !valid_bool(d, object, "auto_start") || !valid_bool(d, object, "fallback_enabled") || !valid_bool(d, object, "developer_mode") || !valid_bool(d, object, "ephemeral_chats")) { return false; }
     let harness: i32 = s.*.harness; let harness_at: i32 = json.get(d, object, "harness");
     if (harness_at >= 0) { harness = 0 - 1; let n: i32 = 0; while (n < 6) { if (json.is_text(d, harness_at, harness_name(n))) { harness = n; } n = n + 1; } if (harness < 0) { return false; } }
     let theme: i32 = s.*.theme; let level: i32 = s.*.log_level;
@@ -72,6 +73,7 @@ fn update(s: *Settings, d: *json.Document, object: i32) bool {
         s.*.restore_tabs = bool_field(d, object, "restore_tabs", s.*.restore_tabs);
         s.*.auto_start = bool_field(d, object, "auto_start", s.*.auto_start);
         s.*.developer_mode = bool_field(d, object, "developer_mode", s.*.developer_mode);
+        s.*.ephemeral_chats = bool_field(d, object, "ephemeral_chats", s.*.ephemeral_chats);
         s.*.fallback_enabled = enabled; buf.copy(&s.*.fallback_model, buf.view(&fallback)); buf.copy(&s.*.default_model, buf.view(&model));
     }
     buf.free(&fallback); buf.free(&model); return ok;
@@ -80,6 +82,7 @@ fn copy(source: *Settings, target: *Settings) void {
     target.*.harness = source.*.harness; target.*.theme = source.*.theme; target.*.compact = source.*.compact; target.*.restore_tabs = source.*.restore_tabs;
     target.*.auto_start = source.*.auto_start; target.*.idle_minutes = source.*.idle_minutes;
     target.*.developer_mode = source.*.developer_mode; target.*.log_level = source.*.log_level; target.*.fallback_enabled = source.*.fallback_enabled;
+    target.*.ephemeral_chats = source.*.ephemeral_chats;
     buf.copy(&target.*.fallback_model, buf.view(&source.*.fallback_model)); buf.copy(&target.*.default_model, buf.view(&source.*.default_model));
 }
 fn save(root: []u8, s: *Settings) bool {

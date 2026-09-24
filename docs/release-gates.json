@@ -23,8 +23,8 @@
     {
       "id": "svelte_typecheck_vite",
       "description": "Full svelte-check and normal Vite dependency build",
-      "status": "NOT_VERIFIED",
-      "evidence": null
+      "status": "VERIFIED",
+      "evidence": "tests/evidence/svelte-typecheck-vite.json"
     },
     {
       "id": "compiled_ui_chromium",
@@ -77,6 +77,30 @@
     {
       "id": "linux_package",
       "description": "Install, launch and uninstall produced Linux package",
+      "status": "NOT_VERIFIED",
+      "evidence": null
+    },
+    {
+      "id": "macos_local_tools_compile",
+      "description": "Compile native/local-tools.c on macOS (Apple Clang) and run the startup containment probe",
+      "status": "NOT_VERIFIED",
+      "evidence": null
+    },
+    {
+      "id": "macos_local_tools_tests",
+      "description": "Run tests/real/local_tools_test.py against the macOS-built sidecar (symlink/hardlink/race/cancellation/atomic-write/revision/containment)",
+      "status": "NOT_VERIFIED",
+      "evidence": null
+    },
+    {
+      "id": "macos_rust_build",
+      "description": "cargo build/test of the Tauri host on macOS including the LaunchAgent autostart path",
+      "status": "NOT_VERIFIED",
+      "evidence": null
+    },
+    {
+      "id": "macos_dmg",
+      "description": "Produce, install, launch and uninstall the macOS .dmg; verify the bundled local-tools sidecar is a real Mach-O binary and the app enters fallback browsing mode (Zag backend is Linux-only)",
       "status": "NOT_VERIFIED",
       "evidence": null
     },

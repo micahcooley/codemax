@@ -52,9 +52,7 @@ export default function Icon($$anchor, $$props) {
 	};
 
 	var svg = root();
-	var path = $.child(svg);
-
-	$.reset(svg);
+	var path = $.only_child(svg);
 
 	$.template_effect(() => {
 		$.set_attribute(svg, 'width', size());

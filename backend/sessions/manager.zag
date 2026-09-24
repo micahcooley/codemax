@@ -9,7 +9,7 @@ struct Session {
     id: buf.Buffer, model: buf.Buffer, history: buf.Buffer, response: buf.Buffer, last_response_id: buf.Buffer,
     url: buf.Buffer, title: buf.Buffer, receipts: buf.Buffer,
     provider_id: i32, turns: i32, input_messages: i32, created: i64, last_used: i64,
-    status: i32, estimated_used: i64, tools_last_turn: bool,
+    status: i32, estimated_used: i64, tools_last_turn: bool, warned: bool,
 }
 struct Sessions { items: *Session, count: i32, }
 fn make() Sessions { return Sessions{.items = _zag_malloc(128 * @sizeOf[Session]()) as *Session, .count = 0}; }
@@ -21,7 +21,7 @@ fn add(s: *Sessions, id: []u8, provider: i32, model: []u8) i32 {
     let now: i64 = net.unix_seconds();
     let item: Session = Session{.id = buf.make(96), .model = buf.make(256), .history = buf.make(1), .response = buf.make(262144), .last_response_id = buf.make(96),
         .url = buf.make(2048), .title = buf.make(256), .receipts = buf.make(65536),
-        .provider_id = provider, .turns = 0, .input_messages = 0, .created = now, .last_used = now, .status = 0, .estimated_used = 0, .tools_last_turn = false};
+        .provider_id = provider, .turns = 0, .input_messages = 0, .created = now, .last_used = now, .status = 0, .estimated_used = 0, .tools_last_turn = false, .warned = false};
     buf.copy(&item.id, id); buf.copy(&item.model, model); buf.copy(&item.receipts, "[]");
     s.*.items[s.*.count] = item; s.*.count = s.*.count + 1; return s.*.count - 1;
 }

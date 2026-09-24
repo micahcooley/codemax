@@ -9,194 +9,194 @@
     {
       "name": "Entering an existing origin preserves its path, query and fragment",
       "status": "PASS",
-      "seconds": 0.151
+      "seconds": 0.021
     },
     {
       "name": "Address parser distinguishes local hosts, search, unsafe schemes and credentials",
       "status": "PASS",
-      "seconds": 0.015
+      "seconds": 0.008
     },
     {
       "name": "Escape cancels address edits without navigation and restores tab focus",
       "status": "PASS",
-      "seconds": 0.103
+      "seconds": 0.074
     },
     {
       "name": "Find focuses immediately, supports reverse search and closes independently",
       "status": "PASS",
-      "seconds": 0.111
+      "seconds": 0.065
     },
     {
       "name": "Confirmation defaults to Cancel and traps browser shortcuts without destructive side effects",
       "status": "PASS",
-      "seconds": 0.421
+      "seconds": 0.363
     },
     {
       "name": "Command palette autofocus and keyboard selection remain visible while scrolling",
       "status": "PASS",
-      "seconds": 0.118
+      "seconds": 0.036
     },
     {
       "name": "Internal management navigation has predictable Back and Forward history",
       "status": "PASS",
-      "seconds": 0.847
+      "seconds": 0.772
     },
     {
       "name": "Page zoom readout follows each website instead of resetting on every switch",
       "status": "PASS",
-      "seconds": 0.195
+      "seconds": 0.134
     },
     {
       "name": "Copy feedback stays in the reserved footer, does not shift the website and expires",
       "status": "PASS",
-      "seconds": 5.211
+      "seconds": 5.191
     },
     {
       "name": "Disconnected state retains last-known profiles, labels staleness and blocks mutations",
       "status": "PASS",
-      "seconds": 0.42
+      "seconds": 0.33
     },
     {
       "name": "Loading an unavailable snapshot is not mislabeled as an empty workspace",
       "status": "PASS",
-      "seconds": 0.028
+      "seconds": 0.012
     },
     {
       "name": "Repeated identical actions in flight dispatch only one backend request",
       "status": "PASS",
-      "seconds": 0.078
+      "seconds": 0.075
     },
     {
       "name": "Errors survive unrelated successful actions and preserve path/message casing",
       "status": "PASS",
-      "seconds": 0.027
+      "seconds": 0.011
     },
     {
       "name": "Provider override drafts survive navigation and Reset does not mutate saved data",
       "status": "PASS",
-      "seconds": 1.141
+      "seconds": 1.037
     },
     {
       "name": "Provider edits are explicit; unchanged values cannot be resubmitted",
       "status": "PASS",
-      "seconds": 0.46
+      "seconds": 0.388
     },
     {
       "name": "Disabling a provider during work requires confirmation; Cancel restores the checkbox",
       "status": "PASS",
-      "seconds": 0.68
+      "seconds": 0.603
     },
     {
       "name": "Client setup includes working Start, health Check and confirmed Stop controls",
       "status": "PASS",
-      "seconds": 0.822
+      "seconds": 0.469
     },
     {
       "name": "A negative health result cannot produce a successful connection message",
       "status": "PASS",
-      "seconds": 0.413
+      "seconds": 0.389
     },
     {
       "name": "Unavailable explicit client model selection is not silently replaced by another model",
       "status": "PASS",
-      "seconds": 0.432
+      "seconds": 0.343
     },
     {
       "name": "Technical connection fields start collapsed; leaving the page hides revealed secrets",
       "status": "PASS",
-      "seconds": 0.605
+      "seconds": 0.504
     },
     {
       "name": "Ready filters and default-model actions respect model and provider exposure",
       "status": "PASS",
-      "seconds": 0.39
+      "seconds": 0.336
     },
     {
       "name": "Model filters persist, empty searches recover in place, and sorting toggles direction",
       "status": "PASS",
-      "seconds": 1.142
+      "seconds": 1.069
     },
     {
       "name": "Opening a session asks the backend for that conversation, not the provider homepage",
       "status": "PASS",
-      "seconds": 0.421
+      "seconds": 0.338
     },
     {
       "name": "Ending a session requires review and does not delete a website conversation",
       "status": "PASS",
-      "seconds": 0.957
+      "seconds": 0.87
     },
     {
       "name": "A failed session rename restores its saved value without a stale event error",
       "status": "PASS",
-      "seconds": 0.415
+      "seconds": 0.319
     },
     {
       "name": "Unsent tool task and server drafts survive navigation; invalid JSON is explained inline",
       "status": "PASS",
-      "seconds": 0.794
+      "seconds": 1.086
     },
     {
       "name": "Tool approvals remain visible while browsing and never auto-execute",
       "status": "PASS",
-      "seconds": 0.164
+      "seconds": 0.107
     },
     {
       "name": "A new or changed tool call resets the broader grant checkbox to Allow once",
       "status": "PASS",
-      "seconds": 0.498
+      "seconds": 0.42
     },
     {
       "name": "Removing a tool server requires confirmation without deleting its executable",
       "status": "PASS",
-      "seconds": 0.776
+      "seconds": 0.651
     },
     {
       "name": "Failed tool-server connection keeps the reviewed definition available for retry",
       "status": "PASS",
-      "seconds": 0.504
+      "seconds": 0.452
     },
     {
       "name": "Settings deep links open the right section, remember it and settle applied forms",
       "status": "PASS",
-      "seconds": 1.167
+      "seconds": 0.604
     },
     {
       "name": "Connector reset, diagnostic clearing and application close guard destructive effects",
       "status": "PASS",
-      "seconds": 1.314
+      "seconds": 1.238
     },
     {
       "name": "Filtered-empty Sessions and Activity recover without sending users into setup",
       "status": "PASS",
-      "seconds": 0.768
+      "seconds": 0.669
     },
     {
       "name": "All nine surfaces and five Settings sections stay bounded at three viewport sizes",
       "status": "PASS",
-      "seconds": 10.371
+      "seconds": 9.059
     },
     {
       "name": "Long provider labels, model names and identifiers cannot expand the whole window",
       "status": "PASS",
-      "seconds": 1.546
+      "seconds": 1.467
     },
     {
       "name": "Slow tab opening cannot override a newer tab or page selection",
       "status": "PASS",
-      "seconds": 0.272
+      "seconds": 0.26
     },
     {
       "name": "An in-flight confirmation cannot be half-dismissed; failures remain recoverable in its dialog",
       "status": "PASS",
-      "seconds": 1.539
+      "seconds": 1.409
     },
     {
       "name": "Reduced motion keeps readable working states without animation",
       "status": "PASS",
-      "seconds": 0.093
+      "seconds": 0.074
     }
   ],
   "runtime_errors": [],
-  "chromium": "144.0.7559.96"
+  "chromium": "153.0.8010.12"
 }

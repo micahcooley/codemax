@@ -1,0 +1,53 @@
+@import("../core/runtime.zag")
+@import("../core/buffer.zag") as buf
+@import("../core/json.zag") as json
+@import("../providers/registry.zag") as registry
+@import("../detector/symbolic.zag") as symbolic
+@import("../browser/actions.zag") as actions
+@import("../sessions/context.zag") as context
+@import("../storage/settings.zag") as prefs
+// Temporary-chat preference: detection records the switch, the generate
+// action carries it only for fresh switch-kind conversations, and settings
+// round-trip the preference. The context watermark tripwire is covered here
+// too: 75% of a known budget warns once, unknown budgets never trip.
+fn check(value: bool, label: []u8) void { if (!value) { _zag_eprintln(label); _zag_exit(1); } }
+fn main() i32 {
+    let r: registry.Registry = registry.make();
+    let i: i32 = registry.add(&r, "https://chat.example", "https://chat.example/", "Ephemeral");
+    let p: *registry.Provider = &r.items[i];
+    let d: json.Document = json.parse("{\"origin\":\"https://chat.example\",\"document_id\":\"site-ephemeral\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New chat\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Model\",\"visible\":true,\"current_value\":\"M1\"},{\"id\":4,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"M1\",\"visible\":true,\"menu_owner\":3,\"value\":\"m1\"},{\"id\":5,\"tag\":\"button\",\"role\":\"switch\",\"label\":\"Temporary chat\",\"visible\":true},{\"id\":6,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Ask anything\",\"visible\":true,\"editable\":true},{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send message\",\"visible\":true}]}");
+    check(d.ok != 0, "ephemeral fixture JSON");
+    check(symbolic.observe(p, &d, 0), "ephemeral observation accepted");
+    json.free(&d);
+    check(p.*.detected && p.*.ephemeral > 0, "temporary switch mapped without disturbing admission");
+    check(buf.eq(actions.ephemeral_mode(p, true), "on"), "switch control yields on");
+    check(buf.eq(actions.ephemeral_mode(p, false), ""), "no flip without freshness");
+    let out: buf.Buffer = buf.make(65536);
+    check(actions.generate(p, 0, "req_ephemeral", "Hello", "", "", false, "on", &out), "generate builds with ephemeral");
+    check(buf.find(buf.view(&out), "\"ephemeral\":\"on\"", 0) >= 0, "action carries ephemeral on");
+    check(buf.find(buf.view(&out), "\"ephemeral_control\":5", 0) >= 0, "action carries ephemeral node");
+    buf.free(&out);
+    // Button-kind temporary controls are recorded but never auto-flipped.
+    let j: i32 = registry.add(&r, "https://chat2.example", "https://chat2.example/", "Ephemeral button");
+    let q: *registry.Provider = &r.items[j];
+    let e: json.Document = json.parse("{\"origin\":\"https://chat2.example\",\"document_id\":\"site-ephemeral-btn\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New chat\",\"visible\":true},{\"id\":2,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Temporary chat\",\"visible\":true},{\"id\":6,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Ask anything\",\"visible\":true,\"editable\":true},{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send message\",\"visible\":true}]}");
+    check(e.ok != 0, "button fixture JSON");
+    check(symbolic.observe(q, &e, 0), "button observation accepted");
+    json.free(&e);
+    check(q.*.ephemeral > 0, "button temporary control mapped");
+    check(buf.eq(actions.ephemeral_mode(q, true), ""), "button kind never auto-flips");
+    // Preference round-trips through settings persistence.
+    let s: prefs.Settings = prefs.make();
+    let sd: json.Document = json.parse("{\"ephemeral_chats\":true}");
+    check(sd.ok != 0 && prefs.update(&s, &sd, 0) && s.*.ephemeral_chats, "preference parses");
+    json.free(&sd);
+    let rendered: buf.Buffer = buf.make(2048); prefs.render(&s, &rendered);
+    check(buf.find(buf.view(&rendered), "\"ephemeral_chats\":true", 0) >= 0, "preference renders");
+    buf.free(&rendered); prefs.free(&s);
+    // Watermark: 75% of a known budget trips once; unknown never trips.
+    check(context.watermark(75, 100) && context.watermark(300000, 400000), "watermark at three quarters");
+    check(!context.watermark(74, 100) && !context.watermark(0, 100) && !context.watermark(100, 0) && !context.watermark(0 - 5, 100), "watermark rejects below, empty and unknown");
+    registry.free(&r);
+    _zag_println("native ephemeral and watermark assertions passed");
+    return 0;
+}

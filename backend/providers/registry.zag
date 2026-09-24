@@ -1,13 +1,14 @@
 @import("../core/runtime.zag")
 @import("../core/buffer.zag") as buf
 @import("../core/json.zag") as json
+@import("../security/validation.zag") as validation
 // Fixed limits are part of PROTOCOL.md: 16 providers, 32 models each.
 struct Model { id: buf.Buffer, label: buf.Buffer, value: buf.Buffer, option_node: i32, supplied: bool, enabled: bool, available: bool, context_tokens: i64, context_source: buf.Buffer, context_label: buf.Buffer, label_seen: i64, tokenizer: buf.Buffer, tokenizer_seen: i64, reasoning_modes: buf.Buffer, reasoning_observed: bool, reasoning_seen: i64, capabilities_seen: i64, }
 struct Provider {
     detected: bool, exposed: bool, scan_enabled: bool, dismissed: bool, discovery_score: i32, discovery_reason: buf.Buffer, current_model: buf.Buffer, reasoning_modes: buf.Buffer,
     id: i32, origin: buf.Buffer, url: buf.Buffer, label: buf.Buffer, document: buf.Buffer,
     state: i32, models: *Model, model_count: i32, prompt: i32, send: i32, response: i32,
-    stop: i32, new_chat: i32, model_control: i32, reasoning_control: i32,
+    stop: i32, new_chat: i32, model_control: i32, reasoning_control: i32, model_locked: bool, reasoning_locked: bool, ephemeral: i32,
     investigation_count: i32, investigation_at: i64, investigation_node: i32, last_seen: i64, last_used: i64, version: i32, quota: i32, active_request: i32, session: i32,
     last_error: buf.Buffer, evidence: buf.Buffer, recipes: buf.Buffer, manual_model: buf.Buffer, current_url: buf.Buffer, reasoning_value: buf.Buffer, open_tab: bool, pinned: bool, context_hint: i64, attachment: i32, preparing: bool, prepared: bool, browser_busy: bool,
 }
@@ -26,7 +27,7 @@ fn add(r: *Registry, origin: []u8, url: []u8, label: []u8) i32 {
         .detected = false, .exposed = true, .scan_enabled = true, .dismissed = false, .discovery_score = 0, .discovery_reason = buf.make(256), .current_model = buf.make(192), .reasoning_modes = buf.make(4096),
         .id = r.*.next_id, .origin = buf.make(512), .url = buf.make(2048), .label = buf.make(256), .document = buf.make(96),
         .state = 1, .models = _zag_malloc(32 * @sizeOf[Model]()) as *Model, .model_count = 0,
-        .prompt = 0, .send = 0, .response = 0, .stop = 0, .new_chat = 0, .model_control = 0, .reasoning_control = 0,
+        .prompt = 0, .send = 0, .response = 0, .stop = 0, .new_chat = 0, .model_control = 0, .reasoning_control = 0, .model_locked = false, .reasoning_locked = false, .ephemeral = 0,
         .investigation_count = 0, .investigation_at = 0, .investigation_node = 0, .last_seen = 0, .last_used = _zag_clock_monotonic_ms(), .version = 0, .quota = 0, .active_request = 0 - 1, .session = 0 - 1,
         .last_error = buf.make(256), .evidence = buf.make(32768), .recipes = buf.make(8192), .manual_model = buf.make(256), .current_url = buf.make(2048), .reasoning_value = buf.make(192), .open_tab = true, .pinned = false, .context_hint = 0, .attachment = 0, .preparing = false, .prepared = false, .browser_busy = false};
     buf.copy(&p.reasoning_modes, "[]"); buf.copy(&p.discovery_reason, "No AI chat evidence observed"); buf.copy(&p.recipes, "[]"); buf.copy(&p.origin, origin); buf.copy(&p.url, url); buf.copy(&p.current_url, url); buf.copy(&p.label, label);
@@ -37,11 +38,81 @@ fn add(r: *Registry, origin: []u8, url: []u8, label: []u8) i32 {
 fn index(r: *Registry, id: i32) i32 {
     let i: i32 = 0; while (i < r.*.count) { if (r.*.items[i].id == id) { return i; } i = i + 1; } return 0 - 1;
 }
-fn model(p: *Provider, value: []u8, label: []u8, option_node: i32) void {
-    if (_zag_strlen(value) < 1 || _zag_strlen(value) > 180 || _zag_strlen(label) > 240) { return; }
+// UI-chrome duplicates: a menu item whose label is an observed model name
+// plus an affordance suffix ("Set as default" + description text) is the
+// same model, not a new one. The longer side must carry the affordance
+// marker and the shorter side must be model-plausible, so genuine variants
+// (K2 vs K2 Thinking, GLM-4.6 vs GLM-4.6-Thinking) never merge.
+fn lower_eq(a: []u8, b: []u8) bool {
+    let x: buf.Buffer = buf.make(256); let y: buf.Buffer = buf.make(256);
+    validation.ascii_lower(a, &x); validation.ascii_lower(b, &y);
+    let out: bool = buf.eq(buf.view(&x), buf.view(&y)); buf.free(&x); buf.free(&y); return out;
+}
+fn chrome_dupe(a_value: []u8, a_label: []u8, b_value: []u8, b_label: []u8) bool {
+    let texts: i32 = 0;
+    while (texts < 4) {
+        let x: []u8 = a_value; if (texts == 1) { x = a_label; } if (texts == 2) { x = b_value; } if (texts == 3) { x = b_label; }
+        let y: i32 = 0;
+        while (y < 4) {
+            let z: []u8 = a_value; if (y == 1) { z = a_label; } if (y == 2) { z = b_value; } if (y == 3) { z = b_label; }
+            // Compare cross-pair only (existing text vs new text), in lowercase.
+            if ((texts < 2) != (y < 2)) {
+                let xl: buf.Buffer = buf.make(256); let zl: buf.Buffer = buf.make(256);
+                validation.ascii_lower(x, &xl); validation.ascii_lower(z, &zl);
+                let longer: []u8 = buf.view(&xl); let shorter: []u8 = buf.view(&zl);
+                if (_zag_strlen(shorter) > _zag_strlen(longer)) { longer = buf.view(&zl); shorter = buf.view(&xl); }
+                if (_zag_strlen(shorter) >= 3 && !buf.eq(longer, shorter) && buf.prefix(longer, shorter) &&
+                    validation.contains(longer, "set as default")) { buf.free(&xl); buf.free(&zl); return true; }
+                buf.free(&xl); buf.free(&zl);
+            }
+            y = y + 1;
+        }
+        texts = texts + 1;
+    }
+    return false;
+}
+// Display cleaning: the registry keeps the exact observed identity for
+// dispatch, but humans see the model name without menu affordances.
+fn short_display(label: []u8, out: *buf.Buffer) void {
+    let lower: buf.Buffer = buf.make(256); validation.ascii_lower(label, &lower);
+    let cut: i32 = buf.find(buf.view(&lower), "set as default", 0); buf.free(&lower);
+    let text: []u8 = label;
+    if (cut > 0) { text = label[0..cut]; }
+    let end: i32 = _zag_strlen(text);
+    while (end > 0 && (text[end - 1] == 32 || text[end - 1] == 45 || text[end - 1] == 46 || text[end - 1] == 95)) { end = end - 1; }
+    buf.add(out, text[0..end]);
+}
+// Returns the registry slot, or -1 when rejected. Merges never create: the
+// returned slot may hold an earlier entry refreshed to this observation.
+fn model(p: *Provider, value: []u8, label: []u8, option_node: i32) i32 {
+    if (_zag_strlen(value) < 1 || _zag_strlen(value) > 180 || _zag_strlen(label) > 240) { return 0 - 1; }
     let i: i32 = 0;
-    while (i < p.*.model_count) { if (buf.eq(buf.view(&p.*.models[i].value), value)) { buf.copy(&p.*.models[i].label, label); p.*.models[i].option_node = option_node; p.*.models[i].available = true; return; } i = i + 1; }
-    if (p.*.model_count >= 32) { return; }
+    while (i < p.*.model_count) { if (buf.eq(buf.view(&p.*.models[i].value), value)) { buf.copy(&p.*.models[i].label, label); p.*.models[i].option_node = option_node; p.*.models[i].available = true; return i; } i = i + 1; }
+    // Case-only variants (GPT-5 vs gpt-5) are one model: refresh to the live
+    // observation so dispatch matches the page exactly.
+    i = 0;
+    while (i < p.*.model_count) {
+        if (lower_eq(buf.view(&p.*.models[i].value), value)) {
+            buf.copy(&p.*.models[i].value, value); buf.copy(&p.*.models[i].label, label);
+            p.*.models[i].option_node = option_node; p.*.models[i].available = true; return i;
+        }
+        i = i + 1;
+    }
+    i = 0;
+    // A display-only current value ("Qwen3.8-Max") and its affordance-laden
+    // menu option are one model. Menu options (option_node > 0) carry the
+    // selectable identity, so they win; display-only sightings only confirm
+    // availability and never overwrite the selectable pair.
+    while (i < p.*.model_count) {
+        if (chrome_dupe(buf.view(&p.*.models[i].value), buf.view(&p.*.models[i].label), value, label)) {
+            if (option_node > 0) {
+                buf.copy(&p.*.models[i].value, value); buf.copy(&p.*.models[i].label, label); p.*.models[i].option_node = option_node;
+            }
+            p.*.models[i].available = true; return i;
+        }
+        i = i + 1;
+    }
+    if (p.*.model_count >= 32) { return 0 - 1; }
     let m: *Model = &p.*.models[p.*.model_count]; buf.clear(&m.*.id);
     // Reusing a registry slot after profile reset cannot inherit another model's facts.
     m.*.context_tokens = 0; m.*.capabilities_seen = 0; m.*.label_seen = 0;
@@ -50,13 +121,24 @@ fn model(p: *Provider, value: []u8, label: []u8, option_node: i32) void {
     buf.clear(&m.*.tokenizer); buf.copy(&m.*.reasoning_modes, "[]");
     buf.add(&m.*.id, "p"); buf.integer(&m.*.id, p.*.id as i64); buf.add(&m.*.id, "/"); buf.add(&m.*.id, value);
     buf.copy(&m.*.value, value); buf.copy(&m.*.label, label); m.*.option_node = option_node; m.*.supplied = false; m.*.available = true;
-    p.*.model_count = p.*.model_count + 1;
+    p.*.model_count = p.*.model_count + 1; return p.*.model_count - 1;
 }
 fn find_model(r: *Registry, id: []u8) i32 {
     let i: i32 = 0;
     while (i < r.*.count) {
         let j: i32 = 0;
         while (j < r.*.items[i].model_count) { if (r.*.items[i].detected && r.*.items[i].exposed && !r.*.items[i].dismissed && r.*.items[i].models[j].enabled && r.*.items[i].models[j].available && buf.eq(buf.view(&r.*.items[i].models[j].id), id)) { return i * 32 + j; } j = j + 1; }
+        i = i + 1;
+    }
+    return 0 - 1;
+}
+// Known-model lookup ignoring live availability: a closed website tab still
+// names servable models, and generation parks to provision the tab itself.
+fn find_known(r: *Registry, id: []u8) i32 {
+    let i: i32 = 0;
+    while (i < r.*.count) {
+        let j: i32 = 0;
+        while (j < r.*.items[i].model_count) { if (r.*.items[i].detected && r.*.items[i].exposed && !r.*.items[i].dismissed && r.*.items[i].models[j].enabled && buf.eq(buf.view(&r.*.items[i].models[j].id), id)) { return i * 32 + j; } j = j + 1; }
         i = i + 1;
     }
     return 0 - 1;
@@ -75,7 +157,7 @@ fn model_context(p: *Provider, m: i32) i64 {
 }
 fn model_metadata(p: *Provider, m: i32, out: *buf.Buffer) void {
     let model: *Model = &p.*.models[m]; let nominal: i64 = model_context(p, m);
-    buf.add(out, ",\"display_name\":"); buf.json(out, buf.view(&model.*.label));
+    buf.add(out, ",\"display_name\":"); let shown: buf.Buffer = buf.make(256); short_display(buf.view(&model.*.label), &shown); buf.json(out, buf.view(&shown)); buf.free(&shown);
     buf.add(out, ",\"context\":{\"nominal\":");
     if (nominal > 0) { buf.integer(out, nominal); } else { buf.add(out, "null"); }
     buf.add(out, ",\"effective\":null,\"source\":");
@@ -141,7 +223,8 @@ fn snapshot(r: *Registry, out: *buf.Buffer) void {
         buf.add(out, ",\"send\":"); buf.integer(out, p.*.send as i64); buf.add(out, ",\"response\":"); buf.integer(out, p.*.response as i64);
         buf.add(out, ",\"stop\":"); buf.integer(out, p.*.stop as i64); buf.add(out, ",\"new_chat\":"); buf.integer(out, p.*.new_chat as i64);
         buf.add(out, ",\"model\":"); buf.integer(out, p.*.model_control as i64); buf.add(out, ",\"reasoning\":"); buf.integer(out, p.*.reasoning_control as i64);
-        buf.add(out, ",\"attachment\":"); buf.integer(out, p.*.attachment as i64); buf.add(out, "},\"models\":["); let m: i32 = 0;
+        buf.add(out, ",\"attachment\":"); buf.integer(out, p.*.attachment as i64); buf.add(out, ",\"ephemeral\":"); buf.integer(out, p.*.ephemeral as i64); buf.add(out, "},\"model_locked\":"); flag(out, p.*.model_locked);
+        buf.add(out, ",\"reasoning_locked\":"); flag(out, p.*.reasoning_locked); buf.add(out, ",\"models\":["); let m: i32 = 0;
         while (m < p.*.model_count) {
             if (m != 0) { buf.byte(out, 44); }
             buf.add(out, "{\"id\":"); buf.json(out, buf.view(&p.*.models[m].id));

@@ -9,4 +9,4 @@ export const routes = [
     { id: 'home', title: 'Activity', icon: 'activity', description: 'Gateway health and recent events' },
     { id: 'settings', title: 'Settings', icon: 'settings', description: 'Appearance, profiles and privacy' },
 ];
-export const mappingNames = { prompt: 'Prompt input', send: 'Send message', response: 'Response region', stop: 'Stop generation', new_chat: 'New conversation', model: 'Model selector', reasoning: 'Reasoning control', attachment: 'File attachment' };
+export const mappingNames = { prompt: 'Prompt input', send: 'Send message', response: 'Response region', stop: 'Stop generation', new_chat: 'New conversation', model: 'Model selector', reasoning: 'Reasoning control', attachment: 'File attachment', ephemeral: 'Temporary chat' };

@@ -2,7 +2,8 @@
  import {app} from '../../state/app.svelte';
  import Icon from '../Icon.svelte';
  import TabActivity from '../TabActivity.svelte';
- import {initials,providerText} from '../../format';
+ import Favicon from '../Favicon.svelte';
+ import {providerText} from '../../format';
  const sites=$derived(app.detectedProviders);
  function manage(id:number){app.providerSelection=id;app.navigate('providers');}
 </script>
@@ -12,7 +13,7 @@
   {#each sites as site(site.id)}
    <div class="shelf-row" class:current={app.route==='browser'?app.selectedProvider===site.id:app.route==='providers'&&(app.providerSelection??app.selectedProvider??sites[0]?.id)===site.id}>
     <button class="shelf-open" aria-label={`Open registered provider ${site.label}`} title={`${site.label} · ${site.origin}\n${!app.ready?'Last known state':!site.exposed?'Not shared with clients':providerText(site)}`} disabled={!app.ready} onclick={()=>app.openProvider(site.id)}>
-     <span class="shelf-monogram" aria-hidden="true">{initials(site.label).slice(0,1)}</span><span class="shelf-name">{site.label}</span><TabActivity provider={site} loading={app.loading[site.id]===true} online={app.ready}/>
+     <span class="shelf-monogram" aria-hidden="true"><Favicon origin={site.origin} label={site.label} size={16}/></span><span class="shelf-name">{site.label}</span><TabActivity provider={site} loading={app.loading[site.id]===true} online={app.ready}/>
     </button>
     <button class="shelf-settings" aria-label={`Settings for ${site.label}`} title={`Settings for ${site.label}`} onclick={()=>manage(site.id)}><Icon name="more" size={14}/></button>
    </div>

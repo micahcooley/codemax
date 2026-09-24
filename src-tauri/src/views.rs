@@ -5,7 +5,80 @@ use std::{fs, path::{Path, PathBuf}, sync::{Arc, atomic::Ordering}, time::{Durat
 use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Webview, WebviewUrl, webview::{DownloadEvent, NewWindowResponse, WebviewBuilder}};
 use url::Url;
 
-pub struct ProviderView { pub origin: String, pub profile: PathBuf, pub window_start: Instant, pub observations: u32, pub popup_until: Option<Instant>, pub download_until: Option<Instant>, pub last_url: String, pub zoom: f64 }
+pub struct ProviderView { pub origin: String, pub profile: PathBuf, pub window_start: Instant, pub observations: u32, pub popup_until: Option<Instant>, pub download_until: Option<Instant>, pub last_url: String, pub zoom: f64, pub placed: Option<[i64; 4]>, pub shown: bool }
+
+/// Desktop browser user agent so AI chat sites do not reject the embedded
+/// WebKit view as an unknown bot. The UA always matches the underlying
+/// engine: WKWebView on macOS advertises Safari, WebKitGTK elsewhere keeps
+/// the Chrome token. A Chrome UA on top of WKWebView trips consistency
+/// checks (notably Google's "browser is not secure" page on sign-in),
+/// while a genuine engine-consistent desktop UA is accepted.
+/// The origin isolation and observation model are unchanged; only the
+/// advertised UA string changes.
+///
+/// The Safari version is read from the installed Safari bundle at runtime so
+/// the string never goes stale: providers (especially Google) treat an
+/// outdated browser version as a "less secure browser" signal regardless of
+/// engine. A fixed recent fallback covers systems without a readable bundle.
+pub fn provider_user_agent() -> String {
+    if cfg!(target_os = "macos") {
+        if let Some(version) = safari_bundle_version() {
+            return format!("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/{version} Safari/605.1.15");
+        }
+        return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15".to_owned();
+    }
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36".to_owned()
+}
+
+/// Best-effort Safari marketing version (e.g. "26.6.2"), read once per
+/// process from the system Safari bundle. Returns None when unreadable so
+/// callers fall back to a fixed recent string.
+fn safari_bundle_version() -> Option<String> {
+    static CACHED: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    CACHED.get_or_init(|| {
+        let bytes = std::fs::read("/Applications/Safari.app/Contents/Info.plist").ok()?;
+        let text = String::from_utf8_lossy(&bytes);
+        let marker = "<key>CFBundleShortVersionString</key>";
+        let start = text.find(marker)? + marker.len();
+        let string_open = text[start..].find("<string>")? + "<string>".len();
+        let absolute = start + string_open;
+        let end = text[absolute..].find("</string>")?;
+        let version: String = text[absolute..absolute + end].trim().to_owned();
+        if version.is_empty() || version.len() > 24 || !version.bytes().next().map(|b| b.is_ascii_digit()).unwrap_or(false) {
+            return None;
+        }
+        Some(version)
+    }).clone()
+}
+
+pub fn private_directory_path(app: &AppHandle) -> Result<PathBuf, String> {
+    // Clone the root while the State guard lives, then drop it before IO.
+    let root: PathBuf = {
+        let host = app.state::<Arc<Host>>();
+        host.root.clone()
+    };
+    let profiles = root.join("profiles");
+    private_directory(&profiles)?;
+    Ok(profiles)
+}
+
+pub fn insert_view(app: &AppHandle, id: u32, view: ProviderView) -> Result<(), String> {
+    let host = app.state::<Arc<Host>>();
+    let mut views = host.views.lock().map_err(|_| "HOST_LOCK_FAILED")?;
+    if views.len() >= 16 {
+        return Err("WEBVIEW_LIMIT".into());
+    }
+    views.insert(id, view);
+    Ok(())
+}
+
+pub fn remove_view(app: &AppHandle, id: u32) {
+    if let Some(host) = app.try_state::<Arc<Host>>() {
+        if let Ok(mut views) = host.views.lock() {
+            views.remove(&id);
+        }
+    }
+}
 
 pub fn private_directory(path: &Path) -> Result<(), String> {
     use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
@@ -23,7 +96,7 @@ pub fn private_directory(path: &Path) -> Result<(), String> {
     let owner = file.metadata().map_err(|_| "DIRECTORY_OWNER_CHECK_FAILED")?.uid();
     drop(file); let _ = fs::remove_file(&marker);
     if meta.uid() != owner { return Err("DIRECTORY_OWNER_MISMATCH".into()); }
-    fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|_| "DIRECTORY_MODE_FAILED")
+    fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|_| "DIRECTORY_MODE_FAILED".to_owned())
 }
 pub fn safe_provider_url(url: &Url, _dev: bool) -> bool {
     if !url.username().is_empty() || url.password().is_some() || url.host_str().is_none() { return false; }
@@ -51,7 +124,7 @@ async fn open(app: &AppHandle, host: &Arc<Host>, id: u32, url: Url, origin: Stri
     {
         let mut views = host.views.lock().map_err(|_| "HOST_LOCK_FAILED")?;
         if views.len() >= 16 { return Err("WEBVIEW_LIMIT".into()); }
-        views.insert(id, ProviderView { origin: origin.clone(), profile: profile.clone(), window_start: Instant::now(), observations: 0, popup_until: None, download_until: None, last_url: String::new(), zoom: 1.0 });
+        views.insert(id, ProviderView { origin: origin.clone(), profile: profile.clone(), window_start: Instant::now(), observations: 0, popup_until: None, download_until: None, last_url: String::new(), zoom: 1.0, placed: None, shown: false });
     }
     let config = serde_json::to_string(&json!({"origin":origin})).map_err(|_| "CONFIG_ENCODE_FAILED")?;
     let script = format!("Object.defineProperty(globalThis,'__BRIDGE_BOOT__',{{value:Object.freeze({config})}});\n{}\n{}", include_str!("../../browser/semantics.js"), include_str!("../../browser/agent.js"));
@@ -62,7 +135,7 @@ async fn open(app: &AppHandle, host: &Arc<Host>, id: u32, url: Url, origin: Stri
         let result = (|| -> Result<(), String> {
             let parent = app_on_main.get_window("main").ok_or("MAIN_WINDOW_MISSING")?;
             let builder = WebviewBuilder::new(&label, WebviewUrl::External(url)).data_directory(profile)
-                .initialization_script(&script).devtools(true).focused(false)
+                .initialization_script(&script).user_agent(&provider_user_agent()).devtools(true).focused(false)
                 .on_navigation(move |next| safe_provider_url(next, dev))
                 .on_download(move |_, event| {
                     match event {
@@ -151,7 +224,7 @@ pub fn execute(app: &AppHandle, host: &Arc<Host>, frame: &Value) -> Result<(), S
     let encoded = serde_json::to_string(action).map_err(|_| "ACTION_ENCODE_FAILED")?;
     if encoded.len() > 900_000 { return Err("ACTION_SIZE_LIMIT".into()); }
     // The sole eval template takes JSON data, never executable provider text.
-    view.eval(&format!("globalThis.__BRIDGE_EXECUTE__?.({encoded});")).map_err(|_| "ACTION_DISPATCH_FAILED".into())
+    view.eval(format!("globalThis.__BRIDGE_EXECUTE__?.({encoded});")).map_err(|_| "ACTION_DISPATCH_FAILED".into())
 }
 #[derive(Deserialize)]
 pub struct Bounds { pub provider_id: Option<u32>, pub x: f64, pub y: f64, pub width: f64, pub height: f64, pub visible: bool }
@@ -159,17 +232,38 @@ pub fn bounds(app: &AppHandle, host: &Arc<Host>, rect: Bounds) -> Result<(), Str
     if ![rect.x, rect.y, rect.width, rect.height].iter().all(|n| n.is_finite()) { return Err("INVALID_BOUNDS".into()); }
     let parent = app.get_window("main").ok_or("MAIN_WINDOW_MISSING")?;
     let scale = parent.scale_factor().map_err(|_| "WINDOW_SCALE_UNAVAILABLE")?;
+    if !scale.is_finite() || scale <= 0.0 { return Err("WINDOW_SCALE_UNAVAILABLE".into()); }
     let size = parent.inner_size().map_err(|_| "WINDOW_SIZE_UNAVAILABLE")?.to_logical::<f64>(scale);
-    let x = rect.x.clamp(0.0, (size.width - 1.0).max(0.0)); let y = rect.y.clamp(80.0, (size.height - 1.0).max(80.0));
+    // The frontend owns the layout (titlebar + toolbar offsets included). Clamp
+    // only to the window so a stale measurement can never push the child offscreen.
+    let x = rect.x.clamp(0.0, (size.width - 1.0).max(0.0)); let y = rect.y.clamp(0.0, (size.height - 1.0).max(0.0));
     let width = rect.width.clamp(1.0, (size.width - x).max(1.0)); let height = rect.height.clamp(1.0, (size.height - y).max(1.0));
+    // Quantize to physical pixels. On macOS Retina (scale 2) a fractional CSS
+    // rect would otherwise land between physical pixels and jitter/blur during
+    // live resize. Snapping back to the pixel grid keeps geometry stable.
+    let quant = [(x * scale).round() as i64, (y * scale).round() as i64,
+        (width * scale).round().max(1.0) as i64, (height * scale).round().max(1.0) as i64];
+    let (x, y, width, height) = (quant[0] as f64 / scale, quant[1] as f64 / scale, quant[2] as f64 / scale, quant[3] as f64 / scale);
     let ids: Vec<u32> = host.views.lock().map_err(|_| "HOST_LOCK_FAILED")?.keys().copied().collect();
     for id in ids {
-        if let Some(view) = app.get_webview(&format!("provider-{id}")) {
-            if rect.visible && rect.provider_id == Some(id) && width > 4.0 && height > 4.0 {
+        let Some(view) = app.get_webview(&format!("provider-{id}")) else { continue; };
+        let want_visible = rect.visible && rect.provider_id == Some(id) && width > 4.0 && height > 4.0;
+        // Skip redundant native calls: re-showing or re-moving an unchanged
+        // child webview flickers and reorders it on macOS during live resize.
+        let (placed, shown) = host.views.lock().map_err(|_| "HOST_LOCK_FAILED")?
+            .get(&id).map(|v| (v.placed, v.shown)).unwrap_or((None, false));
+        if placed == Some(quant) && shown == want_visible { continue; }
+        if want_visible {
+            if placed != Some(quant) || !shown {
                 view.set_position(LogicalPosition::new(x, y)).map_err(|_| "VIEW_POSITION_FAILED")?;
                 view.set_size(LogicalSize::new(width, height)).map_err(|_| "VIEW_SIZE_FAILED")?;
-                view.show().map_err(|_| "VIEW_SHOW_FAILED")?;
-            } else { view.hide().map_err(|_| "VIEW_HIDE_FAILED")?; }
+            }
+            if !shown { view.show().map_err(|_| "VIEW_SHOW_FAILED")?; }
+        } else if shown {
+            view.hide().map_err(|_| "VIEW_HIDE_FAILED")?;
+        }
+        if let Ok(mut views) = host.views.lock() {
+            if let Some(entry) = views.get_mut(&id) { entry.placed = Some(quant); entry.shown = want_visible; }
         }
     }
     Ok(())
@@ -177,7 +271,6 @@ pub fn bounds(app: &AppHandle, host: &Arc<Host>, rect: Bounds) -> Result<(), Str
 #[tauri::command]
 pub async fn provider_observe(webview: Webview, host: tauri::State<'_, Arc<Host>>, event: Value) -> Result<(), String> {
     let id = webview.label().strip_prefix("provider-").and_then(|id| id.parse::<u32>().ok()).ok_or("PROVIDER_VIEW_REQUIRED")?;
-    if !host.ready.load(Ordering::Acquire) { return Err("BACKEND_UNAVAILABLE".into()); }
     let size = serde_json::to_vec(&event).map_err(|_| "INVALID_OBSERVATION")?.len();
     if size > 32768 || event["v"] != 1 || !event.is_object() { return Err("OBSERVATION_LIMIT".into()); }
     if !matches!(event["type"].as_str(), Some("capabilities" | "picked" | "shortcut" | "observation" | "network" | "generation_delta" | "generation_done" | "generation_error" | "action_result" | "quota" | "login_required" | "interaction" | "instrumentation_warning")) { return Err("OBSERVATION_TYPE_DENIED".into()); }
@@ -191,11 +284,33 @@ pub async fn provider_observe(webview: Webview, host: tauri::State<'_, Arc<Host>
     }
     report_location(&webview,host.inner(),id);
     if event["type"]=="shortcut" {
-        if !matches!(event["key"].as_str(),Some("address"|"commands")) {return Err("SHORTCUT_DENIED".into());}
+        // Named UI gestures only; the exact set is shared with the frontend
+        // bridge contract and the agent forwarder. Arbitrary keys never pass.
+        let key = event["key"].as_str().unwrap_or("");
+        let tab_number = key.strip_prefix("tab-").filter(|n| n.len() == 1 && ('1'..='9').contains(&n.chars().next().unwrap_or('0')));
+        if !matches!(key, "address" | "commands" | "close-tab" | "reopen-tab" | "new-tab" | "next-tab" | "prev-tab") && tab_number.is_none() {return Err("SHORTCUT_DENIED".into());}
         if let Some(main)=webview.app_handle().get_webview("main") {let _=main.set_focus();}
         let _=webview.app_handle().emit_to(tauri::EventTarget::Webview{label:"main".into()},"bridge:shortcut",json!({"key":event["key"]}));
         return Ok(());
     }
+    // Fallback browsing records positive page evidence locally (observed
+    // model facts, chat structure, sign-in/rate-limit signals) without
+    // inventing models. Anything requiring inference still needs Zag.
+    if host.is_fallback() {
+        let changed = if let Ok(mut store) = host.fallback_store.try_lock() {
+            crate::fallback::record_observation(&mut store, id as i32, &event)
+        } else {
+            false
+        };
+        if changed {
+            if let Ok(store) = host.fallback_store.try_lock() {
+                let data = crate::fallback::snapshot(&store);
+                let _ = webview.app_handle().emit_to(tauri::EventTarget::Webview { label: "main".into() }, "bridge:snapshot", data);
+            }
+        }
+        return Ok(());
+    }
+    if !host.ready.load(Ordering::Acquire) { return Err("BACKEND_UNAVAILABLE".into()); }
     host.notify("observation", json!({"provider_id":id,"event":event}))
 }
 
@@ -213,7 +328,20 @@ fn report_location(view: &Webview, host: &Arc<Host>, id:u32) {
             else{item.last_url=url.to_string();true}
         }else{false}
     }else{false};
-    if changed {let _=host.notify("browser.location",json!({"provider_id":id,"url":url.as_str()}));}
+    if !changed { return; }
+    if host.is_fallback() {
+        // Keep fallback browsing state accurate without a sidecar round-trip.
+        if let Ok(mut store) = host.fallback_store.try_lock() {
+            if let Some(p) = store.providers.iter_mut().find(|p| p.id == id as i32) {
+                // Only same-origin updates (views already enforces origin).
+                if url.origin().ascii_serialization() == p.origin {
+                    p.current_url = url.as_str().to_owned();
+                }
+            }
+        }
+        return;
+    }
+    let _=host.notify("browser.location",json!({"provider_id":id,"url":url.as_str()}));
 }
 
 #[tauri::command]
@@ -223,5 +351,21 @@ pub async fn browser_find(webview:Webview,host:tauri::State<'_,Arc<Host>>,provid
     if !host.views.lock().map_err(|_|"HOST_LOCK_FAILED")?.contains_key(&provider_id){return Err("UNKNOWN_VIEW".into());}
     let view=webview.app_handle().get_webview(&format!("provider-{provider_id}")).ok_or("PROVIDER_VIEW_CLOSED")?;
     let encoded=serde_json::to_string(&query).map_err(|_|"FIND_ENCODE_FAILED")?;
-    view.eval(&format!("window.find({encoded},false,{backwards},true,false,false,false);")).map_err(|_|"FIND_FAILED".into())
+    view.eval(format!("window.find({encoded},false,{backwards},true,false,false,false);")).map_err(|_|"FIND_FAILED".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn user_agent_matches_engine_and_stays_current() {
+        let ua = provider_user_agent();
+        // Engine-consistent desktop UA: Safari token on the WebKit engine.
+        assert!(ua.starts_with("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) "));
+        assert!(ua.contains("Version/") && ua.ends_with("Safari/605.1.15"));
+        assert!(!ua.contains("Chrome/"), "a Chrome token on WKWebView trips provider bot checks");
+        if let Some(bundle) = safari_bundle_version() {
+            assert!(ua.contains(&format!("Version/{bundle}")), "UA tracks the installed Safari release");
+        }
+    }
 }

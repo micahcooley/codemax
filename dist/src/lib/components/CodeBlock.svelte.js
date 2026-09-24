@@ -12,14 +12,8 @@ export default function CodeBlock($$anchor, $$props) {
 	var div = root();
 	var div_1 = $.child(div);
 	var span = $.child(div_1);
-	var text = $.child(span, true);
-
-	$.reset(span);
-
+	var text = $.only_child(span, true);
 	var button = $.sibling(span);
-
-	button.__click = () => app.clipboard($$props.code);
-
 	var node = $.child(button);
 
 	Icon(node, { name: 'copy', size: 14 });
@@ -29,9 +23,8 @@ export default function CodeBlock($$anchor, $$props) {
 
 	var pre = $.sibling(div_1);
 	var code_1 = $.child(pre);
-	var text_1 = $.child(code_1, true);
+	var text_1 = $.only_child(code_1, true);
 
-	$.reset(code_1);
 	$.reset(pre);
 	$.reset(div);
 
@@ -40,6 +33,7 @@ export default function CodeBlock($$anchor, $$props) {
 		$.set_text(text_1, $$props.code);
 	});
 
+	$.delegated('click', button, () => app.clipboard($$props.code));
 	$.append($$anchor, div);
 	$.pop();
 }

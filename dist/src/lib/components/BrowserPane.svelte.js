@@ -5,10 +5,10 @@ import { app } from '../state/app.svelte.js';
 import * as bridge from '../api/bridge.js';
 import Icon from './Icon.svelte.js';
 
-var root_1 = $.from_html(`<!><h2>Reconnect the browser</h2><p>The native host or Zag gateway is not connected. Your website profile is preserved.</p><button class="secondary">Open runtime settings</button>`, 1);
-var root_3 = $.from_html(`<!><h2> </h2><p>Close the menu to return to the website. Its session stays connected.</p>`, 1);
-var root_4 = $.from_html(`<div class="spinner"></div><h2> </h2><p>The website opens here in its own persistent, native browser view.</p><button class="text-button"><!>Reopen website</button>`, 1);
-var root = $.from_html(`<div class="browser-surface"><div class="browser-awaiting"><!></div></div>`);
+var root = $.from_html(`<!><h2>Reconnect the browser</h2><p>The native host or Zag gateway is not connected. Your website profile is preserved.</p><button class="secondary">Open runtime settings</button>`, 1);
+var root_1 = $.from_html(`<!><h2> </h2><p>Close the menu to return to the website. Its session stays connected.</p>`, 1);
+var root_2 = $.from_html(`<div class="spinner"></div><h2> </h2><p>The website opens here in its own persistent, native browser view.</p><button class="text-button"><!>Reopen website</button>`, 1);
+var root_3 = $.from_html(`<div class="browser-surface"><div class="browser-awaiting"><!></div></div>`);
 
 export default function BrowserPane($$anchor, $$props) {
 	$.push($$props, true);
@@ -26,12 +26,21 @@ export default function BrowserPane($$anchor, $$props) {
 
 			const r = element.getBoundingClientRect();
 
+			// Snap to the device-pixel grid so Retina (DPR 2) live-resizes don't spam
+			// the native host with sub-pixel rects. Every measurement is sent: popups
+			// and route changes also hide the surface out-of-band (hideProviders),
+			// so skipping "unchanged" rects here can stick on a stale send. The
+			// native host owns no-op suppression (it tracks placed/shown per view).
+			const dpr = window.devicePixelRatio || 1;
+
+			const snap = (v) => Math.round(v * dpr) / dpr;
+
 			void bridge.position({
 				provider_id: $$props.provider.id,
-				x: r.x,
-				y: r.y,
-				width: r.width,
-				height: r.height,
+				x: snap(r.x),
+				y: snap(r.y),
+				width: snap(r.width),
+				height: snap(r.height),
 				visible: app.route === 'browser' && app.popup === null && app.ready && r.width > 1 && r.height > 1
 			}).catch((error) => {
 				app.error = String(error);
@@ -69,77 +78,54 @@ export default function BrowserPane($$anchor, $$props) {
 		if ($.get(mounted)) measure();
 	});
 
-	var div = root();
+	var div = root_3();
 	var div_1 = $.child(div);
 	var node = $.child(div_1);
 
 	{
 		var consequent = ($$anchor) => {
-			var fragment = root_1();
+			var fragment = root();
 			var node_1 = $.first_child(fragment);
 
 			Icon(node_1, { name: 'globe', size: 27 });
 
 			var button = $.sibling(node_1, 3);
 
-			button.__click = () => app.settingsPage('runtime');
+			$.delegated('click', button, () => app.settingsPage('runtime'));
 			$.append($$anchor, fragment);
 		};
 
-		var alternate_1 = ($$anchor) => {
-			var fragment_1 = $.comment();
+		var consequent_1 = ($$anchor) => {
+			var fragment_1 = root_1();
 			var node_2 = $.first_child(fragment_1);
 
-			{
-				var consequent_1 = ($$anchor) => {
-					var fragment_2 = root_3();
-					var node_3 = $.first_child(fragment_2);
+			Icon(node_2, { name: 'globe', size: 27 });
 
-					Icon(node_3, { name: 'globe', size: 27 });
+			var h2 = $.sibling(node_2);
+			var text = $.only_child(h2);
 
-					var h2 = $.sibling(node_3);
-					var text = $.child(h2);
-
-					$.reset(h2);
-					$.next();
-					$.template_effect(() => $.set_text(text, `${$$props.provider.label ?? ''} is still open`));
-					$.append($$anchor, fragment_2);
-				};
-
-				var alternate = ($$anchor) => {
-					var fragment_3 = root_4();
-					var h2_1 = $.sibling($.first_child(fragment_3));
-					var text_1 = $.child(h2_1);
-
-					$.reset(h2_1);
-
-					var button_1 = $.sibling(h2_1, 2);
-
-					button_1.__click = () => app.openProvider($$props.provider.id);
-
-					var node_4 = $.child(button_1);
-
-					Icon(node_4, { name: 'refresh', size: 14 });
-					$.next();
-					$.reset(button_1);
-					$.template_effect(() => $.set_text(text_1, `Opening ${$$props.provider.label ?? ''}`));
-					$.append($$anchor, fragment_3);
-				};
-
-				$.if(
-					node_2,
-					($$render) => {
-						if (app.popup) $$render(consequent_1); else $$render(alternate, false);
-					},
-					true
-				);
-			}
-
+			$.next();
+			$.template_effect(() => $.set_text(text, `${$$props.provider.label ?? ''} is still open`));
 			$.append($$anchor, fragment_1);
 		};
 
+		var alternate = ($$anchor) => {
+			var fragment_2 = root_2();
+			var h2_1 = $.sibling($.first_child(fragment_2));
+			var text_1 = $.only_child(h2_1);
+			var button_1 = $.sibling(h2_1, 2);
+			var node_3 = $.child(button_1);
+
+			Icon(node_3, { name: 'refresh', size: 14 });
+			$.next();
+			$.reset(button_1);
+			$.template_effect(() => $.set_text(text_1, `Opening ${$$props.provider.label ?? ''}`));
+			$.delegated('click', button_1, () => app.openProvider($$props.provider.id));
+			$.append($$anchor, fragment_2);
+		};
+
 		$.if(node, ($$render) => {
-			if (!app.ready) $$render(consequent); else $$render(alternate_1, false);
+			if (!app.ready) $$render(consequent); else if (app.popup) $$render(consequent_1, 1); else $$render(alternate, -1);
 		});
 	}
 

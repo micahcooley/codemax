@@ -111,14 +111,36 @@ fn read_permitted(p: *Probe, id: []u8, provider: i32, model: []u8, path: []u8, o
     }
     // Consume the grant even on an I/O failure. There is no retry authorization.
     p.*.granted=false;
+    // Native shape first: dirfd open with Linux stat offsets, uid ownership
+    // and a link-count of one. openat(2) cannot reach Darwin, so a failed
+    // geteuid dispatches to the composed-path shape instead (projected mode
+    // and size words; link and owner identity are then carried by the 0700
+    // containment proven at prepare time). The shapes never cross-execute.
     let file: buf.Buffer=buf.make(32); buf.add(&file,"bridge-probe.txt"); buf.byte(&file,0);
     let fd: i64=_zag_raw_syscall(257,p.*.directory_fd,file.data as i64,131072 | 524288 | 2048,0,0,0); buf.free(&file);
-    if (fd<0) { p.*.denied=p.*.denied+1; return false; }
-    let stat: *u64=_zag_malloc(144) as *u64;
-    let rc: i64=_zag_raw_syscall(5,fd,stat as i64,0,0,0,0);
+    let ok: bool=false;
     let uid: i64=_zag_raw_syscall(107,0,0,0,0,0,0);
-    let ok: bool=rc==0 && (stat[3] & 61440)==32768 && (stat[3] & 63)==0 && (stat[3] >> 32) as i64==uid && stat[2]==1 && stat[6]<128;
-    _zag_free(stat as *i8);
+    if (fd>=0 && uid>=0) {
+        let stat: *u64=_zag_malloc(144) as *u64;
+        let rc: i64=_zag_raw_syscall(5,fd,stat as i64,0,0,0,0);
+        ok=rc==0 && (stat[3] & 61440)==32768 && (stat[3] & 63)==0 && (stat[3] >> 32) as i64==uid && stat[2]==1 && stat[6]<128;
+        _zag_free(stat as *i8);
+    }
+    if (!ok) {
+        if (fd>=0) { net.close(fd); fd=0 - 1; }
+        if (uid<0) {
+            let full: buf.Buffer=buf.make(4096); buf.add(&full,buf.view(&p.*.root)); buf.add(&full,"/bridge-probe.txt"); buf.byte(&full,0);
+            fd=_zag_raw_syscall(2,full.data as i64,657408,0,0,0,0);
+            if (fd>=0) {
+                let stat: *u32=_zag_malloc(144) as *u32;
+                let rc: i64=_zag_raw_syscall(262,0 - 100,full.data as i64,stat as i64,256,0,0);
+                ok=rc==0 && (stat[3] & 61440)==32768 && (stat[3] & 63)==0 && stat[6]<128;
+                _zag_free(stat as *i8);
+            }
+            buf.free(&full);
+        }
+    }
+    if (fd<0) { p.*.denied=p.*.denied+1; return false; }
     if (ok) {
         let got: i64=_zag_raw_syscall(0,fd,out.*.data as i64,out.*.cap as i64,0,0,0);
         ok=got>0 && got<out.*.cap as i64;

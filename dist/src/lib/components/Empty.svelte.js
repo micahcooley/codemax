@@ -20,14 +20,10 @@ export default function Empty($$anchor, $$props) {
 	$.reset(div_1);
 
 	var h2 = $.sibling(div_1);
-	var text = $.child(h2, true);
-
-	$.reset(h2);
-
+	var text = $.only_child(h2, true);
 	var p = $.sibling(h2);
-	var text_1 = $.child(p, true);
+	var text_1 = $.only_child(p, true);
 
-	$.reset(p);
 	$.reset(div);
 
 	$.template_effect(() => {

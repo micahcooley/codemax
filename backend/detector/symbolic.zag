@@ -24,7 +24,7 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
     if (changed_catalog) { let m: i32 = 0; while (m < p.*.model_count) { p.*.models[m].available = false; m = m + 1; } buf.clear(&p.*.current_model); buf.copy(&p.*.reasoning_modes,"[]"); }
 
     if (json.kind(d, json.get(d, event, "password_fields_present")) == 5) { p.*.state = 2; buf.copy(&p.*.discovery_reason, "Sign in normally; credentials are never inspected"); return true; }
-    p.*.prompt = 0; p.*.send = 0; p.*.response = 0; p.*.stop = 0; p.*.new_chat = 0; p.*.model_control = 0; p.*.reasoning_control = 0; p.*.attachment = 0;
+    p.*.prompt = 0; p.*.send = 0; p.*.response = 0; p.*.stop = 0; p.*.new_chat = 0; p.*.model_control = 0; p.*.reasoning_control = 0; p.*.model_locked = false; p.*.reasoning_locked = false; p.*.ephemeral = 0; p.*.attachment = 0;
     // During generation, a disappearing model menu must not rewrite the model
     // selected by an in-flight request. Registry indices remain stable.
     // Retain the catalog when a popover closes. Selection validates availability
@@ -41,22 +41,32 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
             let s: []u8 = buf.view(&lower);
             if (is_visible && json.kind(d, json.get(d, i, "editable")) == 5) {
                 let score: i32 = 1;
-                if (validation.contains(s, "message") || validation.contains(s, "prompt") || validation.contains(s, "ask")) { score = 3; }
+                // English and Chinese composer hints. CJK labels have no case,
+                // so the lowercased text already carries them verbatim. Bare
+                // 问 is safe here: admission still needs a send action, a
+                // model catalog and conversation evidence, and the negative
+                // search-page fixture pins that combination down.
+                if (validation.contains(s, "message") || validation.contains(s, "prompt") || validation.contains(s, "ask") ||
+                    validation.contains(s, "what") || validation.contains(s, "输入") || validation.contains(s, "发送") ||
+                    validation.contains(s, "提问") || validation.contains(s, "消息") || validation.contains(s, "问题") ||
+                    validation.contains(s, "问") || validation.contains(s, "什么")) { score = 3; }
                 if (json.is_text(d, json.get(d, i, "tag"), "textarea")) { score = score + 1; }
                 if (score > prompt_score) { prompt_score = score; p.*.prompt = node; }
             }
             if (json.is_text(d, json.get(d, i, "tag"), "button") || json.is_text(d, json.get(d, i, "role"), "button")) {
-                if (is_visible && (validation.contains(s, "send") || buf.eq(s, "submit"))) {
-                    let score: i32 = 1; if (validation.contains(s, "message")) { score = 2; }
+                if (is_visible && (validation.contains(s, "send") || validation.contains(s, "发送") || buf.eq(s, "submit"))) {
+                    let score: i32 = 1; if (validation.contains(s, "message") || validation.contains(s, "消息")) { score = 2; }
                     if (score > send_score) { send_score = score; p.*.send = node; }
                 }
-                if (validation.contains(s, "stop") && (validation.contains(s, "generat") || buf.eq(s, "stop"))) {
+                if ((validation.contains(s, "stop") && (validation.contains(s, "generat") || buf.eq(s, "stop"))) ||
+                    buf.eq(s, "停止") || validation.contains(s, "停止生成") || validation.contains(s, "取消生成")) {
                     p.*.stop = node;
                     // Presentation only: no grant or routing authority. Hidden or disabled
                     // stop controls are idle, and analytics/network activity never counts.
                     if (is_visible && json.kind(d, json.get(d, i, "disabled")) != 5) { p.*.browser_busy = true; }
                 }
-                if (is_visible && (validation.contains(s, "new chat") || validation.contains(s, "new conversation"))) { p.*.new_chat = node; }
+                if (is_visible && (validation.contains(s, "new chat") || validation.contains(s, "new conversation") || validation.contains(s, "new thread") ||
+                    validation.contains(s, "新对话") || validation.contains(s, "新的对话") || validation.contains(s, "新聊天") || validation.contains(s, "新会话"))) { p.*.new_chat = node; }
             }
             if (is_visible && (json.is_text(d, json.get(d, i, "role"), "log") || json.kind(d, json.get(d, i, "assistant")) == 5)) {
                 if (json.kind(d, json.get(d, i, "busy")) == 5) { p.*.browser_busy = true; }
@@ -66,13 +76,29 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
             if (json.kind(d, json.get(d, i, "file_input")) == 5) { p.*.attachment = node; }
             if (is_visible && (json.is_text(d, json.get(d, i, "tag"), "main") || json.is_text(d, json.get(d, i, "role"), "main")) && response_score == 0) { p.*.response = node; }
             if (is_visible && (json.is_text(d, json.get(d, i, "role"), "combobox") || json.is_text(d, json.get(d, i, "tag"), "button") || json.is_text(d, json.get(d, i, "role"), "button") || json.is_text(d, json.get(d, i, "role"), "switch"))) {
-                if (validation.contains(s, "model") || (model_label(s) && !buf.eq(s, "step 1") && !buf.eq(s, "step 2"))) { p.*.model_control = node; }
-                if (validation.contains(s, "reasoning") || validation.contains(s, "think")) { p.*.reasoning_control = node; }
+                if (validation.contains(s, "model") || validation.contains(s, "模型") || (validation.model_shaped(s) && !buf.eq(s, "step 1") && !buf.eq(s, "step 2"))) {
+                    p.*.model_control = node;
+                    if (json.kind(d, json.get(d, i, "locked")) == 5) { p.*.model_locked = true; }
+                }
+                if (validation.contains(s, "reasoning") || validation.contains(s, "think") || validation.contains(s, "思考") || validation.contains(s, "推理")) {
+                    p.*.reasoning_control = node;
+                    if (json.kind(d, json.get(d, i, "locked")) == 5) { p.*.reasoning_locked = true; }
+                }
+                // Temporary/incognito chat toggles. Detection only records the
+                // control; the automation preference decides whether to flip it.
+                if (validation.contains(s, "tempor") || validation.contains(s, "incognito") || validation.contains(s, "无痕") || validation.contains(s, "临时")) {
+                    p.*.ephemeral = node;
+                }
             }
             if (is_visible && json.is_text(d, json.get(d, i, "tag"), "select")) {
-                if (validation.contains(s, "reason") || validation.contains(s, "think")) { p.*.reasoning_control = node; copy_modes(p, d, i); }
-                else if (validation.contains(s, "model")) {
-                    p.*.model_control = node; let options: i32 = json.get(d, i, "options");
+                if (validation.contains(s, "reason") || validation.contains(s, "think") || validation.contains(s, "思考") || validation.contains(s, "推理")) {
+                    p.*.reasoning_control = node; copy_modes(p, d, i);
+                    if (json.kind(d, json.get(d, i, "locked")) == 5) { p.*.reasoning_locked = true; }
+                }
+                else if (validation.contains(s, "model") || validation.contains(s, "模型")) {
+                    p.*.model_control = node;
+                    if (json.kind(d, json.get(d, i, "locked")) == 5) { p.*.model_locked = true; }
+                    let options: i32 = json.get(d, i, "options");
                     if (json.kind(d, options) == 2 && d.*.tokens[options].size <= 32 && p.*.active_request < 0) {
                         let old: i32 = 0; while (old < p.*.model_count) { p.*.models[old].available = false; old = old + 1; } let opt: i32 = options + 1;
                         while (opt < d.*.tokens[options].next) {
@@ -88,8 +114,92 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
         }
         i = d.*.tokens[i].next;
     }
-    // Second pass: options must belong to the exact model/reasoning control.
-    // Traversal order and a random open settings menu are not evidence of a model.
+    // Second pass: options belong to the exact model/reasoning control,
+    // including owners promoted by the pre-pass above. Traversal order and
+    // a random open settings menu are still not evidence of a model.
+    // Promotion pre-pass: a menu owned by a selector-shaped button confers
+    // model-control status when any of its options is version-shaped, so
+    // option order never matters. Settings-style menus never qualify: their
+    // options carry no letter-digit-separator identity.
+    i = controls + 1;
+    while (i < d.*.tokens[controls].next) {
+        let owner: i32 = json.number(d, json.get(d, i, "menu_owner"), 0) as i32;
+        if (owner > 0 && owner != p.*.model_control && owner != p.*.reasoning_control &&
+            json.kind(d, json.get(d, i, "visible")) == 5 && json.kind(d, json.get(d, i, "disabled")) != 5 &&
+            (json.is_text(d, json.get(d, i, "role"), "option") || json.is_text(d, json.get(d, i, "role"), "menuitemradio") || json.is_text(d, json.get(d, i, "role"), "menuitem"))) {
+            json.field_text(d, i, "value", &value); json.field_text(d, i, "label", &label);
+            if (value.len == 0) { buf.copy(&value, buf.view(&label)); }
+            if (value.ok != 0 && label.ok != 0 && !validation.sensitive_label(buf.view(&label)) &&
+                (validation.model_shaped(buf.view(&value)) || validation.model_shaped(buf.view(&label)))) {
+                let o: i32 = controls + 1;
+                while (o < d.*.tokens[controls].next) {
+                    if ((json.number(d, json.get(d, o, "id"), 0) as i32) == owner &&
+                        json.kind(d, json.get(d, o, "visible")) == 5 &&
+                        (json.is_text(d, json.get(d, o, "tag"), "button") || json.is_text(d, json.get(d, o, "role"), "button") ||
+                        json.is_text(d, json.get(d, o, "role"), "combobox") || json.is_text(d, json.get(d, o, "tag"), "select"))) {
+                        p.*.model_control = owner;
+                    }
+                    o = d.*.tokens[o].next;
+                }
+            }
+        }
+        i = d.*.tokens[i].next;
+    }
+    // Reasoning promotion: a menu owned by a selector-shaped button confers
+    // reasoning-control status when any of its options is reasoning-like
+    // (Auto/Thinking/Fast/Think Deeper/effort levels) without being
+    // model-shaped, so option order never matters. A mixed menu that also
+    // holds versioned models shares one control for both; the split below
+    // keeps versioned models as models and reasoning options as the harness
+    // native reasoning toggle instead of phantom models.
+    i = controls + 1;
+    while (i < d.*.tokens[controls].next) {
+        let owner: i32 = json.number(d, json.get(d, i, "menu_owner"), 0) as i32;
+        if (owner > 0 && owner != p.*.reasoning_control &&
+            json.kind(d, json.get(d, i, "visible")) == 5 && json.kind(d, json.get(d, i, "disabled")) != 5 &&
+            (json.is_text(d, json.get(d, i, "role"), "option") || json.is_text(d, json.get(d, i, "role"), "menuitemradio") || json.is_text(d, json.get(d, i, "role"), "menuitem"))) {
+            json.field_text(d, i, "value", &value); json.field_text(d, i, "label", &label);
+            if (value.len == 0) { buf.copy(&value, buf.view(&label)); }
+            if (value.ok != 0 && label.ok != 0 && !validation.sensitive_label(buf.view(&label)) &&
+                validation.reasoning_option(buf.view(&value), buf.view(&label))) {
+                let o: i32 = controls + 1;
+                while (o < d.*.tokens[controls].next) {
+                    if ((json.number(d, json.get(d, o, "id"), 0) as i32) == owner &&
+                        json.kind(d, json.get(d, o, "visible")) == 5 &&
+                        (json.is_text(d, json.get(d, o, "tag"), "button") || json.is_text(d, json.get(d, o, "role"), "button") ||
+                        json.is_text(d, json.get(d, o, "role"), "combobox") || json.is_text(d, json.get(d, o, "tag"), "select"))) {
+                        p.*.reasoning_control = owner;
+                    }
+                    o = d.*.tokens[o].next;
+                }
+            }
+        }
+        i = d.*.tokens[i].next;
+    }
+    i = controls + 1;
+    while (i < d.*.tokens[controls].next) {
+        let node: i32 = json.number(d, json.get(d, i, "id"), 0) as i32;
+        let owner: i32 = json.number(d, json.get(d, i, "menu_owner"), 0) as i32;
+        if (json.kind(d, json.get(d, i, "visible")) == 5 && json.kind(d, json.get(d, i, "disabled")) != 5) {
+            // An open model menu restates the whole exposed catalog (plan
+            // upgrades, downgrades and sign-in changes included): retire
+            // everything first so vanished models stop showing as available.
+            // A closed menu carries no options and leaves the catalog alone.
+            // Never rewrite mid-generation; selection validates at dispatch.
+            // Reasoning-only options never retire the model catalog; a model
+            // option restates it even when the menu is shared.
+            if (owner == p.*.model_control && p.*.active_request < 0 &&
+                (json.is_text(d, json.get(d, i, "role"), "option") || json.is_text(d, json.get(d, i, "role"), "menuitemradio") || json.is_text(d, json.get(d, i, "role"), "menuitem"))) {
+                json.field_text(d, i, "value", &value); json.field_text(d, i, "label", &label);
+                if (value.len == 0) { buf.copy(&value, buf.view(&label)); }
+                if (value.ok == 0 || label.ok == 0 || !validation.reasoning_option(buf.view(&value), buf.view(&label))) {
+                    let old: i32 = 0; while (old < p.*.model_count) { p.*.models[old].available = false; old = old + 1; }
+                    break;
+                }
+            }
+        }
+        i = d.*.tokens[i].next;
+    }
     i = controls + 1;
     while (i < d.*.tokens[controls].next) {
         let node: i32 = json.number(d, json.get(d, i, "id"), 0) as i32;
@@ -99,7 +209,7 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
                 json.field_text(d, i, "current_value", &label);
                 if (label.len == 0) { json.field_text(d, i, "label", &label); }
                 validation.ascii_lower(buf.view(&label), &lower);
-                if (model_label(buf.view(&lower)) && !validation.contains(buf.view(&lower), "model")) {
+                if (validation.model_shaped(buf.view(&lower)) && !validation.contains(buf.view(&lower), "model")) {
                     registry.model(p, buf.view(&label), buf.view(&label), 0); buf.copy(&p.*.current_model, buf.view(&label));
                 }
             }
@@ -113,12 +223,42 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
                 json.field_text(d, i, "value", &value); json.field_text(d, i, "label", &label);
                 if (value.len == 0) { buf.copy(&value, buf.view(&label)); }
                 if (value.ok != 0 && label.ok != 0 && !validation.sensitive_label(buf.view(&label))) {
-                    if (owner == p.*.model_control && p.*.active_request < 0) { registry.model(p, buf.view(&value), buf.view(&label), node); }
-                    if (owner == p.*.reasoning_control) { append_mode(p, buf.view(&value), buf.view(&label)); }
+                    // Modes and models share menus on some sites (Auto /
+                    // Thinking / Fast beside versioned models). Split them so
+                    // reasoning options become the harness native reasoning
+                    // toggle instead of phantom models, and versioned models
+                    // never become reasoning modes.
+                    if (owner == p.*.model_control && p.*.active_request < 0) {
+                        if (validation.reasoning_option(buf.view(&value), buf.view(&label))) { append_mode(p, buf.view(&value), buf.view(&label)); }
+                        else { registry.model(p, buf.view(&value), buf.view(&label), node); }
+                    }
+                    if (owner == p.*.reasoning_control) {
+                        if (validation.pure_model_option(buf.view(&value), buf.view(&label))) {
+                            if (p.*.active_request < 0) { registry.model(p, buf.view(&value), buf.view(&label), node); }
+                        } else { append_mode(p, buf.view(&value), buf.view(&label)); }
+                    }
                 }
             }
         }
         i = d.*.tokens[i].next;
+    }
+    // A locked selector still displays its model: record the shown value so
+    // the locked conversation keeps its identity. Options are never
+    // invented; only the displayed current value is read.
+    if (p.*.model_control > 0) {
+        i = controls + 1;
+        while (i < d.*.tokens[controls].next) {
+            if ((json.number(d, json.get(d, i, "id"), 0) as i32) == p.*.model_control &&
+                json.kind(d, json.get(d, i, "locked")) == 5 && !json.is_text(d, json.get(d, i, "tag"), "select")) {
+                json.field_text(d, i, "current_value", &label);
+                if (label.len == 0) { json.field_text(d, i, "label", &label); }
+                validation.ascii_lower(buf.view(&label), &lower);
+                if (validation.model_shaped(buf.view(&lower)) && !validation.contains(buf.view(&lower), "model")) {
+                    registry.model(p, buf.view(&label), buf.view(&label), 0); buf.copy(&p.*.current_model, buf.view(&label));
+                }
+            }
+            i = d.*.tokens[i].next;
+        }
     }
     buf.free(&label); buf.free(&lower); buf.free(&value);
     // Do not invent a model identity when a website exposes no selector.
@@ -128,7 +268,11 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
     }
     let chat_input: bool = prompt_score >= 3 && p.*.prompt > 0 && p.*.send > 0;
     let model_evidence: bool = p.*.model_count > 0 && (p.*.model_control > 0 || p.*.current_model.len > 0 || p.*.manual_model.len > 0);
-    let conversation: bool = strong_response || (p.*.new_chat > 0 && p.*.reasoning_control > 0 && p.*.model_control > 0);
+    // A conversation surface is assistant history, or a new-chat action beside
+    // a model control that already yielded an option catalog. The catalog
+    // requirement (not just a label) keeps bare prompt boxes and search pages
+    // out: no observed options means no admission, with or without sign-in.
+    let conversation: bool = strong_response || (p.*.new_chat > 0 && p.*.model_control > 0 && p.*.model_count > 0);
     // Recorder-assisted admission still requires explicit response mapping plus
     // model identity; manually naming an arbitrary website is insufficient.
     if (p.*.recipes.len > 2 && recipes_ok && p.*.response > 0 && p.*.prompt > 0 && p.*.send > 0) {
@@ -152,12 +296,15 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
         else if (!model_evidence) { buf.copy(&p.*.discovery_reason, "Chat candidate; no model identity exposed yet"); }
         else { buf.copy(&p.*.discovery_reason, "Model label alone is insufficient; conversation evidence needed"); }
     }
+    // A dedicated reasoning control (Auto / Thinking / Fast / effort levels)
+    // applies to every exposed model, not just the currently selected one,
+    // so the harness keeps one native reasoning toggle per model.
     let current: i32 = 0;
     while (current < p.*.model_count) {
-        if (p.*.reasoning_control > 0 && buf.eq(buf.view(&p.*.models[current].value), buf.view(&p.*.current_model))) {
+        if (p.*.reasoning_control > 0 && p.*.models[current].available && p.*.reasoning_modes.len > 2) {
             p.*.models[current].reasoning_observed = true;
             p.*.models[current].reasoning_seen = _zag_clock_monotonic_ms();
-            if (p.*.reasoning_modes.len > 2) { buf.copy(&p.*.models[current].reasoning_modes, buf.view(&p.*.reasoning_modes)); }
+            buf.copy(&p.*.models[current].reasoning_modes, buf.view(&p.*.reasoning_modes));
         }
         current = current + 1;
     }
@@ -165,13 +312,9 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
     buf.copy(&p.*.evidence, json.raw(d, event)); return true;
 }
 
-// A model-shaped control label is only a candidate, never sole admission.
-fn model_label(text: []u8) bool {
-    if (text.len < 3 || text.len > 96) { return false; }
-    let letter: bool = false; let digit: bool = false; let separator: bool = false; let i: i32 = 0;
-    while (i < text.len) { let c: u8 = text[i]; if (c >= 97 && c <= 122) { letter = true; } if (c >= 48 && c <= 57) { digit = true; } if (c == 45 || c == 46) { separator = true; } i = i + 1; }
-    return letter && digit && separator;
-}
+// Model-vs-mode classification lives in validation so live detection and
+// state-load pruning share one definition. A model-shaped control label is
+// only a candidate, never sole admission.
 fn append_mode(p: *registry.Provider, value: []u8, label: []u8) void {
     if (value.len < 1 || value.len > 180 || label.len > 240 || p.*.reasoning_modes.len > 3500) { return; }
     let d: json.Document = json.parse(buf.view(&p.*.reasoning_modes)); let found: bool = false;
@@ -187,7 +330,8 @@ fn copy_modes(p: *registry.Provider, d: *json.Document, control: i32) void {
     buf.copy(&p.*.reasoning_modes, "[]"); let value: buf.Buffer = buf.make(192); let label: buf.Buffer = buf.make(256); let i: i32 = options + 1;
     while (i < d.*.tokens[options].next) {
         json.field_text(d, i, "value", &value); json.field_text(d, i, "label", &label);
-        if (value.ok != 0 && label.ok != 0 && json.kind(d, json.get(d, i, "disabled")) != 5) { append_mode(p, buf.view(&value), buf.view(&label)); }
+        if (value.ok != 0 && label.ok != 0 && json.kind(d, json.get(d, i, "disabled")) != 5 &&
+            !validation.pure_model_option(buf.view(&value), buf.view(&label))) { append_mode(p, buf.view(&value), buf.view(&label)); }
         i = d.*.tokens[i].next;
     }
     buf.free(&value); buf.free(&label);

@@ -7,3 +7,9 @@ fn fits(used: i64, output: i64, margin: i64, known_limit: i64) bool {
     if (known_limit <= 0) { return true; }
     return used <= known_limit && output <= known_limit - used && margin <= known_limit - used - output;
 }
+// High-watermark tripwire at 75% of a known budget, so long sessions warn
+// once before the hard refusal above. Unknown budgets cannot trip it.
+fn watermark(used: i64, known_limit: i64) bool {
+    if (used < 0 || known_limit <= 0) { return false; }
+    return used * 4 >= known_limit * 3;
+}

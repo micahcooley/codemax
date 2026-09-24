@@ -1,8 +1,14 @@
 @import("../core/runtime.zag")
 struct Address { low: u64, high: u64, }
+// Portable OS surface: every raw call below uses a Linux x86-64 identity
+// that the macOS backend also admits, so one source runs on both kernels.
+// Darwin rules enforced here: socket/accept without SOCK_NONBLOCK (set it
+// with fcntl instead), send with MSG_NOSIGNAL only, recv with flags 0,
+// fcntl with literal F_SETFL, single-fd poll for sleeps. Anything else
+// fails closed with ENOSYS on Apple Silicon, so keep these tuples exact.
 fn listen(port: i32) i64 {
     if (port < 1024 || port > 65535) { return 0 - 22; }
-    let fd: i64 = _zag_raw_syscall(41, 2, 1 | 2048 | 524288, 0, 0, 0, 0);
+    let fd: i64 = _zag_raw_syscall(41, 2, 1 | 524288, 0, 0, 0, 0);
     if (fd < 0) { return fd; }
     let reuse: i32 = 1; let reuse_pointer: *i32 = &reuse;
     let rc: i64 = _zag_raw_syscall(54, fd, 1, 2, reuse_pointer as i64, 4, 0);
@@ -15,21 +21,53 @@ fn listen(port: i32) i64 {
     if (rc < 0) { close(fd); return rc; }
     rc = _zag_raw_syscall(50, fd, 32, 0, 0, 0, 0);
     if (rc < 0) { close(fd); return rc; }
+    if (!nonblocking(fd)) { close(fd); return 0 - 11; }
     return fd;
 }
 fn close(fd: i64) void { let ignored: i64 = _zag_raw_syscall(3, fd, 0, 0, 0, 0, 0); }
-fn accept(fd: i64) i64 { return _zag_raw_syscall(288, fd, 0, 0, 2048 | 524288, 0, 0); }
-fn recv(fd: i64, output: *u8, length: i32) i64 { return _zag_raw_syscall(45, fd, output as i64, length as i64, 64, 0, 0); }
-fn send(fd: i64, input: *u8, length: i32) i64 { return _zag_raw_syscall(44, fd, input as i64, length as i64, 16384 | 64, 0, 0); }
-fn would_block(code: i64) bool { return code == 0 - 11 || code == 0 - 4; }
+fn accept(fd: i64) i64 { return _zag_raw_syscall(288, fd, 0, 0, 524288, 0, 0); }
+fn recv(fd: i64, output: @borrows_mut *u8, length: i32) i64 { return _zag_raw_syscall(45, fd, output as i64, length as i64, 0, 0, 0); }
+fn send(fd: i64, input: @borrows *u8, length: i32) i64 { return _zag_raw_syscall(44, fd, input as i64, length as i64, 16384, 0, 0); }
+fn would_block(code: i64) bool {
+    // Linux reports EAGAIN as 11; XNU reports 35 (EWOULDBLOCK, same value).
+    // The raw adapter leaves read/write/send/recv errnos untranslated, so
+    // both must be honored for one source to idle correctly on either kernel.
+    return code == 0 - 11 || code == 0 - 4 || code == 0 - 35;
+}
 fn nonblocking(fd: i64) bool {
-    let flags: i64 = _zag_raw_syscall(72, fd, 3, 0, 0, 0, 0);
-    return flags >= 0 && _zag_raw_syscall(72, fd, 4, flags | 2048, 0, 0, 0) == 0;
+    // F_GETFL is not portable to Darwin and the flag expression must be a
+    // literal for the audit. Fresh descriptors carry no other status flags.
+    return _zag_raw_syscall(72, fd, 4, 2048, 0, 0, 0) == 0;
+}
+// Bidirectional loopback pair. socketpair(2) is not admitted on Darwin, so
+// connect two TCP sockets through an ephemeral listener instead. Both ends
+// return nonblocking, matching the old SOCK_NONBLOCK pair on either kernel.
+fn local_pair() Address {
+    let bad: Address = Address{.low = (0 - 1) as u64, .high = 0};
+    let ls: i64 = _zag_raw_syscall(41, 2, 1 | 524288, 0, 0, 0, 0);
+    if (ls < 0) { return bad; }
+    // Port zero selects an ephemeral port; getsockname reads it back.
+    let address: Address = Address{.low = 2 | ((16777343 as u64) << 32), .high = 0};
+    let pointer: *Address = &address;
+    if (_zag_raw_syscall(49, ls, pointer as i64, 16, 0, 0, 0) != 0) { close(ls); return bad; }
+    if (_zag_raw_syscall(50, ls, 8, 0, 0, 0, 0) != 0) { close(ls); return bad; }
+    let len: i32 = 16; let lenp: *i32 = &len;
+    if (_zag_raw_syscall(51, ls, pointer as i64, lenp as i64, 0, 0, 0) != 0) { close(ls); return bad; }
+    let dial: i64 = _zag_raw_syscall(41, 2, 1 | 524288, 0, 0, 0, 0);
+    if (dial < 0) { close(ls); return bad; }
+    if (_zag_raw_syscall(42, dial, pointer as i64, 16, 0, 0, 0) != 0) { close(dial); close(ls); return bad; }
+    let accepted: i64 = accept(ls);
+    close(ls);
+    if (accepted < 0) { close(dial); return bad; }
+    if (!nonblocking(dial) || !nonblocking(accepted)) { close(dial); close(accepted); return bad; }
+    return Address{.low = dial as u64, .high = accepted as u64};
 }
 // Linux pollfd is 8 bytes: int fd, short events, short revents.
 fn poll_entry(fd: i64, events: u64) u64 { return (fd as u64 & 4294967295) | (events << 32); }
 fn poll_revents(entry: u64) i32 { return ((entry >> 48) & 65535) as i32; }
-fn poll(entries: *u64, count: i32, timeout: i32) i64 { return _zag_raw_syscall(7, entries as i64, count as i64, timeout as i64, 0, 0, 0); }
+// Darwin admits poll only for a single pollfd with a 1..60000 ms timeout.
+// The event loop uses this as a bounded sleep, never as a 36-entry vector.
+fn poll(entries: @borrows_mut *u64, count: i32, timeout: i32) i64 { return _zag_raw_syscall(7, entries as i64, count as i64, timeout as i64, 0, 0, 0); }
 struct Timespec { seconds: i64, nanos: i64, }
 fn unix_seconds() i64 {
     let ts: Timespec = Timespec{.seconds = 0, .nanos = 0}; let p: *Timespec = &ts;

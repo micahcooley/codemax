@@ -22,13 +22,13 @@ fn make(fd: i64) Client {
         .text = buf.make(131072), .current_text = buf.make(131072), .calls = buf.make(524288), .segments = buf.make(1048576),
         .segment_count = 0, .raw_bytes = 0, .deadline = now + 10000, .generation_limit = 0, .last_write = now, .last_ping = now};
 }
-fn flush_text(c: *Client) void {
+fn flush_text(c: @borrows_mut *Client) void {
     if (c.*.current_text.len == 0) { return; }
     if (c.*.segment_count > 0) { buf.byte(&c.*.segments, 44); }
     buf.add(&c.*.segments, "{\"type\":\"text\",\"data\":"); buf.json(&c.*.segments, buf.view(&c.*.current_text)); buf.byte(&c.*.segments, 125);
     c.*.segment_count = c.*.segment_count + 1; buf.clear(&c.*.current_text);
 }
-fn free(c: *Client) void {
+fn free(c: @consumes *Client) void {
     if (c.*.fd < 0) { return; }
     net.close(c.*.fd); buf.free(&c.*.input); buf.free(&c.*.output); http.free(&c.*.headers); normalized.free(&c.*.request);
     if (c.*.parser_open) { tools.free(&c.*.parser); }

@@ -1,8 +1,10 @@
 # Optional tool library
 
-The five recipes are setup conveniences, not bundled tools. Selecting a recipe populates a reviewable executable/argv draft. Saving does not run it. Connecting separately asks for process consent; catalog tools start disabled, and calls require exact approval or an explicit broader per-tool task grant. A trusted executable runs as the user, not in an OS sandbox.
+The six recipes are setup conveniences, not bundled tools. Selecting a recipe populates a reviewable executable/argv draft. Saving does not run it. Connecting separately asks for process consent; catalog tools start disabled, and calls require exact approval or an explicit broader per-tool task grant. A trusted executable runs as the user, not in an OS sandbox.
 
 | Recipe | Published version pin | Prerequisites and boundary |
+|---|---|---|
+| Local project tools | builtin (`builtin:local-tools`, version 0.2.0, no download) | Bundled native process; file operations stay inside the chosen project without following links. Writes and trusted shell commands must be enabled explicitly. |
 |---|---|---|
 | Project files | `@modelcontextprotocol/server-filesystem@2026.8.31` | Node/npm; specific user-selected folder; server-owned file access controls. |
 | Git repositories | `mcp-server-git==2026.8.18` | uv/uvx, Python environment and Git; chosen repository is a starting location, not a Codemax confinement promise. |

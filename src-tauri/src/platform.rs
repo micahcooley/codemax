@@ -6,6 +6,92 @@ use tauri::{Manager, Webview};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 pub fn autostart(app: &tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        return autostart_macos(app, enabled);
+    }
+    #[cfg(target_os = "linux")]
+    {
+        return autostart_linux(app, enabled);
+    }
+    #[cfg(target_os = "windows")]
+    {
+        return autostart_windows(app, enabled);
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn autostart_windows(app: &tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    use std::io::Write;
+    let directory = app.path().config_dir().map_err(|_| "CONFIG_DIRECTORY_UNAVAILABLE")?.join("Codemax");
+    views::private_directory(&directory)?;
+    let path = directory.join("startup.cmd");
+    if !enabled {
+        if path.exists() { fs::remove_file(path).map_err(|_| "AUTOSTART_REMOVE_FAILED")?; }
+        return Ok(());
+    }
+    let executable = std::env::current_exe().map_err(|_| "EXECUTABLE_PATH_UNAVAILABLE")?;
+    let text = executable.to_str().ok_or("EXECUTABLE_PATH_ENCODING")?;
+    if text.chars().any(char::is_control) { return Err("EXECUTABLE_PATH_DENIED".into()); }
+    let contents = format!("@echo off\nstart \"\" \"{}\"\n", text.replace('"', "\"\""));
+    let mut file = fs::File::create(&path).map_err(|_| "AUTOSTART_WRITE_FAILED")?;
+    file.write_all(contents.as_bytes()).map_err(|_| "AUTOSTART_WRITE_FAILED")?;
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn xml_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&apos;"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// macOS autostart via a LaunchAgent plist in ~/Library/LaunchAgents.
+/// Same safety contract as the Linux .desktop writer: symlink-safe paths,
+/// create_new + 0o600 + atomic rename, UTF-8/control-char validation, and
+/// XML escaping of the executable path (plist is XML, not a shell command).
+#[cfg(target_os = "macos")]
+fn autostart_macos(app: &tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let directory = app.path().home_dir().map_err(|_| "HOME_DIRECTORY_UNAVAILABLE")?.join("Library/LaunchAgents");
+    views::private_directory(&directory)?;
+    let path = directory.join("com.micahcooley.codemax.plist");
+    if let Ok(meta) = fs::symlink_metadata(&path) {
+        if meta.file_type().is_symlink() || !meta.is_file() { return Err("AUTOSTART_PATH_DENIED".into()); }
+    }
+    if !enabled {
+        if path.exists() { fs::remove_file(path).map_err(|_| "AUTOSTART_REMOVE_FAILED")?; }
+        return Ok(());
+    }
+    let executable = std::env::current_exe().map_err(|_| "EXECUTABLE_PATH_UNAVAILABLE")?;
+    let text = executable.to_str().ok_or("EXECUTABLE_PATH_ENCODING")?;
+    if text.chars().any(char::is_control) { return Err("EXECUTABLE_PATH_DENIED".into()); }
+    let escaped = xml_escape(text);
+    let contents = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t<key>Label</key>\n\t<string>com.micahcooley.codemax</string>\n\t<key>ProgramArguments</key>\n\t<array>\n\t\t<string>{escaped}</string>\n\t</array>\n\t<key>RunAtLoad</key>\n\t<true/>\n</dict>\n</plist>\n");
+    let temporary = path.with_extension(format!("plist-{}-tmp", std::process::id()));
+    let result = (|| -> Result<(), String> {
+        let mut file = fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&temporary).map_err(|_| "AUTOSTART_WRITE_FAILED")?;
+        file.write_all(contents.as_bytes()).map_err(|_| "AUTOSTART_WRITE_FAILED")?;
+        file.sync_all().map_err(|_| "AUTOSTART_SYNC_FAILED")?;
+        fs::rename(&temporary, &path).map_err(|_| "AUTOSTART_RENAME_FAILED")?;
+        Ok(())
+    })();
+    if result.is_err() { let _ = fs::remove_file(temporary); }
+    result
+}
+
+#[cfg(target_os = "linux")]
+fn autostart_linux(app: &tauri::AppHandle, enabled: bool) -> Result<(), String> {
     use std::os::unix::fs::OpenOptionsExt;
     use std::io::Write;
     let directory = app.path().config_dir().map_err(|_| "CONFIG_DIRECTORY_UNAVAILABLE")?.join("autostart");
@@ -90,6 +176,12 @@ pub async fn document_import(webview: Webview) -> Result<Option<Value>, String> 
 #[tauri::command]
 pub async fn gateway_probe(webview: Webview, host: tauri::State<'_, Arc<Host>>) -> Result<Value, String> {
     views::trusted_main(&webview)?;
+    // Fallback browsing has no loopback HTTP gateway by design. Report it
+    // explicitly so the UI shows "gateway stopped, browsing available"
+    // instead of timing out.
+    if host.is_fallback() {
+        return Err("GATEWAY_HEALTH_FAILED".into());
+    }
     let state = host.request("state.get".into(), json!({})).await?;
     let port = state["api"]["port"].as_u64().filter(|p| (1024..=65535).contains(p)).ok_or("INVALID_GATEWAY_PORT")? as u16;
     let started = Instant::now();

@@ -10,7 +10,6 @@
     "src/lib/components/Dialog.svelte",
     "src/lib/components/Empty.svelte",
     "src/lib/components/ExternalClients.svelte",
-    "src/lib/components/FileProbe.svelte",
     "src/lib/components/Icon.svelte",
     "src/lib/components/TabActivity.svelte",
     "src/lib/components/chrome/ChromeMenu.svelte",

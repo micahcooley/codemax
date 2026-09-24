@@ -3,77 +3,72 @@
   "native_tauri_executed": false,
   "zag_executed": false,
   "live_provider_contacted": false,
-  "chromium": "144.0.7559.96",
+  "chromium": "153.0.8010.12",
   "results": [
     {
       "name": "compiled Svelte startup, real runes and native-transport handshake",
       "status": "PASS",
-      "seconds": 0.007
+      "seconds": 0.003
     },
     {
       "name": "browser-first layout with separately positioned provider surface",
       "status": "PASS",
-      "seconds": 0.334
+      "seconds": 0.228
     },
     {
       "name": "Ctrl-L address focus and keyboard command palette with provider hiding",
       "status": "PASS",
-      "seconds": 0.093
+      "seconds": 0.027
     },
     {
       "name": "endpoint/key controls and all five client configuration formats",
       "status": "PASS",
-      "seconds": 0.545
-    },
-    {
-      "name": "website-first client setup, explicit one-file consent, deny/revoke and state rendering",
-      "status": "PASS",
-      "seconds": 1.11
+      "seconds": 0.47
     },
     {
       "name": "real CSS spinner, manual generation, idle ring, limit state and reduced motion",
       "status": "PASS",
-      "seconds": 2.244
+      "seconds": 2.06
     },
     {
       "name": "model filtering, exact identifier copy and backend-driven default selection",
       "status": "PASS",
-      "seconds": 0.528
+      "seconds": 0.473
     },
     {
       "name": "theme, density, API port, listener control and developer setting round trips",
       "status": "PASS",
-      "seconds": 1.089
+      "seconds": 1.018
     },
     {
       "name": "session rename, retained title, search and context provenance",
       "status": "PASS",
-      "seconds": 0.464
+      "seconds": 0.436
     },
     {
       "name": "evidence inspection, connector import/export and page-picker action wiring",
       "status": "PASS",
-      "seconds": 0.554
+      "seconds": 0.518
     },
     {
       "name": "keyboard-resizable panes and collapse/restore bounds",
       "status": "PASS",
-      "seconds": 0.611
+      "seconds": 0.542
     },
     {
       "name": "new website workflow, tab creation and close operation",
       "status": "PASS",
-      "seconds": 0.123
+      "seconds": 0.101
     },
     {
       "name": "profile context menu and destructive-action confirmation with surface hiding",
       "status": "PASS",
-      "seconds": 0.578
+      "seconds": 0.531
     },
     {
       "name": "reduced motion and compact-window overflow checks",
       "status": "PASS",
-      "seconds": 0.191
+      "seconds": 0.165
     },
     {
       "name": "no browser JavaScript runtime errors",
@@ -83,30 +78,30 @@
   ],
   "runtime_errors": [],
   "screenshots": [
-    "14-single-tab-providers.png",
     "12-single-tab-browser.png",
-    "21-ux-connect.png",
-    "27-clean-connect.png",
-    "28-tool-library.png",
-    "07-active-idle-tabs.png",
-    "25-ux-compact.png",
-    "02-model-registry.png",
-    "26-clean-browser.png",
-    "29-safe-continuation.png",
-    "01-browser-workspace.png",
-    "11-mcp-permission.png",
-    "09-provider-settings.png",
-    "13-single-tab-working.png",
-    "05-file-permission.png",
-    "04-settings.png",
-    "24-ux-providers-light.png",
-    "10-harness-setup.png",
-    "23-ux-browser-approval.png",
-    "03-client-setup.png",
-    "22-ux-permission.png",
     "30-clean-browser-light.png",
+    "09-provider-settings.png",
+    "10-harness-setup.png",
+    "07-active-idle-tabs.png",
+    "29-safe-continuation.png",
+    "21-ux-connect.png",
+    "26-clean-browser.png",
+    "03-client-setup.png",
+    "14-single-tab-providers.png",
+    "01-browser-workspace.png",
     "20-ux-providers.png",
-    "06-tool-in-progress.png"
+    "25-ux-compact.png",
+    "24-ux-providers-light.png",
+    "13-single-tab-working.png",
+    "02-model-registry.png",
+    "06-tool-in-progress.png",
+    "05-file-permission.png",
+    "22-ux-permission.png",
+    "27-clean-connect.png",
+    "11-mcp-permission.png",
+    "23-ux-browser-approval.png",
+    "04-settings.png",
+    "28-tool-library.png"
   ],
   "fixture_code_shipped_in_production_dist": false
 }
