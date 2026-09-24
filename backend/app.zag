@@ -355,7 +355,11 @@ fn observe(a: *App, provider_id: i32, d: *json.Document, event: i32) void {
                             let proto: i32 = a.*.clients[w].request.protocol;
                             let ready: bool = registry.find_model(&a.*.providers, buf.view(&want)) >= 0;
                             buf.free(&want);
-                            if (ready) { a.*.clients[w].phase = 0; begin_generation(a, w, proto); }
+                            if (ready) {
+                                a.*.clients[w].phase = 0;
+                                log_event(a, p.*.id, "INFO", "request.provisioned", buf.view(&a.*.clients[w].request.model));
+                                begin_generation(a, w, proto);
+                            }
                         }
                         w = w + 1;
                     }
