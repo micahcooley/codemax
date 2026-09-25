@@ -7,22 +7,26 @@
  const client=$derived<Client>(app.preferences.harness||'opencode');
  const sh=(value:string)=>"'"+value.replaceAll("'","'\\''")+"'";
  const endpoint=$derived(`http://127.0.0.1:${app.snapshot?.api.port??7331}`);
-  const choice=$derived(app.clientModel?app.exposedModels.find(m=>m.id===app.clientModel):app.exposedModels.find(m=>m.id===app.preferences.default_model)||app.exposedModels[0]);
+  // Allowed models ignore transient availability: enabled and exposed is a
+ // user preference, while availability follows open tabs and observations
+ // (the gateway provisions tabs on request). User-hide stays respected.
+ const allowedModels=$derived(app.models.filter(m=>m.enabled&&m.provider.exposed));
+ const choice=$derived(app.clientModel?allowedModels.find(m=>m.id===app.clientModel):app.exposedModels.find(m=>m.id===app.preferences.default_model)||app.exposedModels[0]);
   const docs=$derived(choice?catalogLookup(choice.id,choice.display_name):null);
   const model=$derived(choice?.id||'');
   const running=$derived(app.ready&&app.snapshot?.api.running===true);
   const fallback=$derived(app.host.code==='FALLBACK_MODE');
  const formatNames:Record<Client,string>={koryphaios:'Koryphaios',opencode:'OpenCode',claude:'Claude Code',chat:'Chat API',responses:'Responses API',messages:'Messages API'};
- // Multi-choice opencode model set. Auto-selection mirrors the exposed
- // registry; once the user toggles anything explicitly, that manual set
- // rules (pruned only when models disappear). Explicit picks may include
- // observed-but-not-yet-servable models so fallback browsing can still
- // produce a config; the gateway refuses unservable models at request time.
+ // Multi-choice opencode model set. Auto-selection mirrors the allowed
+ // registry (enabled and exposed, even when tabs are closed); once the user
+ // toggles anything explicitly, that manual set rules (pruned only when
+ // models disappear). Unservable picks stay selectable with status badges;
+ // the gateway provisions tabs on request and refuses otherwise.
  let picked=$state<string[]>([]);let pickerTouched=$state(false);
  $effect(()=>{
   const valid=new Set(app.models.map(m=>m.id));
   if(!pickerTouched){
-   const auto=app.exposedModels.map(m=>m.id).filter(id=>valid.has(id));
+   const auto=allowedModels.map(m=>m.id).filter(id=>valid.has(id));
    if(auto.join(' ')!==picked.join(' '))picked=auto;
   }else if(picked.some(id=>!valid.has(id)))picked=picked.filter(id=>valid.has(id));
  });
@@ -94,7 +98,7 @@
 <section class="quick-connect" aria-label="Simple client connection">
   <div class="quick-connection-status"><span class="dot" class:online={running}></span><span>{!app.ready?'Reconnect Codemax to continue':running?'Local gateway ready':fallback?'No gateway in browsing-only mode':'Ready to set up'}</span></div>
  <label class="field"><span>Coding client</span><select aria-label="Quick coding client" value={client} disabled={!app.ready||setupBusy} onchange={e=>app.settings({harness:e.currentTarget.value as Client})}><option value="koryphaios">Koryphaios</option><option value="opencode">OpenCode</option><option value="claude">Claude Code</option><option value="chat">Other · Chat Completions</option><option value="responses">Other · Responses API</option><option value="messages">Other · Messages API</option></select></label>
-  <label class="field"><span>Website model</span><select aria-label="Quick website model" value={app.clientModel||model} disabled={!app.ready||setupBusy||!app.exposedModels.length} onchange={e=>app.clientModel=e.currentTarget.value}>{#if !model}<option value="">Choose an available model</option>{/if}{#each app.exposedModels as m(m.id)}<option value={m.id}>{m.provider.label} / {m.display_name}</option>{/each}</select></label>
+  <label class="field"><span>Website model</span><select aria-label="Quick website model" value={app.clientModel||model} disabled={!app.ready||setupBusy||!allowedModels.length} onchange={e=>app.clientModel=e.currentTarget.value}>{#if !model}<option value="">Choose an available model</option>{/if}{#each allowedModels as m(m.id)}<option value={m.id}>{m.provider.label} / {m.display_name}</option>{/each}</select></label>
   {#if docs&&(docs.contextTokens||docs.reasoning!==null)}<p class="field-hint">Vendor docs{docs.contextSource?` · ${docs.contextSource.retrieved}`:''}:{#if docs.contextTokens} {formatTokens(docs.contextTokens)} context (advertised; website budget unmeasured){/if}{#if docs.reasoning!==null} · reasoning {docs.reasoning?'supported':'not advertised'}{#if docs.reasoningNote} · {docs.reasoningNote}{/if}{/if}{#if docs.plans} · exposed on {formatPlans(docs.plans)}{#if docs.planNote} ({docs.planNote}){/if}{/if}.</p>{/if}
  {#if app.clientModel&&!choice}<p class="note warning">Your selected model is unavailable. Choose another explicitly; no automatic replacement.</p>{/if}
   {#if fallback}<div class="note"><Icon name="globe" size={16}/><div>The local gateway needs the Zag backend (Linux x86_64). On this Mac, Codemax browses, signs in, and lists observed website models; coding-client connections stay off.</div></div>{/if}
@@ -116,7 +120,7 @@
  <section class="section"><div class="section-title"><h2>1. Choose your client</h2><span class="tag">Website quota</span></div>
   <div class="segmented" aria-label="Client format">{#each ['koryphaios','opencode','claude'] as id}<button class:active={client===id} aria-pressed={client===id} disabled={!app.ready||app.busy('settings.update')} onclick={()=>app.settings({harness:id as Client})}>{formatNames[id as Client]}</button>{/each}</div>
   <details class="advanced-client client-formats" open={['chat','responses','messages'].includes(client)}><summary>Other clients · protocol examples</summary><div class="segmented">{#each ['chat','responses','messages'] as id}<button class:active={client===id} aria-pressed={client===id} disabled={!app.ready||app.busy('settings.update')} onclick={()=>app.settings({harness:id as Client})}>{formatNames[id as Client]}</button>{/each}</div><p class="field-hint">Use a protocol your client supports. These are example requests, not one-click installers.</p></details>
-  <label class="field"><span>Website model</span><select aria-label="Client model" value={app.clientModel||model} disabled={!app.ready||!app.exposedModels.length} onchange={e=>app.clientModel=e.currentTarget.value}>{#if !model}<option value="">Select an available model</option>{/if}{#each app.exposedModels as m(m.id)}<option value={m.id}>{m.provider.label} / {m.display_name}</option>{/each}</select></label>
+  <label class="field"><span>Website model</span><select aria-label="Client model" value={app.clientModel||model} disabled={!app.ready||!allowedModels.length} onchange={e=>app.clientModel=e.currentTarget.value}>{#if !model}<option value="">Select an available model</option>{/if}{#each allowedModels as m(m.id)}<option value={m.id}>{m.provider.label} / {m.display_name}</option>{/each}</select></label>
   {#if app.clientModel&&!choice}<div class="note warning" role="status">Your previous selection is no longer available. Choose a model above; Codemax will not switch it silently.</div>{/if}
   {#if !app.exposedModels.length}<div class="note"><Icon name="globe" size={16}/><div>There are no ready, enabled models yet. <button class="text-button" onclick={()=>app.navigate('providers')}>Review providers</button> or <button class="text-button" onclick={()=>app.newTab()}>open a website</button>.</div></div>{/if}
  </section>

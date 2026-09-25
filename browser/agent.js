@@ -419,7 +419,12 @@
       if (Array.from(document.querySelectorAll('textarea,[contenteditable="true"]')).some(node=>visible(node)&&(node.value||node.textContent||'').trim())) return;
       const node = target(action.node);
       if (!['button','combobox'].includes(semanticRole(node)) || !['menu','listbox','true'].includes(node.getAttribute('aria-haspopup'))) return;
-      if (!REASON_WORD.test(label(node)) && !MODEL_WORD.test(label(node)) && !/^[a-z][a-z0-9 ._-]*[0-9][a-z0-9 ._-]*$/i.test(controlValue(node))) return;
+      // No label/content gate here: the backend names the exact mapped
+      // model/reasoning control (labels plus promoted options), so wording
+      // checks would only block legitimately generic menus like an "Instant"
+      // effort selector. Opening a menu is side-effect free and the guards
+      // above (idle incl. hover, no open popovers, empty composer, popup
+      // shape) plus the backend budget still bound the behavior.
       const previous = document.activeElement; investigating = true;
       try {
         lastMenuTrigger=node;lastMenuAt=Date.now();node.click();await settle();await pause(150);lastSnapshot='';snapshot();

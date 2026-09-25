@@ -59,8 +59,13 @@ export default function ExternalClients($$anchor, $$props) {
 	const sh = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
 	const endpoint = $.derived(() => `http://127.0.0.1:${app.snapshot?.api.port ?? 7331}`);
 
+	// Allowed models ignore transient availability: enabled and exposed is a
+	// user preference, while availability follows open tabs and observations
+	// (the gateway provisions tabs on request). User-hide stays respected.
+	const allowedModels = $.derived(() => app.models.filter((m) => m.enabled && m.provider.exposed));
+
 	const choice = $.derived(() => app.clientModel
-		? app.exposedModels.find((m) => m.id === app.clientModel)
+		? $.get(allowedModels).find((m) => m.id === app.clientModel)
 		: app.exposedModels.find((m) => m.id === app.preferences.default_model) || app.exposedModels[0]);
 
 	const docs = $.derived(() => $.get(choice)
@@ -80,11 +85,11 @@ export default function ExternalClients($$anchor, $$props) {
 		messages: 'Messages API'
 	};
 
-	// Multi-choice opencode model set. Auto-selection mirrors the exposed
-	// registry; once the user toggles anything explicitly, that manual set
-	// rules (pruned only when models disappear). Explicit picks may include
-	// observed-but-not-yet-servable models so fallback browsing can still
-	// produce a config; the gateway refuses unservable models at request time.
+	// Multi-choice opencode model set. Auto-selection mirrors the allowed
+	// registry (enabled and exposed, even when tabs are closed); once the user
+	// toggles anything explicitly, that manual set rules (pruned only when
+	// models disappear). Unservable picks stay selectable with status badges;
+	// the gateway provisions tabs on request and refuses otherwise.
 	let picked = $.state($.proxy([]));
 
 	let pickerTouched = $.state(false);
@@ -93,7 +98,7 @@ export default function ExternalClients($$anchor, $$props) {
 		const valid = new Set(app.models.map((m) => m.id));
 
 		if (!$.get(pickerTouched)) {
-			const auto = app.exposedModels.map((m) => m.id).filter((id) => valid.has(id));
+			const auto = $.get(allowedModels).map((m) => m.id).filter((id) => valid.has(id));
 
 			if (auto.join(' ') !== $.get(picked).join(' ')) $.set(picked, auto, true);
 		} else if ($.get(picked).some((id) => !valid.has(id))) $.set(picked, $.get(picked).filter((id) => valid.has(id)), true);
@@ -402,7 +407,7 @@ export default function ExternalClients($$anchor, $$props) {
 
 	var node_1 = $.sibling(node);
 
-	$.each(node_1, 17, () => app.exposedModels, (m) => m.id, ($$anchor, m) => {
+	$.each(node_1, 17, () => $.get(allowedModels), (m) => m.id, ($$anchor, m) => {
 		var option_7 = root_1();
 		var text_1 = $.only_child(option_7);
 		var option_7_value = {};
@@ -776,7 +781,7 @@ export default function ExternalClients($$anchor, $$props) {
 
 	var node_21 = $.sibling(node_20);
 
-	$.each(node_21, 17, () => app.exposedModels, (m) => m.id, ($$anchor, m) => {
+	$.each(node_21, 17, () => $.get(allowedModels), (m) => m.id, ($$anchor, m) => {
 		var option_9 = root_1();
 		var text_13 = $.only_child(option_9);
 		var option_9_value = {};
@@ -1371,7 +1376,7 @@ export default function ExternalClients($$anchor, $$props) {
 				);
 			}
 
-			select_1.disabled = !app.ready || $.get(setupBusy) || !app.exposedModels.length;
+			select_1.disabled = !app.ready || $.get(setupBusy) || !$.get(allowedModels).length;
 
 			if (select_1_value !== (select_1_value = app.clientModel || $.get(model))) {
 				(
@@ -1381,7 +1386,7 @@ export default function ExternalClients($$anchor, $$props) {
 			}
 
 			details_1.open = $0;
-			select_2.disabled = !app.ready || !app.exposedModels.length;
+			select_2.disabled = !app.ready || !$.get(allowedModels).length;
 
 			if (select_2_value !== (select_2_value = app.clientModel || $.get(model))) {
 				(

@@ -352,6 +352,12 @@ const HOVER_MENU = `<button aria-label="New chat">New chat</button>
 <textarea aria-label="Ask anything" placeholder="Ask anything"></textarea>
 <button aria-label="Send message">send</button>`;
 
+const INSTANT_MENU = `<button aria-label="New chat">New chat</button>
+<main><div data-role="assistant">Hello</div></main>
+<button id="im" aria-label="Instant" aria-haspopup="menu">Instant</button>
+<textarea aria-label="Ask anything" placeholder="Ask anything"></textarea>
+<button aria-label="Send message">send</button>`;
+
 function trustedHover(env) {
   const Evt = env.document.defaultView.Event;
   const event = new Evt('pointermove', {bubbles: true});
@@ -382,6 +388,18 @@ test('idle model button still opens for automatic menu inspection', async () => 
   vm.runInContext(`__BRIDGE_EXECUTE__(${JSON.stringify({type: 'inspect_menu', document_id: docId, node: trigger.id})});`, env.context);
   await new Promise(resolve => setTimeout(resolve, 900));
   assert.equal(env.document.documentElement.getAttribute('data-menu-opened'), '1', 'menu opens once the pointer goes idle');
+});
+
+test('generically labeled menus still open for automatic inspection', async () => {
+  const env = await observeSite('https://kimi.ai', INSTANT_MENU);
+  const docId = (env.events.find(e => e && e.document_id) || {}).document_id;
+  const trigger = env.controls.find(c => /instant/i.test(c.label || ''));
+  assert.ok(docId && trigger, 'instant-menu mappings present');
+  const button = env.document.querySelector('#im');
+  button.addEventListener('click', () => env.document.documentElement.setAttribute('data-menu-opened', '1'));
+  vm.runInContext(`__BRIDGE_EXECUTE__(${JSON.stringify({type: 'inspect_menu', document_id: docId, node: trigger.id})});`, env.context);
+  await new Promise(resolve => setTimeout(resolve, 900));
+  assert.equal(env.document.documentElement.getAttribute('data-menu-opened'), '1', 'backend-targeted menu opens without wording gate');
 });
 
 test('browser shortcut contract matches across page, host and bridge', () => {
