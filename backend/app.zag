@@ -176,6 +176,16 @@ fn begin_generation(a: *App, index: i32, protocol: i32) void {
     if (p.*.state == 2) { http_error(c, 401, "AUTH_REQUIRED"); return; }
     if (!actions.allowed(p)) { http_error(c, 409, "MAPPING_BROKEN"); return; }
     if (p.*.active_request >= 0 || p.*.browser_busy) { http_error(c, 409, "PROVIDER_BUSY"); return; }
+    // Request-shape telemetry for crash correlation: if the process dies
+    // mid-dispatch, the host log keeps the model, wire bytes, stream mode
+    // and tool use of the fatal request. Metadata only, never content.
+    let shape: buf.Buffer = buf.make(512);
+    buf.add(&shape, buf.view(&r.*.model)); buf.add(&shape, " body=");
+    buf.integer(&shape, (c.*.input.len - c.*.headers.header_length) as i64);
+    if (r.*.stream) { buf.add(&shape, " stream"); } else { buf.add(&shape, " once"); }
+    if (r.*.has_tools) { buf.add(&shape, " tools"); }
+    buf.add(&shape, " proto="); buf.integer(&shape, r.*.protocol as i64);
+    log_event(a, p.*.id, "INFO", "request.routed", buf.view(&shape)); buf.free(&shape);
     let concurrent: i32 = 0; let n: i32 = 0;
     while (n < 32) { if (a.*.clients[n].fd >= 0 && a.*.clients[n].phase == 2) { concurrent = concurrent + 1; } n = n + 1; }
     if (concurrent >= 4) { http_error(c, 503, "CONCURRENCY_LIMIT"); return; }
