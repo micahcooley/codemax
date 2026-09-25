@@ -45,16 +45,19 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
                 // so the lowercased text already carries them verbatim. Bare
                 // 问 is safe here: admission still needs a send action, a
                 // model catalog and conversation evidence, and the negative
-                // search-page fixture pins that combination down.
+                // search-page fixture pins that combination down. "Chat" and
+                // its CJK equivalents only ever score editable controls, so a
+                // search box alone cannot admit a provider.
                 if (validation.contains(s, "message") || validation.contains(s, "prompt") || validation.contains(s, "ask") ||
-                    validation.contains(s, "what") || validation.contains(s, "输入") || validation.contains(s, "发送") ||
+                    validation.contains(s, "what") || validation.contains(s, "chat") || validation.contains(s, "输入") || validation.contains(s, "发送") ||
                     validation.contains(s, "提问") || validation.contains(s, "消息") || validation.contains(s, "问题") ||
+                    validation.contains(s, "聊天") || validation.contains(s, "对话") ||
                     validation.contains(s, "问") || validation.contains(s, "什么")) { score = 3; }
                 if (json.is_text(d, json.get(d, i, "tag"), "textarea")) { score = score + 1; }
                 if (score > prompt_score) { prompt_score = score; p.*.prompt = node; }
             }
             if (json.is_text(d, json.get(d, i, "tag"), "button") || json.is_text(d, json.get(d, i, "role"), "button")) {
-                if (is_visible && (validation.contains(s, "send") || validation.contains(s, "发送") || buf.eq(s, "submit"))) {
+                if (is_visible && (validation.contains(s, "send") || validation.contains(s, "发送") || validation.contains(s, "提交") || buf.eq(s, "submit"))) {
                     let score: i32 = 1; if (validation.contains(s, "message") || validation.contains(s, "消息")) { score = 2; }
                     if (score > send_score) { send_score = score; p.*.send = node; }
                 }
@@ -109,6 +112,13 @@ fn observe(p: *registry.Provider, d: *json.Document, event: i32) bool {
                             opt = d.*.tokens[opt].next;
                         }
                     }
+                }
+                // Generically labeled native dropdowns (effort/mode selectors):
+                // options of Auto/Thinking/Fast with no model-shaped sibling
+                // make it a reasoning control whatever the label says.
+                else if (select_holds_reasoning(d, i)) {
+                    p.*.reasoning_control = node; copy_modes(p, d, i);
+                    if (json.kind(d, json.get(d, i, "locked")) == 5) { p.*.reasoning_locked = true; }
                 }
             }
         }
@@ -323,6 +333,26 @@ fn append_mode(p: *registry.Provider, value: []u8, label: []u8) void {
     let out: buf.Buffer = buf.make(4096); buf.add(&out, p.*.reasoning_modes.data[0..p.*.reasoning_modes.len - 1]);
     if (out.len > 1) { buf.byte(&out, 44); } buf.add(&out, "{\"value\":"); buf.json(&out, value); buf.add(&out, ",\"label\":"); buf.json(&out, label); buf.add(&out, "}]");
     if (out.ok != 0) { buf.copy(&p.*.reasoning_modes, buf.view(&out)); } buf.free(&out);
+}
+// A native dropdown whose options are reasoning modes (and never model
+// identities) is a reasoning control under any label.
+fn select_holds_reasoning(d: *json.Document, control: i32) bool {
+    let options: i32 = json.get(d, control, "options");
+    if (json.kind(d, options) != 2 || d.*.tokens[options].size == 0 || d.*.tokens[options].size > 32) { return false; }
+    let value: buf.Buffer = buf.make(192); let label: buf.Buffer = buf.make(256);
+    let vl: buf.Buffer = buf.make(256); let ll: buf.Buffer = buf.make(256);
+    let modes: bool = false; let models: bool = false; let i: i32 = options + 1;
+    while (i < d.*.tokens[options].next) {
+        json.field_text(d, i, "value", &value); json.field_text(d, i, "label", &label);
+        if (value.ok != 0 && label.ok != 0 && json.kind(d, json.get(d, i, "disabled")) != 5) {
+            if (validation.reasoning_option(buf.view(&value), buf.view(&label))) { modes = true; }
+            validation.ascii_lower(buf.view(&value), &vl); validation.ascii_lower(buf.view(&label), &ll);
+            if (validation.model_shaped(buf.view(&vl)) || validation.model_shaped(buf.view(&ll))) { models = true; }
+        }
+        i = d.*.tokens[i].next;
+    }
+    buf.free(&value); buf.free(&label); buf.free(&vl); buf.free(&ll);
+    return modes && !models;
 }
 fn copy_modes(p: *registry.Provider, d: *json.Document, control: i32) void {
     let options: i32 = json.get(d, control, "options");

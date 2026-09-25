@@ -185,6 +185,16 @@ fn main() i32 {
     observe(&wall_registry, dupe, "{\"origin\":\"https://dupe.example\",\"document_id\":\"site-dupe\",\"password_fields_present\":false,\"controls\":[{\"id\":7,\"tag\":\"button\",\"role\":\"button\",\"label\":\"New chat\",\"visible\":true},{\"id\":1,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":2,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Ask anything\",\"visible\":true,\"editable\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Send message\",\"visible\":true},{\"id\":4,\"tag\":\"button\",\"role\":\"button\",\"label\":\"Model\",\"visible\":true,\"current_value\":\"Qwen3.8-Max\"},{\"id\":5,\"tag\":\"div\",\"role\":\"menuitemradio\",\"label\":\"Qwen3.8-MaxSet as defaultThe flagship of Qwen3.8.\",\"visible\":true,\"menu_owner\":4,\"value\":\"Qwen3.8-MaxSet as defaultThe flagship of Qwen3.8.\"}]}");
     check(registry.find_model(&wall_registry, "p4/gpt-5") < 0, "retired model leaves the live catalog");
     check(registry.find_known(&wall_registry, "p4/gpt-5") >= 0, "retired model stays known for tab provisioning");
+    // Generic wording coverage across the supported sites: a "Chat input"
+    // composer, a submit-labeled send action, and a natively labeled
+    // effort dropdown whose options are reasoning modes under any label.
+    let effort: i32 = registry.add(&wall_registry, "https://effort.example", "https://effort.example/", "Effort");
+    observe(&wall_registry, effort, "{\"origin\":\"https://effort.example\",\"document_id\":\"site-effort\",\"password_fields_present\":false,\"controls\":[{\"id\":1,\"tag\":\"main\",\"role\":\"main\",\"label\":\"\",\"visible\":true},{\"id\":2,\"tag\":\"textarea\",\"role\":\"\",\"label\":\"Chat input here\",\"visible\":true,\"editable\":true},{\"id\":3,\"tag\":\"button\",\"role\":\"button\",\"label\":\"提交\",\"visible\":true},{\"id\":4,\"tag\":\"select\",\"role\":\"combobox\",\"label\":\"Effort\",\"visible\":true,\"options\":[{\"value\":\"auto\",\"label\":\"Auto\",\"disabled\":false,\"selected\":true},{\"value\":\"thinking\",\"label\":\"Thinking\",\"disabled\":false,\"selected\":false},{\"value\":\"fast\",\"label\":\"Fast\",\"disabled\":false,\"selected\":false}]}]}");
+    let ep: *registry.Provider = &wall_registry.items[effort];
+    check(ep.*.prompt > 0 && ep.*.send > 0, "generic composer and submit send map");
+    check(ep.*.reasoning_control > 0, "generic effort select maps as reasoning");
+    check(ep.*.model_count == 0, "effort options never become models");
+    check(buf.find(buf.view(&ep.*.reasoning_modes), "thinking", 0) >= 0, "effort modes captured");
     registry.free(&r);
     registry.free(&wall_registry);
     registry.free(&wall_registry_early);
