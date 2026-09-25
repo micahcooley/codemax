@@ -113,10 +113,18 @@ fn activity_cases() void {
 }
 
 // Allocator stress: hammer the per-generation hot path (decode, prompt
-// render, tool-call parsing, SSE render) with harness-shaped payloads at
-// varying size classes. A corrupt free list here fails loudly instead of
-// surfacing later as a dead gateway socket mid-stream.
+// render, tool-call parsing, SSE render, session lifecycles) with
+// harness-shaped payloads at varying size classes. A corrupt free list here
+// fails loudly instead of surfacing later as a dead gateway socket mid-stream.
 fn alloc_stress_cases() void {
+    stress_rounds();
+}
+// Session lifecycles with tool-bearing completions: prepare/complete churn
+// per-turn bookkeeping, receipts and context accounting. Failures here would
+// surface one request AFTER the corrupting turn, so this loops many turns.
+fn stress_rounds() void {
+    let store: sessions.Sessions = sessions.make();
+    check(sessions.add(&store, "s_stress", 1, "p1/stress") == 0, "stress session");
     let round: i32 = 0;
     while (round < 40) {
         let r: normalized.Request = normalized.make();
@@ -147,18 +155,76 @@ fn alloc_stress_cases() void {
         tools.finish(&parser);
         check(parser.calls == 1, "stress tool call parsed");
         tools.free(&parser);
+        let args: buf.Buffer = buf.make(65536);
+        buf.add(&args, "{\"path\":\"notes");
+        buf.integer(&args, round as i64);
+        buf.add(&args, ".txt\",\"extra\":\"");
+        pad = 0;
+        while (pad < round * 512) { buf.add(&args, "argpad "); pad = pad + 1; }
+        buf.add(&args, " 🎯\"}");
+        let calls: buf.Buffer = buf.make(65536);
+        buf.add(&calls, "[{\"id\":\"c1\",\"name\":\"read_file\",\"arguments\":");
+        buf.add(&calls, buf.view(&args));
+        buf.add(&calls, "}]");
+        let segments: buf.Buffer = buf.make(262144);
+        buf.add(&segments, "[{\"type\":\"text\",\"data\":\"turn text ");
+        buf.integer(&segments, round as i64);
+        buf.add(&segments, " 🎯\"}]");
         let w: wire.Writer = wire.make(0);
         let out: buf.Buffer = buf.make(2097152);
         wire.begin(&w, &r, &out);
         wire.text(&w, &r, "hello ", &out);
         wire.text(&w, &r, "world 🎯", &out);
-        wire.complete(&w, &r, "hello world", "[]", "[]", &out);
+        wire.complete(&w, &r, "hello world", buf.view(&segments), buf.view(&calls), &out);
         check(out.ok != 0 && buf.find(buf.view(&out), "[DONE]", 0) >= 0, "stress stream terminates");
-        buf.free(&body); buf.free(&out); normalized.free(&r);
+        let pq: *sessions.Sessions = &store;
+        sessions.prepare(&pq.*.items[0], &r);
+        sessions.complete(&pq.*.items[0], &r, "hello world", buf.view(&calls), false);
+        buf.free(&body); buf.free(&out); buf.free(&args); buf.free(&calls); buf.free(&segments);
+        normalized.free(&r);
         round = round + 1;
     }
+    sessions.free(&store);
+}
+// Parser fuzz: hostile website text through the incremental tool-call
+// scanner at adversarial chunk splits. The scanner indexes into untrusted
+// deltas on every generation; an off-by-one here corrupts the heap and the
+// process dies one request later, which surfaces as a dead harness socket.
+fn parser_fuzz_cases() void {
+    let frags: buf.Buffer = buf.make(4096);
+    buf.add(&frags, "{|}|\"|\\|<|>|`|'");
+    buf.add(&frags, "|<bridge-tool-call| nonce=\"|abc123|\"|>|{\"id\":\"x\",\"name\":\"read_file\",\"arguments\":");
+    buf.add(&frags, "|{\"path\":\"a/b\"}}|</bridge-tool-call>|```|```json|``|`");
+    buf.add(&frags, "|&&|||!|${|}|深度思考|🎯|&lt;|&gt;|&amp;|\"\"|\\\\|{{|}}|[[|]]");
+    buf.add(&frags, "|<bridge-tool-call nonce=\"wrong\">|nonce=\"|t3stnonce|\"");
+    let parts: i32 = 0; let at: i32 = 0;
+    while (at < frags.len) { if (frags.data[at] == 124) { parts = parts + 1; } at = at + 1; }
+    let seed: i64 = 987654321; let round: i32 = 0; let made: i32 = 0;
+    let parser: tools.Parser = tools.make("t3stnonce", "|read_file|run_task|", true);
+    made = 1;
+    while (round < 3000) {
+        seed = (seed * 1103515245 + 12345) % 2147483647;
+        let pick: i32 = (seed % (parts as i64)) as i32;
+        at = 0; let seen: i32 = 0 - 1;
+        while (at < frags.len) {
+            if (frags.data[at] == 124) { seen = seen + 1; if (seen == pick) { break; } }
+            at = at + 1;
+        }
+        let start: i32 = at + 1; let end: i32 = start;
+        while (end < frags.len && frags.data[end] != 124) { end = end + 1; }
+        seed = (seed * 1103515245 + 12345) % 2147483647;
+        let span: i64 = (end - start + 1) as i64;
+        let cut: i32 = (seed % span) as i32;
+        if (cut < 1) { cut = 1; }
+        if (start < end) { tools.feed(&parser, frags.data[start..start + cut]); }
+        if (round % 200 == 199) { tools.finish(&parser); tools.free(&parser); parser = tools.make("t3stnonce", "|read_file|run_task|", true); }
+        round = round + 1;
+    }
+    tools.finish(&parser); tools.free(&parser);
+    check(made == 1, "fuzz parsers cycled");
 }
 fn main() i32 {
+    parser_fuzz_cases();
     alloc_stress_cases();
     activity_cases();
     receipt_and_attachment_cases(); extended_protocol_cases();
